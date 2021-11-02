@@ -24,6 +24,27 @@
 #' @param rngSeed (dbarts option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
 #' @param updateState (dbarts option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
 #' @param print.opt Print every print.optnumber of Gibbsa samples.
+#' @export
+#' @return The following objects are returned by bartbma:
+#' \item{Z.matcens}{Matrix of draws of latent (censored) outcomes for censored observations. Number of rows equals number of censored training observations. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data.}
+#' \item{Z.matcensbelow}{Matrix of draws of latent (censored) outcomes for observations censored from below. Number of rows equals number of training observations censored from below. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
+#' \item{Z.matcensabove}{Matrix of draws of latent (censored) outcomes for observations censored from above. Number of rows equals number of training observations censored from above. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
+#' \item{mu}{Matrix of draws of the sum of terminal nodes, i.e. f(x_i), for all training observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
+#' \item{mucens}{Matrix of draws of the sum of terminal nodes, i.e. f(x_i), for all censored training observations. Number of rows equals number of censored training observations. Number of columns equals n.iter .}
+#' \item{muuncens}{Matrix of draws of the sum of terminal nodes, i.e. f(x_i), for all uncensored training observations. Number of rows equals number of uncensored training observations. Number of columns equals n.iter .}
+#' \item{mucensbelow}{Matrix of draws of the sum of terminal nodes, i.e. f(x_i), for all training observations censored from below. Number of rows equals number of training observations censored from below. Number of columns equals n.iter .}
+#' \item{mucensabove}{Matrix of draws of the sum of terminal nodes, i.e. f(x_i), for all training observations censored from above Number of rows equals number of training observations censored from above Number of columns equals n.iter .}
+#' \item{ystar}{Matrix of training sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of training observations. Number of columns equals n.iter .}
+#' \item{ystarcens}{Matrix of censored training sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of censored training observations. Number of columns equals n.iter .}
+#' \item{ystaruncens}{Matrix of uncensored training sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of uncensored training observations. Number of columns equals n.iter .}
+#' \item{ystarcensbelow}{Matrix of censored from below training sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of training observations censored from below. Number of columns equals n.iter .}
+#' \item{ystarcensabove}{Matrix of censored from above training sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of training observations censored from above. Number of columns equals n.iter .}
+#' \item{test.mu}{Matrix of draws of the sum of terminal nodes, i.e. f(x_i), for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{test.y_nocensoring}{Matrix of test sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{test.y_withcensoring}{Matrix of test sample draws of the outcome assuming censored (cannot take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{test.probcensbelow}{Matrix of draws of probabilities of test sample observations being censored from below. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{test.probcensabove}{Matrix of draws of probabilities of test sample observations being censored from above. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
 #' @examples
 #'
 #'
