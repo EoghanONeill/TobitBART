@@ -10,8 +10,6 @@ tbart1(
   y,
   n.iter = 1000,
   n.burnin = 100,
-  alpha_BART = 0.95,
-  beta_BART = 2,
   below_cens = 0,
   above_cens = Inf,
   n.trees = 50L,
@@ -26,6 +24,11 @@ tbart1(
   rngNormalKind = "default",
   rngSeed = NA_integer_,
   updateState = TRUE,
+  tree.prior = cgm,
+  node.prior = normal,
+  resid.prior = chisq,
+  proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
+  sigmadbarts = NA_real_,
   print.opt = 100
 )
 }
@@ -40,31 +43,37 @@ tbart1(
 
 \item{n.burnin}{Number of burnin iterations.}
 
-\item{alpha_BART}{The alpha parameter for the standard BART prior.}
-
-\item{beta_BART}{The beta parameter for the standard BART prior.}
-
 \item{below_cens}{Number at or below which observations are censored.}
 
 \item{above_cens}{Number at or above which observations are censored.}
 
-\item{n.trees}{(dbarts option) A positive integer giving the number of trees used in the sum-of-trees formulation.}
+\item{n.trees}{(dbarts control option) A positive integer giving the number of trees used in the sum-of-trees formulation.}
 
-\item{n.chains}{(dbarts option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
+\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
 
-\item{n.threads}{(dbarts option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
+\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
 
-\item{printEvery}{(dbarts option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
+\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
 
-\item{printCutoffs}{(dbarts option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
+\item{printCutoffs}{(dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
 
-\item{rngKind}{(dbarts option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.}
+\item{rngKind}{(dbarts control option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.}
 
-\item{rngNormalKind}{(dbarts option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind}
+\item{rngNormalKind}{(dbarts control option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind}
 
-\item{rngSeed}{(dbarts option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.}
+\item{rngSeed}{(dbarts control option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.}
 
-\item{updateState}{(dbarts option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
+\item{updateState}{(dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
+
+\item{tree.prior}{(dbarts option) An expression of the form cgm or cgm(power,base) setting the tree prior used in fitting.}
+
+\item{node.prior}{(dbarts option) An expression of the form normal or normal(k) that sets the prior used on the averages within nodes.}
+
+\item{resid.prior}{(dbarts option) An expression of the form chisq or chisq(df,quant) that sets the prior used on the residual/error variance}
+
+\item{proposal.probs}{(dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.}
+
+\item{sigmadbarts}{(dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.}
 
 \item{print.opt}{Print every print.optnumber of Gibbsa samples.}
 }
