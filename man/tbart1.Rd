@@ -24,9 +24,6 @@ tbart1(
   rngNormalKind = "default",
   rngSeed = NA_integer_,
   updateState = TRUE,
-  tree.prior = cgm,
-  node.prior = normal,
-  resid.prior = chisq,
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
   sigmadbarts = NA_real_,
   print.opt = 100
@@ -65,17 +62,17 @@ tbart1(
 
 \item{updateState}{(dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
 
-\item{tree.prior}{(dbarts option) An expression of the form cgm or cgm(power,base) setting the tree prior used in fitting.}
-
-\item{node.prior}{(dbarts option) An expression of the form normal or normal(k) that sets the prior used on the averages within nodes.}
-
-\item{resid.prior}{(dbarts option) An expression of the form chisq or chisq(df,quant) that sets the prior used on the residual/error variance}
-
 \item{proposal.probs}{(dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.}
 
 \item{sigmadbarts}{(dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.}
 
 \item{print.opt}{Print every print.optnumber of Gibbsa samples.}
+
+\item{tree.prior}{(dbarts option) An expression of the form cgm or cgm(power,base) setting the tree prior used in fitting.}
+
+\item{node.prior}{(dbarts option) An expression of the form normal or normal(k) that sets the prior used on the averages within nodes.}
+
+\item{resid.prior}{(dbarts option) An expression of the form chisq or chisq(df,quant) that sets the prior used on the residual/error variance}
 }
 \value{
 The following objects are returned by bartbma:
@@ -104,6 +101,23 @@ Type I Tobit Bayesian Additive Regression Trees implemented using MCMC
 }
 \examples{
 
+#example taken from https://stats.idre.ucla.edu/r/dae/tobit-models/
 
+dat <- read.csv("https://stats.idre.ucla.edu/stat/data/tobit.csv")
+
+train_inds <- sample(1:200,190)
+test_inds <- (1:200)[-train_inds]
+
+ytrain <- dat$apt[train_inds]
+ytest <- dat$apt[test_inds]
+
+xtrain <- cbind(dat$read, dat$math)[train_inds,]
+xtest <- cbind(dat$read, dat$math)[test_inds,]
+
+tobart_res <- tbart1(xtrain,xtest,ytrain,
+                    below_cens = -Inf,
+                    above_cens = 800,
+                    n.iter = 400,
+                    n.burnin = 100)
 
 }

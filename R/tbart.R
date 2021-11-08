@@ -50,7 +50,24 @@
 #' \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
 #' @examples
 #'
+#'#example taken from https://stats.idre.ucla.edu/r/dae/tobit-models/
 #'
+#'dat <- read.csv("https://stats.idre.ucla.edu/stat/data/tobit.csv")
+#'
+#'train_inds <- sample(1:200,190)
+#'test_inds <- (1:200)[-train_inds]
+#'
+#'ytrain <- dat$apt[train_inds]
+#'ytest <- dat$apt[test_inds]
+#'
+#'xtrain <- cbind(dat$read, dat$math)[train_inds,]
+#'xtest <- cbind(dat$read, dat$math)[test_inds,]
+#'
+#'tobart_res <- tbart1(xtrain,xtest,ytrain,
+#'                     below_cens = -Inf,
+#'                     above_cens = 800,
+#'                     n.iter = 400,
+#'                     n.burnin = 100)
 #'
 #' @export
 
@@ -73,9 +90,9 @@ tbart1 <- function(x.train,
                    rngNormalKind = "default",
                    rngSeed = NA_integer_,
                    updateState = TRUE,
-                   tree.prior = cgm,
-                   node.prior = normal,
-                   resid.prior = chisq,
+                   # tree.prior = cgm,
+                   # node.prior = normal,
+                   # resid.prior = chisq,
                    proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
                    sigmadbarts = NA_real_,
                    print.opt = 100){
@@ -177,9 +194,9 @@ tbart1 <- function(x.train,
                       data = as.data.frame(x.train),
                       #test = x.test,
                       control = control,
-                      tree.prior = tree.prior,
-                      node.prior = node.prior,
-                      resid.prior = resid.prior,
+                      # tree.prior = tree.prior,
+                      # node.prior = node.prior,
+                      # resid.prior = resid.prior,
                       proposal.probs = proposal.probs,
                       sigma = sigmadbarts
     )
@@ -189,9 +206,9 @@ tbart1 <- function(x.train,
                       data = as.data.frame(x.train),
                       test = as.data.frame(x.test),
                       control = control,
-                      tree.prior = tree.prior,
-                      node.prior = node.prior,
-                      resid.prior = resid.prior,
+                      # tree.prior = tree.prior,
+                      # node.prior = node.prior,
+                      # resid.prior = resid.prior,
                       proposal.probs = proposal.probs,
                       sigma = sigmadbarts
     )
