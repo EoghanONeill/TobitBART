@@ -21,9 +21,9 @@
 #' @param rngNormalKind (dbarts control option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind
 #' @param rngSeed (dbarts control option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
 #' @param updateState (dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
-#' @param tree.prior (dbarts option) An expression of the form cgm or cgm(power,base) setting the tree prior used in fitting.
-#' @param node.prior (dbarts option) An expression of the form normal or normal(k) that sets the prior used on the averages within nodes.
-#' @param resid.prior (dbarts option) An expression of the form chisq or chisq(df,quant) that sets the prior used on the residual/error variance
+#' @param tree.prior (dbarts option) An expression of the form dbarts:::cgm or dbarts:::cgm(power,base) setting the tree prior used in fitting.
+#' @param node.prior (dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.
+#' @param resid.prior (dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance
 #' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
 #' @param sigmadbarts (dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.
 #' @param print.opt Print every print.optnumber of Gibbsa samples.
@@ -90,9 +90,9 @@ tbart1 <- function(x.train,
                    rngNormalKind = "default",
                    rngSeed = NA_integer_,
                    updateState = TRUE,
-                   # tree.prior = cgm,
-                   # node.prior = normal,
-                   # resid.prior = chisq,
+                   tree.prior = dbarts:::cgm,
+                   node.prior = dbarts:::normal,
+                   resid.prior = dbarts:::chisq,
                    proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
                    sigmadbarts = NA_real_,
                    print.opt = 100){
@@ -194,9 +194,9 @@ tbart1 <- function(x.train,
                       data = as.data.frame(x.train),
                       #test = x.test,
                       control = control,
-                      # tree.prior = tree.prior,
-                      # node.prior = node.prior,
-                      # resid.prior = resid.prior,
+                      tree.prior = tree.prior,
+                      node.prior = node.prior,
+                      resid.prior = resid.prior,
                       proposal.probs = proposal.probs,
                       sigma = sigmadbarts
     )
@@ -206,9 +206,9 @@ tbart1 <- function(x.train,
                       data = as.data.frame(x.train),
                       test = as.data.frame(x.test),
                       control = control,
-                      # tree.prior = tree.prior,
-                      # node.prior = node.prior,
-                      # resid.prior = resid.prior,
+                      tree.prior = tree.prior,
+                      node.prior = node.prior,
+                      resid.prior = resid.prior,
                       proposal.probs = proposal.probs,
                       sigma = sigmadbarts
     )
