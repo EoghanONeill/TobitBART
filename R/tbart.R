@@ -275,7 +275,14 @@ tbart1 <- function(x.train,
   for(iter in 2:(n.iter+n.burnin)){
 
     #draw the latent outcome
-    z[cens_inds] <- rtruncnorm(n0, a= below_cens, b = above_cens, mean = mu[cens_inds], sd = sigma)
+    # z[cens_inds] <- rtruncnorm(n0, a= below_cens, b = above_cens, mean = mu[cens_inds], sd = sigma)
+    if(length(censbelow_inds)>0){
+      z[censbelow_inds] <- rtruncnorm(n0, a= -Inf, b = below_cens, mean = mu[censbelow_inds], sd = sigma)
+    }
+    if(length(censabove_inds)>0){
+      z[censabove_inds] <- rtruncnorm(n0, a= above_cens, b = Inf, mean = mu[censabove_inds], sd = sigma)
+    }
+
 
     #set the response.
     #Check that 0 is a reasonable initial value
@@ -296,7 +303,11 @@ tbart1 <- function(x.train,
     ystar <- rnorm(n,mean = mu, sd = sigma)
     ystartest <- rnorm(ntest,mean = mutest, sd = sigma)
 
-    ystartestcens <-rtruncnorm(ntest, a= below_cens, b= above_cens, mean = mutest, sd = sigma)
+    # ystartestcens <- rtruncnorm(ntest, a= below_cens, b= above_cens, mean = mutest, sd = sigma)
+    ystartestcens <- ystartest
+    ystartestcens[ystartest < below_cens] <- below_cens
+    ystartestcens[ystartest > above_cens] <- above_cens
+
 
     probcensbelow <- pnorm(below_cens, mean = mutest, sd = sigma)
     probcensabove <- 1 - pnorm(above_cens, mean = mutest, sd = sigma)
