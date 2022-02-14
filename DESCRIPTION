@@ -17,3 +17,6 @@ Depends:
 LazyData: true
 URL: https://github.com/EoghanONeill/TobitBART
 BugReports: https://github.com/EoghanONeill/TobitBART/issues
+LinkingTo: 
+    dbarts,
+    truncnorm

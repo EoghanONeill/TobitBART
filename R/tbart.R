@@ -26,9 +26,9 @@
 #' @param resid.prior (dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance
 #' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
 #' @param sigmadbarts (dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.
-#' @param print.opt Print every print.optnumber of Gibbsa samples.
+#' @param print.opt Print every print.opt number of Gibbs samples.
 #' @export
-#' @return The following objects are returned by bartbma:
+#' @return The following objects are returned:
 #' \item{Z.matcens}{Matrix of draws of latent (censored) outcomes for censored observations. Number of rows equals number of censored training observations. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data.}
 #' \item{Z.matcensbelow}{Matrix of draws of latent (censored) outcomes for observations censored from below. Number of rows equals number of training observations censored from below. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
 #' \item{Z.matcensabove}{Matrix of draws of latent (censored) outcomes for observations censored from above. Number of rows equals number of training observations censored from above. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
@@ -43,8 +43,8 @@
 #' \item{ystarcensbelow}{Matrix of censored from below training sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of training observations censored from below. Number of columns equals n.iter .}
 #' \item{ystarcensabove}{Matrix of censored from above training sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of training observations censored from above. Number of columns equals n.iter .}
 #' \item{test.mu}{Matrix of draws of the sum of terminal nodes, i.e. f(x_i), for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
-#' \item{test.y_nocensoring}{Matrix of test sample draws of the outcome assuming uncensored (can take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
-#' \item{test.y_withcensoring}{Matrix of test sample draws of the outcome assuming censored (cannot take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{test.y_nocensoring}{Matrix of test sample draws of the outcome assuming uncensored. Can take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{test.y_withcensoring}{Matrix of test sample draws of the outcome assuming censored. Cannot take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{test.probcensbelow}{Matrix of draws of probabilities of test sample observations being censored from below. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{test.probcensabove}{Matrix of draws of probabilities of test sample observations being censored from above. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
@@ -242,7 +242,7 @@ tbart1 <- function(x.train,
   ystartestcens <-rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
 
   probcensbelow <- pnorm(below_cens, mean = mutest, sd = sigma)
-  probcensabove <- pnorm(above_cens, mean = mutest, sd = sigma)
+  probcensabove <- 1 - pnorm(above_cens, mean = mutest, sd = sigma)
 
 
 
@@ -299,7 +299,7 @@ tbart1 <- function(x.train,
     ystartestcens <-rtruncnorm(ntest, a= below_cens, b= above_cens, mean = mutest, sd = sigma)
 
     probcensbelow <- pnorm(below_cens, mean = mutest, sd = sigma)
-    probcensabove <- pnorm(above_cens, mean = mutest, sd = sigma)
+    probcensabove <- 1 - pnorm(above_cens, mean = mutest, sd = sigma)
 
     if(iter>n.burnin){
       iter_min_burnin <- iter-n.burnin
