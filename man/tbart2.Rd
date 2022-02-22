@@ -16,7 +16,7 @@ tbart2(
   gamma0 = 0,
   G0 = 10,
   nzero = 0.002,
-  S0 = NULL,
+  S0 = 0.002,
   sigest = NA,
   n.trees_outcome = 50L,
   n.trees_censoring = 50L,
@@ -37,7 +37,8 @@ tbart2(
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
   sigmadbarts = NA_real_,
   print.opt = 100,
-  eq_by_eq = TRUE
+  eq_by_eq = TRUE,
+  accelerate = FALSE
 )
 }
 \arguments{
@@ -100,6 +101,8 @@ tbart2(
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
 
 \item{eq_by_eq}{If TRUE, implements sampler equation by equation (as in BAVART by Huber and Rossini (2021)). If FALSE, implements sampler in similar approach to SUR-BART (Chakraborty 2016) or MPBART (Kindo 2016).}
+
+\item{accelerate}{If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).}
 }
 \value{
 The following objects are returned:
