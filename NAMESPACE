@@ -2,6 +2,7 @@
 
 export(tbart1)
 export(tbart2)
+import(GIGrvg)
 import(MASS)
 import(dbarts)
 import(truncnorm)

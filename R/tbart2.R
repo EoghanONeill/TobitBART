@@ -6,6 +6,7 @@
 #' @import dbarts
 #' @import truncnorm
 #' @import MASS
+#' @import GIGrvg
 #' @param x.train The outcome model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The outcome model test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param w.train The censoring model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
@@ -163,11 +164,20 @@ tbart2 <- function(x.train,
 
   ntest = nrow(x.test)
 
-  offsetz <- qnorm(n0/n)
+  offsetz <- qnorm(n1/n)
 
-  z <- rep(offsetz, length(y))
+  # z <- rep(offsetz, length(y))
+
+  z[cens_inds] <- qnorm(0.001) #rtruncnorm(n0, a= -Inf, b = 0, mean = offsetz, sd = 1)
+
+  z[uncens_inds] <- qnorm(0.999) #rtruncnorm(n1, a= 0, b = Inf, mean = offsetz, sd = 1)
 
 
+  # z <- rnorm(n = length(y), mean = offsetz, sd =1)
+
+
+  meanmu_z <- (min(z - offsetz) +max(z- offsetz))/(2*n.trees_censoring)
+  sigmu_z <- (max(z- offsetz) - min(z- offsetz))/(2*2*sqrt(n.trees_censoring))
   #set prior parameter values
 
 
@@ -346,7 +356,7 @@ tbart2 <- function(x.train,
   Sigma_mat <- cbind(c(1,0),c(0,sigest^2))
 
   #set initial gamma
-  gamma1 <- 0
+  gamma1 <- cov(ystar,z)
 
   #set initial phi
   phi1 <- sigest^2
@@ -367,7 +377,12 @@ tbart2 <- function(x.train,
 
   sampler_z$setSigma(sigma = 1)
 
-  # sampler_z$sampleTreesFromPrior()
+  sampler_z$sampleTreesFromPrior()
+
+  priormean_z <- sampler_z$predict(xdf_z)[1,]
+
+  sampler_z$sampleNodeParametersFromPrior()
+
   samplestemp_z <- sampler_z$run()
 
   # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
@@ -377,9 +392,14 @@ tbart2 <- function(x.train,
   mutemp_test_z <- samplestemp_z$test[,1]
 
 
-  # sampler_y$setSigma(sigma = sigest)
+  sampler_y$setSigma(sigma = sigest)
 
-  # sampler_y$sampleTreesFromPrior()
+  sampler_y$sampleTreesFromPrior()
+
+  # priormean_y <- sampler_y$predict(xdf_y)[1,]
+
+  sampler_y$sampleNodeParametersFromPrior()
+
   samplestemp_y <- sampler_y$run()
 
   # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
@@ -520,6 +540,19 @@ tbart2 <- function(x.train,
     y_epsilon <- ystar - mutemp_y
 
 
+    # print("temp_sd_z = ")
+    # print(temp_sd_z)
+    #
+    # print("mutemp_z = ")
+    # print(mutemp_z)
+    #
+    # print("temp_zmean_cens = ")
+    # print(temp_zmean_cens)
+    #
+    # print("z = ")
+    # print(z)
+
+
     #########  set parameters for phi draw  ######################################################
 
     n_one <- nzero + n
@@ -561,6 +594,16 @@ tbart2 <- function(x.train,
     #
     # print("gamma_one = ")
     # print(gamma_one)
+    #
+    # print("crossprod(z_epsilon , y_epsilon   ) = ")
+    # print(crossprod(z_epsilon , y_epsilon   ))
+    #
+    # print("crossprod(z_epsilon    ) = ")
+    # print(crossprod(z_epsilon   ))
+    #
+    # print("z_epsilon     = ")
+    # print(z_epsilon   )
+    #
     # print("G1 = ")
     # print(G1)
 
@@ -656,7 +699,76 @@ tbart2 <- function(x.train,
     ###### Accelerated sampler  ###############################
 
 
+    if(accelerate){
 
+
+      #if prior mean for mu parameters is zero (does this make sense? require an offset for y?)
+
+      nu1 <- sum(sampler_z$getTrees@.Data()$var ==-1) - nzero + 1
+
+
+      asquared <- (1/phi1)*(S0 + crossprod(y_epsilon))
+
+      znodestemp <- sampler_z$getTrees@.Data()$value[sampler_z$getTrees@.Data()$var!=-1]
+
+      bsquared <- (1 + (gamma1^2)/phi1)*crossprod(z_epsilon) +
+        (1/sigmu_z)*crossprod(znodestemp) + (gamma1^2)*(1/G0)
+
+
+      if(sqrt(asquared*bsquared) > 150^2){
+        print("GIG sample will be slow.")
+      }
+
+      #candidate g parameer value
+      gprime <- rgig(n = 1, lambda = nu1/2, chi = asquared, psi = bsquared )
+
+
+
+
+      probaccept <- min(1, exp((gprime-1)* ((1/sigmu_z)*sum(znodestemp)*meanmu_z      +
+                                                        gamma1*gamma0/G0 )    ) )
+
+      g_accepted <- 1
+
+      #check if accept
+      accept_bin <- rbinom(n = 1,size = 1, prob = probaccept)
+
+      if(is.na(accept_bin)){
+
+        print("accept_bin is na.  probaccept =")
+        print(probaccept)
+
+        print("gprime = ")
+        print(gprime)
+
+        print("sigmu_z = ")
+        print(sigmu_z)
+
+        print("sum(znodestemp) = ")
+        print(sum(znodestemp))
+
+        print("meanmu_z = ")
+        print(meanmu_z)
+
+      }
+
+      if(accept_bin ==1){
+        g_accepted <- gprime
+
+        phi1 <- (gprime^2)*phi1
+
+        gamma1 <- gprime*gamma1
+
+        mutemp_z <- gprime*mutemp_z
+
+        z <- gprime*z
+
+      }
+
+
+
+
+    }
 
 
     ###### Store results   ###############################
