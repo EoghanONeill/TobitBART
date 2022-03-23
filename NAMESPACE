@@ -2,6 +2,7 @@
 
 export(tbart1)
 export(tbart2)
+export(tbart2b)
 import(GIGrvg)
 import(MASS)
 import(dbarts)

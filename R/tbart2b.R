@@ -88,7 +88,7 @@
 #'
 #' @export
 
-tbart2 <- function(x.train,
+tbart2b <- function(x.train,
                    x.test,
                    w.train,
                    w.test,
@@ -139,6 +139,7 @@ tbart2 <- function(x.train,
 
   if((nrow(w.test)!=nrow(x.test))) stop("input w.test must have the same number of rows as x.test")
   if((nrow(w.train)!=nrow(x.train))) stop("input w.train must have the same number of rows as x.train")
+
 
   #indexes of censored observations
   if(is.na(censored_value)){
@@ -229,15 +230,15 @@ tbart2 <- function(x.train,
     # Z.mat_test = array(NA, dim = c(ntest, n.iter)),
     # Y.mat_train = array(NA, dim = c(n, n.iter)),
     # Y.mat_test = array(NA, dim = c(ntest, n.iter)),
-    mu_y_train = array(NA, dim = c(n, n.iter)),
+    mu_y_train = array(NA, dim = c(n1, n.iter)),# array(NA, dim = c(n, n.iter)),
     mu_y_test = array(NA, dim = c(ntest, n.iter)),
-    mucens_y_train = array(NA, dim = c(n0, n.iter)),
+    # mucens_y_train = array(NA, dim = c(n0, n.iter)),
     muuncens_y_train = array(NA, dim = c(n1, n.iter)),
     mu_z_train = array(NA, dim = c(n, n.iter)),
     mu_z_test = array(NA, dim = c(ntest, n.iter)),
-    train.probcens =  array(NA, dim = c(n, n.iter)),#,
+    train.probcens =  array(NA, dim = c(n1, n.iter)),#array(NA, dim = c(n, n.iter)),#,
     test.probcens =  array(NA, dim = c(ntest, n.iter)),#,
-    cond_exp_train = array(NA, dim = c(n, n.iter)),
+    cond_exp_train = array(NA, dim = c(n1, n.iter)),#cond_exp_train = array(NA, dim = c(n, n.iter)),
     cond_exp_test = array(NA, dim = c(ntest, n.iter)),
     ystar_train = array(NA, dim = c(n, n.iter)),
     ystar_test = array(NA, dim = c(ntest, n.iter)),
@@ -249,41 +250,41 @@ tbart2 <- function(x.train,
   )
 
   if(is.numeric(censored_value)){
-    draw$uncond_exp_train <- array(NA, dim = c(n, n.iter))
+    draw$uncond_exp_train <- array(NA, dim = c(n1, n.iter)) #array(NA, dim = c(n, n.iter))
     draw$uncond_exp_test <- array(NA, dim = c(ntest, n.iter))
-    draw$ydraws_train <- array(NA, dim = c(n, n.iter))
+    # draw$ydraws_train <- array(NA, dim = c(n, n.iter))
     draw$ydraws_test <- array(NA, dim = c(ntest, n.iter))
   }
 
 
 
   control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                           keepTrees = TRUE,
-                           n.trees = n.trees_censoring,
-                           n.burn = n.burn,
-                           n.samples = n.samples,
-                           n.thin = n.thin,
-                           n.chains = n.chains,
-                           n.threads = n.threads,
-                           printEvery = printEvery,
-                           printCutoffs = printCutoffs,
-                           rngKind = rngKind,
-                           rngNormalKind = rngNormalKind,
-                           rngSeed = rngSeed)
+                             keepTrees = TRUE,
+                             n.trees = n.trees_censoring,
+                             n.burn = n.burn,
+                             n.samples = n.samples,
+                             n.thin = n.thin,
+                             n.chains = n.chains,
+                             n.threads = n.threads,
+                             printEvery = printEvery,
+                             printCutoffs = printCutoffs,
+                             rngKind = rngKind,
+                             rngNormalKind = rngNormalKind,
+                             rngSeed = rngSeed)
 
   control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                           keepTrees = TRUE,
-                           n.trees = n.trees_outcome,
-                           n.burn = n.burn,
-                           n.samples = n.samples,
-                           n.thin = n.thin,
-                           n.chains = n.chains,
-                           n.threads = n.threads,
-                           printEvery = printEvery,
-                           printCutoffs = printCutoffs,
-                           rngKind = rngKind,
-                           rngNormalKind = rngNormalKind,
-                           rngSeed = rngSeed)
+                             keepTrees = TRUE,
+                             n.trees = n.trees_outcome,
+                             n.burn = n.burn,
+                             n.samples = n.samples,
+                             n.thin = n.thin,
+                             n.chains = n.chains,
+                             n.threads = n.threads,
+                             printEvery = printEvery,
+                             printCutoffs = printCutoffs,
+                             rngKind = rngKind,
+                             rngNormalKind = rngNormalKind,
+                             rngSeed = rngSeed)
   # print(colnames(Xmat.train))
 
   # print("begin dbarts")
@@ -292,16 +293,16 @@ tbart2 <- function(x.train,
   if(nrow(x.test )==0){
 
 
-    xdf_y <- data.frame(y = ystar, x = x.train)
+    xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
     sampler_y <- dbarts(y ~ .,
-                      data = xdf_y,
-                      #test = x.test,
-                      control = control_y,
-                      tree.prior = tree.prior,
-                      node.prior = node.prior,
-                      resid.prior = resid.prior,
-                      proposal.probs = proposal.probs,
-                      sigma = sigmadbarts
+                        data = xdf_y,
+                        #test = x.test,
+                        control = control_y,
+                        tree.prior = tree.prior,
+                        node.prior = node.prior,
+                        resid.prior = resid.prior,
+                        proposal.probs = proposal.probs,
+                        sigma = sigmadbarts
     )
 
     xdf_z <- data.frame(y = z - offsetz, x = w.train)
@@ -319,7 +320,7 @@ tbart2 <- function(x.train,
 
   }else{
 
-    xdf_y <- data.frame(y = ystar, x = x.train)
+    xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
     xdf_y_test <- data.frame(x = x.test)
 
     sampler_y <- dbarts(y ~ .,
@@ -360,7 +361,7 @@ tbart2 <- function(x.train,
   Sigma_mat <- cbind(c(1,0),c(0,sigest^2))
 
   #set initial gamma
-  gamma1 <- 0 #cov(ystar,z)
+  gamma1 <- 0#cov(ystar,z)
 
   #set initial phi
   phi1 <- sigest^2
@@ -383,7 +384,7 @@ tbart2 <- function(x.train,
 
   sampler_z$sampleTreesFromPrior()
 
-  priormean_z <- sampler_z$predict(xdf_z)[1,]
+  # priormean_z <- sampler_z$predict(xdf_z)[1,]
 
   sampler_z$sampleNodeParametersFromPrior()
 
@@ -394,6 +395,22 @@ tbart2 <- function(x.train,
 
   mutemp_z <- samplestemp_z$train[,1]
   mutemp_test_z <- samplestemp_z$test[,1]
+
+  # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+
+
+
+  # print("length(mutemp_test_z) = ")
+  # print(length(mutemp_test_z))
+  #
+  # print("mutemp_test_z[1000:1010] = ")
+  # print(mutemp_test_z[1000:1010])
+  #
+  # print("mutemp_test_z[1:10] = ")
+  # print(mutemp_test_z[1:10])
+  #
+  # print("nrow(xdf_z_test) = ")
+  # print(nrow(xdf_z_test))
 
 
   sampler_y$setSigma(sigma = sigest)
@@ -412,6 +429,8 @@ tbart2 <- function(x.train,
   mutemp_y <- samplestemp_y$train[,1]
   mutemp_test_y <- samplestemp_y$test[,1]
 
+  # print("length(mutemp_test_y) = ")
+  # print(length(mutemp_test_y))
 
   if(sigest != samplestemp_y$sigma){
     print("sigest = ")
@@ -526,23 +545,29 @@ tbart2 <- function(x.train,
       # print("cens_inds = ")
       # print(cens_inds)
 
-      ystar[cens_inds] <- rnorm(n0,  mean = mutemp_y[cens_inds], sd = temp_sd_y)
+      # ystar[cens_inds] <- rnorm(n0,  mean = mutemp_y[cens_inds], sd = temp_sd_y)
 
-      temp_zmean_cens <- offsetz + mutemp_z[cens_inds] + (ystar[cens_inds]  - mutemp_y[cens_inds])*gamma1/(phi1 + gamma1^2)
+      # temp_zmean_cens <- offsetz + mutemp_z[cens_inds] + (ystar[cens_inds]  - mutemp_y[cens_inds])*gamma1/(phi1 + gamma1^2)
+      temp_zmean_cens <- offsetz + mutemp_z[cens_inds] #+ (ystar[cens_inds]  - mutemp_y[cens_inds])*gamma1/(phi1 + gamma1^2)
 
 
       z[cens_inds] <- rtruncnorm(n0, a= -Inf, b = 0, mean = temp_zmean_cens, sd = temp_sd_z)
     }
 
-    temp_zmean_uncens <- offsetz + mutemp_z[uncens_inds] + (ystar[uncens_inds]  - mutemp_y[uncens_inds])*gamma1/(phi1 + gamma1^2)
+    # temp_zmean_uncens <- offsetz + mutemp_z[uncens_inds] + (ystar[uncens_inds]  - mutemp_y[uncens_inds])*gamma1/(phi1 + gamma1^2)
+    temp_zmean_uncens <- offsetz + mutemp_z[uncens_inds] + (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
 
     z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = temp_zmean_uncens, sd = temp_sd_z)
 
     #########
 
-    z_epsilon <- z - offsetz - mutemp_z
-    y_epsilon <- ystar - mutemp_y
+    # z_epsilon <- z - offsetz - mutemp_z
+    # y_epsilon <- ystar - mutemp_y
 
+    z_epsilon <- z - offsetz - mutemp_z
+
+    y_epsilon <- rep (0, n)
+    y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
 
     # print("temp_sd_z = ")
     # print(temp_sd_z)
@@ -572,7 +597,8 @@ tbart2 <- function(x.train,
     # print("crossprod(y_epsilon) = ")
     # print(crossprod(y_epsilon))
 
-    S1 <- S0 + (gamma1^2)*crossprod(z_epsilon) - 2*gamma1*crossprod(z_epsilon , y_epsilon   )  + crossprod(y_epsilon)
+    # S1 <- S0 + (gamma1^2)*crossprod(z_epsilon) - 2*gamma1*crossprod(z_epsilon , y_epsilon   )  + crossprod(y_epsilon)
+    S1 <- S0 + (gamma1^2)*crossprod(z_epsilon) - 2*gamma1*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )  + crossprod(y_epsilon)
 
     # print("S1 = ")
     # print(S1)
@@ -585,16 +611,20 @@ tbart2 <- function(x.train,
 
     #########  set parameters for phi draw  ######################################################
 
-    G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
+    # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
+    G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
     G1 <- (1/G1inv)[1,1]
 
-    gamma_one <- (G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
-
+    # gamma_one <- (G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
+    gamma_one <- (G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
 
     # print("phi1 = ")
     # print(phi1)
     # print("G0 = ")
     # print(G0)
+    #
+    # print("(G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )) = ")
+    # print((G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )))
     #
     # print("gamma_one = ")
     # print(gamma_one)
@@ -631,6 +661,7 @@ tbart2 <- function(x.train,
       z_resids <- z - offsetz #z_epsilon
       sd_zdraw <- 1
     }else{
+      #not sure about this step for tobit2b
       z_resids <- z - offsetz - y_epsilon*(gamma1/(phi1+gamma1^2))
       sd_zdraw <- sqrt(phi1 / (phi1 + gamma1^2)  )
     }
@@ -645,8 +676,13 @@ tbart2 <- function(x.train,
     samplestemp_z <- sampler_z$run()
 
     mutemp_z <- samplestemp_z$train[,1]
-    mutemp_test_z <- samplestemp_z$test[,1]
+    mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
+    # print("length(mutemp_test_z) = ")
+    # print(length(mutemp_test_z))
+    #
+    # print("nrow(xdf_z_test) = ")
+    # print(nrow(xdf_z_test))
 
     #update z_epsilon
     z_epsilon <- z - offsetz - mutemp_z
@@ -671,10 +707,10 @@ tbart2 <- function(x.train,
 
 
     if(eq_by_eq){
-      y_resids <- ystar - gamma1*z_epsilon
+      y_resids <- ystar[uncens_inds] - gamma1*z_epsilon[uncens_inds]
       sd_ydraw <- sqrt(phi1)
     }else{
-      y_resids <- ystar - gamma1*z_epsilon
+      y_resids <- ystar[uncens_inds] - gamma1*z_epsilon[uncens_inds]
       sd_ydraw <- sqrt(phi1)
     }
 
@@ -696,7 +732,7 @@ tbart2 <- function(x.train,
 
 
     #update z_epsilon
-    y_epsilon <- ystar - mutemp_y
+    y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
 
 
 
@@ -711,7 +747,7 @@ tbart2 <- function(x.train,
       nu1 <- sum(sampler_z$getTrees@.Data()$var ==-1) - nzero + 1
 
 
-      asquared <- (1/phi1)*(S0 + crossprod(y_epsilon))
+      asquared <- (1/phi1)*(S0 + crossprod(y_epsilon[uncens_inds]))
 
       znodestemp <- sampler_z$getTrees@.Data()$value[sampler_z$getTrees@.Data()$var!=-1]
 
@@ -730,7 +766,7 @@ tbart2 <- function(x.train,
 
 
       probaccept <- min(1, exp((gprime-1)* ((1/sigmu_z)*sum(znodestemp)*meanmu_z      +
-                                                        gamma1*gamma0/G0 )    ) )
+                                              gamma1*gamma0/G0 )    ) )
 
       g_accepted <- 1
 
@@ -798,6 +834,15 @@ tbart2 <- function(x.train,
                         mu = c(0, 0),
                         Sigma = Sigma_mat)
 
+      # print("length(mutemp_test_z) = ")
+      # print(length(mutemp_test_z))
+      #
+      # print("offsetz = ")
+      # print(offsetz)
+      #
+      # print("length(zytest[,1]) = ")
+      # print(length(zytest[,1]))
+
       zytest[,1] <- zytest[,1] + offsetz + mutemp_test_z
       zytest[,2] <- zytest[,2] + mutemp_test_y
 
@@ -808,12 +853,13 @@ tbart2 <- function(x.train,
       # }
 
 
-      probcens_train <- pnorm(- mutemp_z - offsetz )
+      probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz )
       probcens_test <- pnorm(- mutemp_test_z - offsetz)
 
       #calculate conditional expectation
 
-      condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z - offsetz ))/(1-probcens_train)
+      # condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z - offsetz ))/(1-probcens_train)
+      condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z[uncens_inds] - offsetz ))/(1-probcens_train)
       condexptest <- mutemp_test_y + gamma1*(dnorm(- mutemp_test_z - offsetz ))/(1-probcens_test)
 
 
@@ -824,7 +870,8 @@ tbart2 <- function(x.train,
       draw$mu_y_train[, iter_min_burnin] <- mutemp_y
       draw$mu_y_test[, iter_min_burnin] <- mutemp_test_y
 
-      draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
+      # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
+      # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
       draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
 
       draw$mu_z_train[, iter_min_burnin] <- mutemp_z
@@ -849,14 +896,15 @@ tbart2 <- function(x.train,
 
       if(is.numeric(censored_value)){
 
-        uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z - offsetz )
+        # uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z - offsetz )
+        uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z[uncens_inds] - offsetz )
         uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + gamma1*dnorm(- mutemp_test_z - offsetz)
 
         draw$uncond_exp_train[, iter_min_burnin] <- uncondexptrain
         draw$uncond_exp_test[, iter_min_burnin] <- uncondexptest
 
 
-        draw$ydraws_train[, iter_min_burnin] <- ifelse(z < 0, censored_value, ystar )
+        # draw$ydraws_train[, iter_min_burnin] <- ifelse(z < 0, censored_value, ystar )
         draw$ydraws_test[, iter_min_burnin] <- ifelse(zytest[,1] < 0, censored_value, zytest[,2] )
       }
 
