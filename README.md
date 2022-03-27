@@ -6,11 +6,13 @@
 
 The goal of TobitBART is to provide implementations of type 1 and type 2 Tobit models with Bayesian Additive Regression Trees (Chipman et al. 2010) instead of linear combinations of covariates. Sums-of-trees are sampled using the ``dbarts`` package.
 
-The Type 1 Tobit implementaiton is based on Chib (1992). The Type 2 Tobit implementaiton is based on Omori (2007).
+The Type 1 Tobit implementaiton is based on Chib (1992). The Type 2 Tobit implementaiton is based on Omori (2007), and van Hasselt (2011).
 
 Chib, S. (1992). Bayes inference in the Tobit censored regression model. Journal of Econometrics, 51(1-2), 79-99.
 
 Omori, Y. (2007). Efficient Gibbs sampler for Bayesian analysis of a sample selection model. Statistics & probability letters, 77(12), 1300-1311.
+
+Van Hasselt, M. (2011). Bayesian inference in a sample selection model. Journal of Econometrics, 165(2), 221-232.
 
 ## Installation
 

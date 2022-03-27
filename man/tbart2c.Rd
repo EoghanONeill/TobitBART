@@ -137,23 +137,115 @@ Type II Tobit Bayesian Additive Regression Trees implemented using MCMC
 }
 \examples{
 
-#example taken from https://stats.idre.ucla.edu/r/dae/tobit-models/
+#example taken from Zhang, J., Li, Z., Song, X., & Ning, H. (2021). Deep Tobit networks: A novel machine learning approach to microeconometrics. Neural Networks, 144, 279-296.
 
-dat <- read.csv("https://stats.idre.ucla.edu/stat/data/tobit.csv")
 
-train_inds <- sample(1:200,190)
-test_inds <- (1:200)[-train_inds]
 
-ytrain <- dat$apt[train_inds]
-ytest <- dat$apt[test_inds]
+#Type II tobit simulation
 
-xtrain <- cbind(dat$read, dat$math)[train_inds,]
-xtest <- cbind(dat$read, dat$math)[test_inds,]
+num_train <- 5000
 
-tobart_res <- tbart1(xtrain,xtest,ytrain,
-                    below_cens = -Inf,
-                    above_cens = 800,
-                    n.iter = 400,
-                    n.burnin = 100)
+#consider increasing the number of covariates
+
+Xmat_train <- matrix(NA,nrow = num_train,
+                     ncol = 8)
+
+Xmat_train[,1] <- runif(num_train, min = -1, max = 1)
+Xmat_train[,2] <- rf(num_train,20,20)
+Xmat_train[,3] <- rbinom(num_train, size = 1, prob = 0.75)
+Xmat_train[,4] <- rnorm(num_train, mean = 1, sd = 1)
+Xmat_train[,5] <- rnorm(num_train)
+Xmat_train[,6] <- rbinom(num_train, size = 1, prob = 0.5)
+Xmat_train[,7] <- rf(num_train,20,200)
+Xmat_train[,8] <- runif(num_train, min = 0, max = 2)
+
+#it would be better to test performance of the models when there is correlation in the error terms.
+varepsilon1_train <- rnorm(num_train, mean = 0, sd = sqrt(0.00025))
+varepsilon2_train <- rnorm(num_train, mean = 0, sd = sqrt(0.00025))
+
+y1star_train <- 1 - 0.75*Xmat_train[,1] + 0.75*Xmat_train[,2] -
+  0.5*Xmat_train[,4] -  0.5*Xmat_train[,6] - 0.25*Xmat_train[,1]^2 -
+  0.75*Xmat_train[,1]*Xmat_train[,4] - 0.25*Xmat_train[,1]*Xmat_train[,2] -
+  1*Xmat_train[,1]*Xmat_train[,6] + 0.5*Xmat_train[,2]*Xmat_train[,6] +
+  varepsilon1_train
+
+y2star_train <- 1 + 0.25*Xmat_train[,4] - 0.75*Xmat_train[,6] +
+  0.5*Xmat_train[,7] + 0.25*Xmat_train[,8] +
+  0.25*Xmat_train[,4]^2 + 0.75*Xmat_train[,7]^2 + 0.5*Xmat_train[,8]^2 -
+  1*Xmat_train[,4]*Xmat_train[,6] + 0.5*Xmat_train[,4]*Xmat_train[,8] +
+  1*Xmat_train[,6]*Xmat_train[,7] - 0.25*Xmat_train[,7]*Xmat_train[,8] +
+  varepsilon2_train
+
+y2obs_train <- ifelse(y1star_train>0, y2star_train,0)
+
+#Type II tobit simulation
+
+num_test <- 5000
+
+#consider increasing the number of covariates
+
+Xmat_test <- matrix(NA,nrow = num_test,
+                    ncol = 8)
+
+Xmat_test[,1] <- runif(num_test, min = -1, max = 1)
+Xmat_test[,2] <- rf(num_test,20,20)
+Xmat_test[,3] <- rbinom(num_test, size = 1, prob = 0.75)
+Xmat_test[,4] <- rnorm(num_test, mean = 1, sd = 1)
+Xmat_test[,5] <- rnorm(num_test)
+Xmat_test[,6] <- rbinom(num_test, size = 1, prob = 0.5)
+Xmat_test[,7] <- rf(num_test,20,200)
+Xmat_test[,8] <- runif(num_test, min = 0, max = 2)
+
+#it would be better to test performance of the models when there is correlation in the error terms.
+varepsilon1_test <- rnorm(num_test, mean = 0, sd = sqrt(0.00025))
+varepsilon2_test <- rnorm(num_test, mean = 0, sd = sqrt(0.00025))
+
+y1star_test <- 1 - 0.75*Xmat_test[,1] + 0.75*Xmat_test[,2] -
+  0.5*Xmat_test[,4] -  0.5*Xmat_test[,6] - 0.25*Xmat_test[,1]^2 -
+  0.75*Xmat_test[,1]*Xmat_test[,4] - 0.25*Xmat_test[,1]*Xmat_test[,2] -
+  1*Xmat_test[,1]*Xmat_test[,6] + 0.5*Xmat_test[,2]*Xmat_test[,6] +
+  varepsilon1_test
+
+y2star_test <- 1 + 0.25*Xmat_test[,4] - 0.75*Xmat_test[,6] +
+  0.5*Xmat_test[,7] + 0.25*Xmat_test[,8] +
+  0.25*Xmat_test[,4]^2 + 0.75*Xmat_test[,7]^2 + 0.5*Xmat_test[,8]^2 -
+  1*Xmat_test[,4]*Xmat_test[,6] + 0.5*Xmat_test[,4]*Xmat_test[,8] +
+  1*Xmat_test[,6]*Xmat_test[,7] - 0.25*Xmat_test[,7]*Xmat_test[,8] +
+  varepsilon2_test
+
+y2obs_test <- ifelse(y1star_test>0, y2star_test,0)
+
+y2response_test <- ifelse(y1star_test>0, 1,0)
+
+tbartII_example <- tbart2c(Xmat_train,
+                           Xmat_test,
+                           Xmat_train,
+                           Xmat_test,
+                           y2obs_train,
+                           n.iter=5000,
+                           n.burnin=1000,
+                           censored_value = 0,
+                           eq_by_eq = TRUE)
+
+
+pred_probs_tbart2_test <- rowMeans(tbartII_example$test.probcens)
+
+#Training (within-sample) Prediction Realization Table
+
+cutoff_point <- mean(y2obs_train>0)
+
+test_bin_preds <- ifelse(1 - pred_probs_tbart2_test > cutoff_point,1,0)
+
+#Training (within-sample) Prediction Realization Table
+
+pred_realization_test <- rbind(cbind(table(y2response_test, test_bin_preds)/length(y2response_test),
+                                     apply(table(y2response_test, test_bin_preds)/length(y2response_test),1,sum)),
+                               c(t(apply(table(y2response_test, test_bin_preds)/length(y2response_test),2,sum)), 1))
+
+hit_rate_test <- pred_realization_test[1,1] +pred_realization_test[2,2]
+
+testpreds_tbart2 <- rowMeans(tbartII_example$uncond_exp_test)
+
+sqrt(mean((y2obs_test - testpreds_tbart2  )^2 ))
 
 }

@@ -171,7 +171,7 @@ tbart2b <- function(x.train,
 
   offsetz <- qnorm(n1/n)
 
-  # z <- rep(offsetz, length(y))
+  z <- rep(offsetz, length(y))
 
   z[cens_inds] <- qnorm(0.001) #rtruncnorm(n0, a= -Inf, b = 0, mean = offsetz, sd = 1)
 
