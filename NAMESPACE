@@ -3,6 +3,7 @@
 export(tbart1)
 export(tbart2)
 export(tbart2b)
+export(tbart2c)
 import(GIGrvg)
 import(MASS)
 import(dbarts)
