@@ -38,7 +38,9 @@ tbart2c(
   sigmadbarts = NA_real_,
   print.opt = 100,
   eq_by_eq = TRUE,
-  accelerate = FALSE
+  accelerate = FALSE,
+  vh_prior = TRUE,
+  tau = 0.5
 )
 }
 \arguments{
@@ -103,6 +105,10 @@ tbart2c(
 \item{eq_by_eq}{If TRUE, implements sampler equation by equation (as in BAVART by Huber and Rossini (2021)). If FALSE, implements sampler in similar approach to SUR-BART (Chakraborty 2016) or MPBART (Kindo 2016).}
 
 \item{accelerate}{If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).}
+
+\item{vh_prior}{If TRUE, apply the prior of van Hasselt (2011) on the covariance of the error terms. This prior, N(gamma0, tau*phi), imposes dependence between gamma and phi.}
+
+\item{tau}{Parameter for the prior of van Hasselt (2011) on the covariance of the error terms.}
 }
 \value{
 The following objects are returned:

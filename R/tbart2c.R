@@ -38,6 +38,8 @@
 #' @param print.opt Print every print.opt number of Gibbs samples.
 #' @param eq_by_eq If TRUE, implements sampler equation by equation (as in BAVART by Huber and Rossini (2021)). If FALSE, implements sampler in similar approach to SUR-BART (Chakraborty 2016) or MPBART (Kindo 2016).
 #' @param accelerate If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).
+#' @param vh_prior If TRUE, apply the prior of van Hasselt (2011) on the covariance of the error terms. This prior, N(gamma0, tau*phi), imposes dependence between gamma and phi.
+#' @param tau Parameter for the prior of van Hasselt (2011) on the covariance of the error terms.
 #' @export
 #' @return The following objects are returned:
 #' \item{Z.mat_train}{Matrix of draws of censoring model latent outcomes for training observations. Number of rows equals number of training observations. Number of columns equals n.iter . Rows are ordered in order of observations in the training data.}
@@ -213,7 +215,9 @@ tbart2c <- function(x.train,
                     sigmadbarts = NA_real_,
                     print.opt = 100,
                     eq_by_eq = TRUE,
-                    accelerate = FALSE){
+                    accelerate = FALSE,
+                    vh_prior = TRUE,
+                    tau = 0.5){
 
 
 
@@ -361,6 +365,7 @@ tbart2c <- function(x.train,
   }
 
 
+  ########## Initialize dbarts #####################
 
   control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
@@ -660,7 +665,7 @@ tbart2c <- function(x.train,
 
     z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = temp_zmean_uncens, sd = phi1/(phi1 + gamma1^2))
 
-    #########
+
 
     # z_epsilon <- z - offsetz - mutemp_z
     # y_epsilon <- ystar - mutemp_y
@@ -775,6 +780,11 @@ tbart2c <- function(x.train,
 
     #########  set parameters for gamma draw  ######################################################
 
+    if(vh_prior == TRUE){
+      G0 <- tau*phi1
+    }
+
+
     # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
     G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
     G1 <- (1/G1inv)[1,1]
@@ -823,8 +833,12 @@ tbart2c <- function(x.train,
     # print(crossprod(y_epsilon))
 
     # S1 <- S0 + (gamma1^2)*crossprod(z_epsilon) - 2*gamma1*crossprod(z_epsilon , y_epsilon   )  + crossprod(y_epsilon)
+
     S1 <- S0 + (gamma1^2)/G0 + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
 
+    if(vh_prior == TRUE){
+      S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
+    }
     # print("S1 = ")
     # print(S1)
     # print("n_one = ")
