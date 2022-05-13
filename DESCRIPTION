@@ -13,7 +13,9 @@ Imports:
     dbarts,
     GIGrvg,
     MASS,
-    truncnorm
+    truncnorm,
+    mvtnorm,
+    Rfast
 Depends: 
     R (>= 2.10)
 LazyData: true
@@ -23,4 +25,6 @@ LinkingTo:
     dbarts,
     truncnorm,
     MASS,
-    GIGrvg
+    GIGrvg,
+    mvtnorm,
+    Rfast

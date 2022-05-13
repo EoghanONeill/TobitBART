@@ -7,6 +7,7 @@
 #' @import truncnorm
 #' @import MASS
 #' @import GIGrvg
+#' @import mvtnorm
 #' @param x.train The outcome model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The outcome model test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param w.train The censoring model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
@@ -825,7 +826,7 @@ tbart2 <- function(x.train,
       draw$mu_y_test[, iter_min_burnin] <- mutemp_test_y
 
       draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
-      draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
+      draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y
 
       draw$mu_z_train[, iter_min_burnin] <- mutemp_z
       draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z

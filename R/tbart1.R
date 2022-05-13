@@ -5,6 +5,7 @@
 #' @description Type I Tobit Bayesian Additive Regression Trees implemented using MCMC
 #' @import dbarts
 #' @import truncnorm
+#' @import mvtnorm
 #' @param x.train The training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param y The training data vector of outcomes. A continuous, censored outcome variable.

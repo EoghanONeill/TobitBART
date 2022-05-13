@@ -7,6 +7,7 @@
 #' @import truncnorm
 #' @import MASS
 #' @import GIGrvg
+#' @import mvtnorm
 #' @param x.train The outcome model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The outcome model test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param w.train The censoring model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
@@ -192,8 +193,8 @@ tbart2c <- function(x.train,
                     censored_value = NA,
                     gamma0 = 0,
                     G0=10,
-                    nzero = 0.002,
-                    S0= 0.002,
+                    nzero = 6,#0.002,
+                    S0= 12,#0.002,
                     sigest = NA,
                     n.trees_outcome = 50L,
                     n.trees_censoring = 50L,
@@ -663,7 +664,8 @@ tbart2c <- function(x.train,
     # temp_zmean_uncens <- offsetz + mutemp_z[uncens_inds] + (ystar[uncens_inds]  - mutemp_y[uncens_inds])*gamma1/(phi1 + gamma1^2)
     temp_zmean_uncens <- offsetz + mutemp_z[uncens_inds] + (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
 
-    z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = temp_zmean_uncens, sd = phi1/(phi1 + gamma1^2))
+    z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = temp_zmean_uncens,
+                                 sd = temp_sd_z)
 
 
 
@@ -998,7 +1000,7 @@ tbart2c <- function(x.train,
 
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
-      draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
+      draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y
 
       draw$mu_z_train[, iter_min_burnin] <- mutemp_z
       draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z
