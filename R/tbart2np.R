@@ -285,7 +285,7 @@ tbart2np <- function(x.train,
 
   ntest = nrow(x.test)
 
-  offsetz <- qnorm(n1/n)
+  offsetz <- 0 #qnorm(n1/n)
 
   z <- rep(offsetz, length(y))
 
@@ -830,7 +830,7 @@ tbart2np <- function(x.train,
 
       print("phi1_vec_train[phi1_vec_train <= 0] = ")
       print(phi1_vec_train[phi1_vec_train <= 0])
-      # stop("temp_sd_z contains NaNs")
+      stop("any(phi1_vec_train <= 0)")
     }else{
       # print("phi1_vec_train = ")
       # print(phi1_vec_train)
@@ -1096,10 +1096,48 @@ tbart2np <- function(x.train,
         temp_aprior = temp_aprior^psiprior
         # temp_aprior = temp_aprior/sum(temp_aprior)
 
-        temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
+
+        log_tempvals <- k_uniq*log(alpha_values) + lgamma(alpha_values) - lgamma(n+alpha_values)
+
+        # print("log_tempvals = ")
+        # print(log_tempvals)
+        # print("temp_aprior = ")
+        # print(temp_aprior)
+
+        temp_kgivenalpha <- exp(log_tempvals)
+
+        # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
         temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
 
+
+        # print("temp_kgivenalpha = ")
+        # print(temp_kgivenalpha)
+
+
+        # print("gamma(alpha_values) = ")
+        # print(gamma(alpha_values))
+        #
+        #
+        # print("gamma(n+alpha_values) = ")
+        # print(gamma(n+alpha_values))
+        #
+        #
+        # print("alpha_values = ")
+        # print(alpha_values)
+        #
+        # print("temp_kgivenalpha = ")
+        # print(temp_kgivenalpha)
+
+        # print("temp_aprior = ")
+        # print(temp_aprior)
+        #
+        # print("temp_alpha_postprobs = ")
+        # print(temp_alpha_postprobs)
+
         post_probs_alphs = temp_alpha_postprobs/sum(temp_alpha_postprobs)
+
+        # print("post_probs_alphs = ")
+        # print(post_probs_alphs)
 
         #sample from 1 to alpha_gridsize
         index_alpha <- sample.int(n = alpha_gridsize, size = 1, prob = post_probs_alphs, replace = TRUE)
@@ -1360,7 +1398,7 @@ tbart2np <- function(x.train,
           #       mean = mutemp_z[i] + mu1_vec_train,
           #       sd = 1)
 
-          temp_samp_probs <-exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
+          temp_samp_probs <- exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
 
 
 
@@ -2504,8 +2542,8 @@ tbart2np <- function(x.train,
       if(is.numeric(censored_value)){
 
         # uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z - offsetz )
-        uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + varthetamat[uncens_inds,4]*dnorm(- mutemp_z[uncens_inds] - offsetz )
-        uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + varthetamat_test[,4]*dnorm(- mutemp_test_z - offsetz)
+        uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + varthetamat[uncens_inds,4]*dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
+        uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + varthetamat_test[,4]*dnorm(- mutemp_test_z - offsetz -  varthetamat_test[,1])
 
         draw$uncond_exp_train[, iter_min_burnin] <- uncondexptrain
         draw$uncond_exp_test[, iter_min_burnin] <- uncondexptest
