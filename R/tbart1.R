@@ -159,7 +159,9 @@ tbart1 <- function(x.train,
     test.y_withcensoring =  array(NA, dim = c(ntest, n.iter)),#,
     test.probcensbelow =  array(NA, dim = c(ntest, n.iter)),#,
     test.probcensabove =  array(NA, dim = c(ntest, n.iter)),
-    sigma = rep(NA, n.iter)
+    sigma = rep(NA, n.iter),
+    cond_exp_train =  array(NA, dim = c(n, n.iter)),
+    cond_exp_test =  array(NA, dim = c(ntest, n.iter))
     )
 
 
@@ -242,9 +244,24 @@ tbart1 <- function(x.train,
 
   ystartestcens <-rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
 
+  probcensbelow_train <- pnorm(below_cens, mean = mu, sd = sigma)
+  probcensabove_train <- 1 - pnorm(above_cens, mean = mu, sd = sigma)
+
+
   probcensbelow <- pnorm(below_cens, mean = mutest, sd = sigma)
   probcensabove <- 1 - pnorm(above_cens, mean = mutest, sd = sigma)
 
+  condexptrain <- below_cens*probcensbelow_train +
+    (mu)*(1- probcensabove_train - probcensbelow_train) +
+    sigma*( dnorm(below_cens, mean = mu, sd = sigma) -
+              dnorm(above_cens, mean = mu, sd = sigma) ) +
+    above_cens*probcensabove_train
+
+  condexptest <- below_cens*probcensbelow +
+    (mutest)*(1- probcensabove - probcensbelow) +
+    sigma*( dnorm(below_cens, mean = mutest, sd = sigma) -
+              dnorm(above_cens, mean = mutest, sd = sigma) ) +
+    above_cens*probcensabove
 
 
 #save the first round of values
@@ -270,6 +287,9 @@ tbart1 <- function(x.train,
     draw$test.probcensbelow[,1] = probcensbelow
     draw$test.probcensabove[,1] = probcensabove
     draw$sigma[1] <- sigma
+
+    draw$cond_exp_train[, 1] <- condexptrain
+    draw$cond_exp_test[, 1] <- condexptest
 }
 
   #loop through the Gibbs sampler iterations
@@ -310,8 +330,24 @@ tbart1 <- function(x.train,
     ystartestcens[ystartest > above_cens] <- above_cens
 
 
+    probcensbelow_train <- pnorm(below_cens, mean = mu, sd = sigma)
+    probcensabove_train <- 1 - pnorm(above_cens, mean = mu, sd = sigma)
+
     probcensbelow <- pnorm(below_cens, mean = mutest, sd = sigma)
     probcensabove <- 1 - pnorm(above_cens, mean = mutest, sd = sigma)
+
+    condexptrain <- below_cens*probcensbelow_train +
+      (mu)*(1- probcensabove_train - probcensbelow_train) +
+      sigma*( dnorm(below_cens, mean = mu, sd = sigma) -
+                dnorm(above_cens, mean = mu, sd = sigma) ) +
+      above_cens*probcensabove_train
+
+
+    condexptest <- below_cens*probcensbelow +
+      (mutest)*(1- probcensabove - probcensbelow) +
+      sigma*( dnorm(below_cens, mean = mutest, sd = sigma) -
+                          dnorm(above_cens, mean = mutest, sd = sigma) ) +
+      above_cens*probcensabove
 
     if(iter>n.burnin){
       iter_min_burnin <- iter-n.burnin
@@ -336,6 +372,9 @@ tbart1 <- function(x.train,
       draw$test.probcensbelow[,iter_min_burnin] = probcensbelow
       draw$test.probcensabove[,iter_min_burnin] = probcensabove
       draw$sigma[iter_min_burnin] <- sigma
+
+      draw$cond_exp_train[, iter_min_burnin] <- condexptrain
+      draw$cond_exp_test[, iter_min_burnin] <- condexptest
 
     }
 

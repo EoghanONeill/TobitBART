@@ -179,7 +179,12 @@ tbart1np <- function(x.train,
     test.y_withcensoring =  array(NA, dim = c(ntest, n.iter)),#,
     test.probcensbelow =  array(NA, dim = c(ntest, n.iter)),#,
     test.probcensabove =  array(NA, dim = c(ntest, n.iter)),
-    sigma = rep(NA, n.iter)
+    sigmavecs_train =  array(NA, dim = c(n, n.iter)),
+    sigmavecs_test =  array(NA, dim = c(ntest, n.iter)),
+    error_mu_train =  array(NA, dim = c(n, n.iter)),
+    error_mu_test = array(NA, dim = c(ntest, n.iter)),
+    cond_exp_train =  array(NA, dim = c(n, n.iter)),
+    cond_exp_test =  array(NA, dim = c(ntest, n.iter))
     )
 
 
@@ -426,11 +431,14 @@ tbart1np <- function(x.train,
     # skip
   }else{
     # draw from prior
-    sigma1_vec_test[test_clusts ==0] <- sqrt(1/rgamma(n = ntest, shape =  nu0/2, rate = nu0*lambda0/2))
+    numzeros <- sum(test_clusts ==0)
 
-    mu1_vec_test[test_clusts ==0] <- rnorm(n = ntest, mean = mu0, sd = sigma_init/sqrt(k0))
+    sigma1_vec_test[test_clusts ==0] <- sqrt(1/rgamma(n = numzeros, shape =  nu0/2, rate = nu0*lambda0/2) )
+
+    mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma_init/sqrt(k0))
 
   }
+
 
   # print("Line 398")
 
@@ -439,9 +447,56 @@ tbart1np <- function(x.train,
   ystartestcens <-rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
 
 
+  probcensbelow_train <- pnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)
+  probcensabove_train <- 1 - pnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)
 
-  probcensbelow <- pnorm(below_cens, mean = mu1_vec_test, sd = sigma1_vec_test)
-  probcensabove <- 1 - pnorm(above_cens, mean = mu1_vec_test, sd = sigma1_vec_test)
+
+  probcensbelow <- pnorm(below_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test)
+  probcensabove <- 1 - pnorm(above_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test)
+
+
+  if(below_cens == - Inf){
+    if(above_cens == Inf){
+      condexptrain <- (mu + mu1_vec_train)
+
+      condexptest <- (mutest + mu1_vec_test)
+    }else{ # above_cens !=Inf
+      condexptrain <-
+        (mu + mu1_vec_train)*(1- probcensabove_train ) +
+        sigma1_vec_train*(  - dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+        above_cens*probcensabove_train
+
+      condexptest <-
+        (mutest + mu1_vec_test)*(1- probcensabove ) +
+        sigma1_vec_test*(  -dnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
+        above_cens*probcensabove
+    }
+  }else{ # below_cens != - Inf
+    if(above_cens == Inf){
+      condexptrain <- below_cens*probcensbelow_train +
+        (mu + mu1_vec_train)*(1 - probcensbelow) +
+        sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
+
+      condexptest <- below_cens*probcensbelow +
+        (mutest + mu1_vec_test)*(1 - probcensbelow) +
+        sigma1_vec_test*( dnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test)  )
+
+
+    }else{ # above_cens !=Inf
+      condexptrain <- below_cens*probcensbelow_train +
+        (mu + mu1_vec_train)*(1- probcensabove_train - probcensbelow) +
+        sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
+                             dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+        above_cens*probcensabove_train
+
+      condexptest <- below_cens*probcensbelow +
+        (mutest + mu1_vec_test)*(1- probcensabove - probcensbelow) +
+        sigma1_vec_test*( dnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) -
+                            dnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
+        above_cens*probcensabove
+    }
+  }
+
 
 
 #save the first round of values
@@ -467,6 +522,9 @@ tbart1np <- function(x.train,
     draw$test.probcensbelow[,1] = probcensbelow
     draw$test.probcensabove[,1] = probcensabove
     draw$sigma[1] <- sigma
+
+    draw$cond_exp_train[, 1] <- condexptrain
+    draw$cond_exp_test[, 1] <- condexptest
 }
 
 
@@ -862,8 +920,57 @@ tbart1np <- function(x.train,
     ystartestcens[ystartest > above_cens] <- above_cens
 
 
+    probcensbelow_train <- pnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)
+    probcensabove_train <- 1 - pnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)
+
+
     probcensbelow <- pnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test)
     probcensabove <- 1 - pnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test)
+
+
+    if(below_cens == - Inf){
+      if(above_cens == Inf){
+        condexptrain <- (mu + mu1_vec_train)
+
+        condexptest <- (mutest + mu1_vec_test)
+      }else{ # above_cens !=Inf
+        condexptrain <-
+          (mu + mu1_vec_train)*(1- probcensabove_train ) +
+          sigma1_vec_train*(  - dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+          above_cens*probcensabove_train
+
+        condexptest <-
+          (mutest + mu1_vec_test)*(1- probcensabove ) +
+          sigma1_vec_test*(  -dnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
+          above_cens*probcensabove
+      }
+    }else{ # below_cens != - Inf
+      if(above_cens == Inf){
+        condexptrain <- below_cens*probcensbelow_train +
+          (mu + mu1_vec_train)*(1 - probcensbelow) +
+          sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
+
+        condexptest <- below_cens*probcensbelow +
+          (mutest + mu1_vec_test)*(1 - probcensbelow) +
+          sigma1_vec_test*( dnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test)  )
+
+
+      }else{ # above_cens !=Inf
+        condexptrain <- below_cens*probcensbelow_train +
+          (mu + mu1_vec_train)*(1- probcensabove_train - probcensbelow) +
+          sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
+                               dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+          above_cens*probcensabove_train
+
+        condexptest <- below_cens*probcensbelow +
+          (mutest + mu1_vec_test)*(1- probcensabove - probcensbelow) +
+          sigma1_vec_test*( dnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) -
+                              dnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
+          above_cens*probcensabove
+      }
+    }
+
+
 
     if(iter>n.burnin){
       iter_min_burnin <- iter-n.burnin
@@ -887,7 +994,13 @@ tbart1np <- function(x.train,
       draw$test.y_withcensoring[,iter_min_burnin] = ystartestcens
       draw$test.probcensbelow[,iter_min_burnin] = probcensbelow
       draw$test.probcensabove[,iter_min_burnin] = probcensabove
-      draw$sigma[iter_min_burnin] <- sigma
+      draw$sigmavecs_train[, iter_min_burnin] = sigma1_vec_train
+      draw$sigmavecs_test[, iter_min_burnin] = sigma1_vec_test
+      draw$error_mu_train[, iter_min_burnin] = mu1_vec_train
+      draw$error_mu_test[, iter_min_burnin] = mu1_vec_test
+
+      draw$cond_exp_train[, iter_min_burnin] <- condexptrain
+      draw$cond_exp_test[, iter_min_burnin] = condexptest
 
     }
 
