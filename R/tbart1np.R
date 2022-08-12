@@ -222,7 +222,8 @@ tbart1np <- function(x.train,
 
   estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
   sum_est <- summary( estResult )
-  mu0 <-  sum_est$estimate["(Intercept)", "Estimate"]
+  # mu0 <-  sum_est$estimate["(Intercept)", "Estimate"]
+  mu0 <-  0#sum_est$estimate["(Intercept)", "Estimate"]
 
   # print("Line 222")
   # intialize parameters
@@ -435,7 +436,7 @@ tbart1np <- function(x.train,
 
     sigma1_vec_test[test_clusts ==0] <- sqrt(1/rgamma(n = numzeros, shape =  nu0/2, rate = nu0*lambda0/2) )
 
-    mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma1_vec_test/sqrt(k0))
+    mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma1_vec_test[test_clusts ==0]/sqrt(k0))
 
   }
 
@@ -521,10 +522,13 @@ tbart1np <- function(x.train,
     draw$test.y_withcensoring[,1] = ystartestcens
     draw$test.probcensbelow[,1] = probcensbelow
     draw$test.probcensabove[,1] = probcensabove
-    draw$sigma[1] <- sigma
-
-    draw$cond_exp_train[, 1] <- condexptrain
-    draw$cond_exp_test[, 1] <- condexptest
+    # draw$sigma[1] = sigma
+    draw$sigmavecs_train[, 1] = sigma1_vec_train
+    draw$sigmavecs_test[, 1] = sigma1_vec_test
+    draw$error_mu_train[, 1] = mu1_vec_train
+    draw$error_mu_test[, 1] = mu1_vec_test
+    draw$cond_exp_train[, 1] = condexptrain
+    draw$cond_exp_test[, 1] = condexptest
 }
 
 
@@ -904,7 +908,7 @@ tbart1np <- function(x.train,
 
       sigma1_vec_test[test_clusts ==0] <- sqrt(1/rgamma(n = numzeros, shape =  nu0/2, rate = nu0*lambda0/2) )
 
-      mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma1_vec_test/sqrt(k0))
+      mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma1_vec_test[test_clusts ==0]/sqrt(k0))
 
     }
 
@@ -999,7 +1003,7 @@ tbart1np <- function(x.train,
       draw$error_mu_train[, iter_min_burnin] = mu1_vec_train
       draw$error_mu_test[, iter_min_burnin] = mu1_vec_test
 
-      draw$cond_exp_train[, iter_min_burnin] <- condexptrain
+      draw$cond_exp_train[, iter_min_burnin] = condexptrain
       draw$cond_exp_test[, iter_min_burnin] = condexptest
 
     }
