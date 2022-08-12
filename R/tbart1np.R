@@ -435,7 +435,7 @@ tbart1np <- function(x.train,
 
     sigma1_vec_test[test_clusts ==0] <- sqrt(1/rgamma(n = numzeros, shape =  nu0/2, rate = nu0*lambda0/2) )
 
-    mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma_init/sqrt(k0))
+    mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma1_vec_test/sqrt(k0))
 
   }
 
@@ -904,7 +904,7 @@ tbart1np <- function(x.train,
 
       sigma1_vec_test[test_clusts ==0] <- sqrt(1/rgamma(n = numzeros, shape =  nu0/2, rate = nu0*lambda0/2) )
 
-      mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma_init/sqrt(k0))
+      mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma1_vec_test/sqrt(k0))
 
     }
 
