@@ -415,7 +415,7 @@ tbart1np <- function(x.train,
   mu <- samplestemp$train[,1]
   mutest <- samplestemp$test[,1]
 
-  ystar <- rnorm(n,mean = mu, sd = sigma1_vec_train)
+  ystar <- rnorm(n,mean = mu + mu1_vec_train, sd = sigma1_vec_train)
 
 
   # must draw test parameter values
@@ -443,9 +443,14 @@ tbart1np <- function(x.train,
 
   # print("Line 398")
 
-  ystartest <- rnorm(ntest,mean = mu1_vec_test, sd = sigma1_vec_test)
+  ystartest <- rnorm(ntest,
+                     mean = mutest + mu1_vec_test,
+                     sd = sigma1_vec_test)
 
-  ystartestcens <-rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
+  ystartestcens <-rtruncnorm(ntest,
+                             a = below_cens, b = above_cens,
+                             mean = mutest + mu1_vec_test,
+                             sd = sigma1_vec_test)
 
 
   probcensbelow_train <- pnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)
