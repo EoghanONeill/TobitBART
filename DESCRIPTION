@@ -15,7 +15,8 @@ Imports:
     MASS,
     truncnorm,
     mvtnorm,
-    Rfast
+    Rfast,
+    censReg
 Depends: 
     R (>= 2.10)
 LazyData: true

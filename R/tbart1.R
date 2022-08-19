@@ -6,6 +6,7 @@
 #' @import dbarts
 #' @import truncnorm
 #' @import mvtnorm
+#' @import censReg
 #' @param x.train The training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param y The training data vector of outcomes. A continuous, censored outcome variable.
@@ -278,7 +279,7 @@ tbart1 <- function(x.train,
         above_cens*probcensabove_train
 
       condexptest <-
-        (mutest + mu1_vec_test)*(1- probcensabove ) +
+        (mutest )*(1- probcensabove ) +
         sigma*(  -dnorm(above_cens, mean = mutest, sd = sigma) ) +
         above_cens*probcensabove
     }
@@ -412,7 +413,7 @@ tbart1 <- function(x.train,
           above_cens*probcensabove_train
 
         condexptest <-
-          (mutest + mu1_vec_test)*(1- probcensabove ) +
+          (mutest )*(1- probcensabove ) +
           sigma*(  -dnorm(above_cens, mean = mutest, sd = sigma) ) +
           above_cens*probcensabove
       }

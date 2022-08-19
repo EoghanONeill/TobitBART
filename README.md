@@ -11,7 +11,7 @@ The Type 1 Tobit implementaiton is based on Chib (1992). The Type 2 Tobit implem
 
 The `tbart1` function runs Type 1 TOBART.
 
-The `tbart1` function runs Type 1 TOBART with a Dirichlet Process mixture distribution for the error (George et al. 2019).
+The `tbart1np` function runs Type 1 TOBART with a Dirichlet Process mixture distribution for the error (George et al. 2019).
 
 The `tbart2c` function runs Type 2 TOBART with bivariate normal errors in the selection and outcome equations. [Not tested yet]
 
