@@ -225,7 +225,7 @@ tbart2np <- function(x.train,
                     accelerate = FALSE,
                     vh_prior = TRUE,
                     tau = 0.5,
-                    M_mat = 10*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
+                    M_mat = 2*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
                     alpha_prior = "vh",
                     c1 = 2,
                     c2 = 2,
@@ -393,20 +393,25 @@ tbart2np <- function(x.train,
 
       phi1_vec_train[i] <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
 
+      phitilde <- phi1_vec_train[i]
+
       gamma1_vec_train[i] <- rnorm(1,
                                    mean = gamma0,
                                    sd = sqrt(tau*phitilde))
 
 
-
+      mutilde <- c(NA,NA)
 
       mu1_vec_train[i] <- rnorm(n = 1,
                                 mean = u_z[i]/( (1/M_mat[1,1]) + 1  ),
                                 sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
 
+      mutilde[1] <- mu1_vec_train[i]
       mu2_vec_train[i] <- rnorm(n = 1,
                                 mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
                                 sd =  sqrt( M_mat[2,2] + (M_mat[1,2]^2/M_mat[1,1])   ))
+
+      mutilde[2] <- mu2_vec_train[i]
 
 
     }else{
@@ -612,7 +617,7 @@ tbart2np <- function(x.train,
     sampler_y <- dbarts(y ~ .,
                         data = xdf_y,
                         test = xdf_y_test,
-                        weights = weightstemp_y,
+                        # weights = weightstemp_y,
                         control = control_y,
                         tree.prior = tree.prior,
                         node.prior = node.prior,
@@ -622,11 +627,11 @@ tbart2np <- function(x.train,
     )
 
 
-    # print("length(z - offsetz) = ")
-    # print(length(z - offsetz))
-    #
-    # print("length(weightstemp) = ")
-    # print(length(weightstemp))
+    print("length(z - offsetz) = ")
+    print(length(z - offsetz))
+
+    print("length(weightstemp) = ")
+    print(length(weightstemp))
 
     xdf_z <- data.frame(y = z - offsetz, x = w.train)
     xdf_z_test <- data.frame(x = w.test)
@@ -634,7 +639,7 @@ tbart2np <- function(x.train,
     sampler_z <- dbarts(y ~ .,
                         data = xdf_z,
                         test = xdf_z_test,
-                        weights = weightstemp,
+                        # weights = weightstemp,
                         control = control_z,
                         tree.prior = tree.prior,
                         node.prior = node.prior,
@@ -666,6 +671,7 @@ tbart2np <- function(x.train,
 
 
   sampler_z$setSigma(sigma = 1)
+  sampler_z$setWeights(weights = weightstemp)
 
   sampler_z$sampleTreesFromPrior()
 
@@ -699,6 +705,7 @@ tbart2np <- function(x.train,
 
 
   sampler_y$setSigma(sigma = sigest)
+  sampler_y$setWeights(weights = weightstemp_y)
 
   sampler_y$sampleTreesFromPrior()
 
@@ -808,9 +815,12 @@ tbart2np <- function(x.train,
   #loop through the Gibbs sampler iterations
   for(iter in 1:(n.iter+n.burnin)){
 
-    print("iteration number = ")
 
-    print(iter)
+    if( (iter %% 100) == 0){
+      print("iteration number = ")
+
+      print(iter)
+    }
 
     # if(eq_by_eq){
     #   sig_zdraw <- 1
@@ -1154,7 +1164,7 @@ tbart2np <- function(x.train,
     #########  Sample new cluster parameter values  ######################################################
 
 
-    print("sample new clusters step")
+    # print("sample new clusters step")
 
     # varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
     #
@@ -1337,7 +1347,7 @@ tbart2np <- function(x.train,
 
 
 
-    print("now loop through each observation for new samples")
+    # print("now loop through each observation for new samples")
 
     #reset index for uncensored observations
     itemp <- 0
@@ -1960,7 +1970,7 @@ tbart2np <- function(x.train,
     }
 
 
-    print("remix step")
+    # print("remix step")
 
     # varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
 

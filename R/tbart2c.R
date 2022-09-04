@@ -397,12 +397,21 @@ tbart2c <- function(x.train,
                              rngSeed = rngSeed)
   # print(colnames(Xmat.train))
 
-  # print("begin dbarts")
+  print("begin dbarts")
 
 
   weightstemp <- rep(1,n)
 
   weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
+
+  print("weightstemp = ")
+  print(weightstemp)
+
+  print("length(weightstemp) = ")
+  print(length(weightstemp))
+
+  print("length(uncens_inds) = ")
+  print(length(uncens_inds))
 
   if(nrow(x.test )==0){
 
@@ -418,6 +427,8 @@ tbart2c <- function(x.train,
                         proposal.probs = proposal.probs,
                         sigma = sigmadbarts
     )
+
+    print("Line 425")
 
     xdf_z <- data.frame(y = z - offsetz, x = w.train)
 
@@ -449,14 +460,17 @@ tbart2c <- function(x.train,
                         sigma = sigmadbarts
     )
 
+    print("Line 425")
+
 
     xdf_z <- data.frame(y = z - offsetz, x = w.train)
     xdf_z_test <- data.frame(x = w.test)
 
+
     sampler_z <- dbarts(y ~ .,
                         data = xdf_z,
                         test = xdf_z_test,
-                        weights = weightstemp,
+                        # weights = weightstemp,
                         control = control_z,
                         tree.prior = tree.prior,
                         node.prior = node.prior,
@@ -470,6 +484,7 @@ tbart2c <- function(x.train,
 
 
 
+  print("Line 473")
 
 
 
@@ -488,6 +503,7 @@ tbart2c <- function(x.train,
 
 
   sampler_z$setSigma(sigma = 1)
+  sampler_z$setWeights(weights = weightstemp)
 
   sampler_z$sampleTreesFromPrior()
 

@@ -246,16 +246,42 @@ tbart1np <- function(x.train,
 
         df0 = data.frame(x.train,y)
 
+        # print("df0 = ")
+        # print(df0)
+
         estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
         sum_est <- summary( estResult )
+
+        # print("sum_est = ")
+        # print(sum_est)
+
+        if(is.null(coef(estResult))){
+          # estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
+          # sum_est <- summary( estResult )
+
+          templm <- lm(y ~. , data = df0)
+          df0 = data.frame(y = y,
+                           df0[,names(which(!is.na(templm$coefficients[2:length(templm$coefficients)])))])
+
+          estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
+          sum_est <- summary( estResult )
+
+        }
         sigest <- exp(sum_est$estimate["logSigma", "Estimate"])
+
 
 
       } else {
         df0 = data.frame(y)
 
+
         estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
+
+
         sum_est <- summary( estResult )
+
+        print("sum_est = ")
+        print(sum_est)
         sigest <- exp(sum_est$estimate["logSigma", "Estimate"])
 
 

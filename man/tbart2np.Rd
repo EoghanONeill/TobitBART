@@ -41,7 +41,7 @@ tbart2np(
   accelerate = FALSE,
   vh_prior = TRUE,
   tau = 0.5,
-  M_mat = 10 * matrix(c(1, 0, 0, 1), nrow = 2, ncol = 2, byrow = TRUE),
+  M_mat = 2 * matrix(c(1, 0, 0, 1), nrow = 2, ncol = 2, byrow = TRUE),
   alpha_prior = "vh",
   c1 = 2,
   c2 = 2,
