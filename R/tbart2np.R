@@ -340,6 +340,15 @@ tbart2np <- function(x.train,
 
   }
 
+
+
+  # set the priorbased on sigest
+
+  M_mat = ((sigest^2))*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
+
+
+
+
   #set initial sigma
 
   #alternatively, draw this from the prior
@@ -409,14 +418,14 @@ tbart2np <- function(x.train,
       mutilde[1] <- mu1_vec_train[i]
       mu2_vec_train[i] <- rnorm(n = 1,
                                 mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
-                                sd =  sqrt( M_mat[2,2] + (M_mat[1,2]^2/M_mat[1,1])   ))
+                                sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
 
       mutilde[2] <- mu2_vec_train[i]
 
 
     }else{
       # uncensored observation, must use Gibbs sampler to obtain initial value
-      # Maybe it would be more efficient to just sample fromt he prior?
+      # Maybe it would be more efficient to just sample from the prior?
 
       #increase count of uncensored observation index
       uncens_count <- uncens_count +1
@@ -2050,7 +2059,7 @@ tbart2np <- function(x.train,
 
         mutilde[2] <- rnorm(n = 1,
                            mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
-                           sd =  sqrt( M_mat[2,2] + (M_mat[1,2]^2/M_mat[1,1])   ))
+                           sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
 
 
 
