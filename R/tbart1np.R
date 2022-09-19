@@ -571,12 +571,12 @@ tbart1np <- function(x.train,
     ########### 2 draw the latent outcome####################
     # z[cens_inds] <- rtruncnorm(n0, a= below_cens, b = above_cens, mean = mu[cens_inds], sd = sigma)
     if(length(censbelow_inds)>0){
-      z[censbelow_inds] <- rtruncnorm(n0, a= -Inf, b = below_cens,
+      z[censbelow_inds] <- rtruncnorm(n_censbelow, a= -Inf, b = below_cens,
                                       mean = mu[censbelow_inds] + mu1_vec_train[censbelow_inds],
                                       sd = sigma1_vec_train[censbelow_inds])
     }
     if(length(censabove_inds)>0){
-      z[censabove_inds] <- rtruncnorm(n0, a= above_cens, b = Inf,
+      z[censabove_inds] <- rtruncnorm(n_censabove, a= above_cens, b = Inf,
                                       mean = mu[censabove_inds] + mu1_vec_train[censabove_inds],
                                       sd = sigma1_vec_train[censabove_inds])
     }
@@ -982,7 +982,7 @@ tbart1np <- function(x.train,
     }else{ # below_cens != - Inf
       if(above_cens == Inf){
         condexptrain <- below_cens*probcensbelow_train +
-          (mu + mu1_vec_train)*(1 - probcensbelow) +
+          (mu + mu1_vec_train)*(1 - probcensbelow_train) +
           sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
 
         condexptest <- below_cens*probcensbelow +
@@ -992,7 +992,7 @@ tbart1np <- function(x.train,
 
       }else{ # above_cens !=Inf
         condexptrain <- below_cens*probcensbelow_train +
-          (mu + mu1_vec_train)*(1- probcensabove_train - probcensbelow) +
+          (mu + mu1_vec_train)*(1- probcensabove_train - probcensbelow_train) +
           sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
                                dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
           above_cens*probcensabove_train

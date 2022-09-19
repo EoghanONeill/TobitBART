@@ -346,10 +346,10 @@ tbart1 <- function(x.train,
     #draw the latent outcome
     # z[cens_inds] <- rtruncnorm(n0, a= below_cens, b = above_cens, mean = mu[cens_inds], sd = sigma)
     if(length(censbelow_inds)>0){
-      z[censbelow_inds] <- rtruncnorm(n0, a= -Inf, b = below_cens, mean = mu[censbelow_inds], sd = sigma)
+      z[censbelow_inds] <- rtruncnorm(n_censbelow, a= -Inf, b = below_cens, mean = mu[censbelow_inds], sd = sigma)
     }
     if(length(censabove_inds)>0){
-      z[censabove_inds] <- rtruncnorm(n0, a= above_cens, b = Inf, mean = mu[censabove_inds], sd = sigma)
+      z[censabove_inds] <- rtruncnorm(n_censabove, a= above_cens, b = Inf, mean = mu[censabove_inds], sd = sigma)
     }
 
 
@@ -420,7 +420,7 @@ tbart1 <- function(x.train,
     }else{ # below_cens != - Inf
       if(above_cens == Inf){
         condexptrain <- below_cens*probcensbelow_train +
-          (mu )*(1 - probcensbelow) +
+          (mu )*(1 - probcensbelow_train) +
           sigma*( dnorm(below_cens, mean = mu , sd = sigma)  )
 
         condexptest <- below_cens*probcensbelow +
@@ -430,7 +430,7 @@ tbart1 <- function(x.train,
 
       }else{ # above_cens !=Inf
         condexptrain <- below_cens*probcensbelow_train +
-          (mu )*(1- probcensabove_train - probcensbelow) +
+          (mu )*(1- probcensabove_train - probcensbelow_train) +
           sigma*( dnorm(below_cens, mean = mu , sd = sigma) -
                                dnorm(above_cens, mean = mu , sd = sigma) ) +
           above_cens*probcensabove_train
