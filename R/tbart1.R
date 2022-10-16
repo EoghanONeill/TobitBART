@@ -286,7 +286,7 @@ tbart1 <- function(x.train,
   }else{ # below_cens != - Inf
     if(above_cens == Inf){
       condexptrain <- below_cens*probcensbelow_train +
-        (mu )*(1 - probcensbelow) +
+        (mu )*(1 - probcensbelow_train) +
         sigma*( dnorm(below_cens, mean = mu , sd = sigma)  )
 
       condexptest <- below_cens*probcensbelow +
@@ -296,7 +296,7 @@ tbart1 <- function(x.train,
 
     }else{ # above_cens !=Inf
       condexptrain <- below_cens*probcensbelow_train +
-        (mu )*(1- probcensabove_train - probcensbelow) +
+        (mu )*(1- probcensabove_train - probcensbelow_train) +
         sigma*( dnorm(below_cens, mean = mu , sd = sigma) -
                   dnorm(above_cens, mean = mu , sd = sigma) ) +
         above_cens*probcensabove_train
