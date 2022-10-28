@@ -505,6 +505,10 @@ tbart2c <- function(x.train,
   sampler_z$setSigma(sigma = 1)
   sampler_z$setWeights(weights = weightstemp)
 
+
+  # print("Line 509")
+
+
   sampler_z$sampleTreesFromPrior()
 
   # priormean_z <- sampler_z$predict(xdf_z)[1,]
@@ -729,7 +733,20 @@ tbart2c <- function(x.train,
 
     weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
 
+
+    # print("Line 737")
+    # print("weightstemp = ")
+    # print(weightstemp)
+    #
+    # print("gamma1 = ")
+    # print(gamma1)
+    #
+    # print("phi1 = ")
+    # print(phi1)
+
     sampler_z$setWeights(weights = weightstemp)
+
+    # print("Line 741")
 
     samplestemp_z <- sampler_z$run()
 
@@ -855,20 +872,30 @@ tbart2c <- function(x.train,
     S1 <- S0 + (gamma1^2)/G0 + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
 
     if(vh_prior == TRUE){
-      S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
+      # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
+      S1 <- S0 + (gamma1^2)/tau + crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  ) # + crossprod(y_epsilon)
     }
     # print("S1 = ")
     # print(S1)
     # print("n_one = ")
     # print(n_one)
 
+
+    # print("Line 883 phi1 = ")
+    # print(phi1)
+
     # draw from inverse gamma
     phi1 <- 1/rgamma(n = 1, shape =  n_one/2, rate = S1/2)
 
 
-
-
-
+    # print("Line 890 phi1 = ")
+    # print(phi1)
+    #
+    # print("Line 890 n_one = ")
+    # print(n_one)
+    #
+    # print("Line 890 S1 = ")
+    # print(S1)
     # print("gamma1 = ")
     # print(gamma1)
 
@@ -876,8 +903,6 @@ tbart2c <- function(x.train,
     ######### update Sigma matrix #####################################################
 
     Sigma_mat <- cbind(c(1,gamma1),c(gamma1,phi1+gamma1^2))
-
-
 
 
     ###### Accelerated sampler  ###############################

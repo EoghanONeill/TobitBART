@@ -1,0 +1,512 @@
+# varepsilon2_test <- rnorm(num_test, mean = 0, sd = sqrt(0.0025))
+varepsilontemp <- MASS::mvrnorm(num_test, mu = mutemp, Sigma = errSigma)
+varepsilon1_test <- varepsilontemp[,1]
+varepsilon2_test <- varepsilontemp[,2]
+s11 <- -0.7*(4*Xmat_test[,1] +
+2.5*Xmat_test[,1]^2 +
+0.7*sin(5*Xmat_test[,1]) +
+cos(7.5*Xmat_test[,1]) )
+s12 <- -0.4*(-0.3 -
+1.6*Xmat_test[,2] +
+sin(5*Xmat_test[,2]) )
+s21 <- 0.6*(exp(Xmat_test[,1]) +
+sin(2.9*Xmat_test[,1]) )
+y1star_test <- theta11 + 2.5*Xmat_test[,3] + s11 + s12 + varepsilon1_test
+y2star_test <- -0.68 + 1.5*Xmat_test[,3] + s21 + varepsilon2_test
+y2obs_test <- ifelse(y1star_test>0, y2star_test,NA)
+y2response_test <- ifelse(y1star_test>0, 1,0)
+# selection      = z~x1
+# outcome      = y~x1 +s(x2)
+f_selection <-  ys ~ s(x.1) + s(x.2) #+ x.3
+f_outcome <-  yo ~ s(x.1) + s(x.2) #+ x.3
+f_selection <-  ys ~ s(x.1) + s(x.2) + x.3
+f_outcome <-  yo ~ s(x.1) + s(x.2) + x.3
+# f_selection <-  ys ~ x.1 + x.2 + x.3
+# f_outcome <-  yo ~ x.1 + x.2 + x.3
+data2$yo[is.na(data2$yo)] <-  0
+newdatatest.list <- split(newdatatest, seq(nrow(newdatatest)))
+newdatatest.list <- as.list(as.data.frame(t(newdatatest)))
+sim=ssm(selection=f_selection,
+outcome=f_outcome,
+data=data2,#numBurnIn=10000,numSamples=40000,thin=40, numKnots=20
+x.pred = newdatatest.list,
+numBurnIn=1000,numSamples=10000,thin=5, numKnots=20,
+x.pred = newdatatest.list)
+data2 <- data.frame(yo = y2obs_train,
+ys = y2response_train,
+x = Xmat_train)
+# data2x <- data2[, !(colnames(data2) %in% c("yo", "ys") )]
+#
+#
+# splinenamesx <-   sprintf("s(%s)", names(data2x))
+#
+#
+# f_selection <- paste( "ys ~", paste(splinenamesx, collapse=" + "))
+# f_outcome <- paste( "yo ~", paste(splinenamesx, collapse=" + "))
+# sapply(names(data2x), paste, ")", sep="")
+# sprintf("s(%s)", names(data2x))
+f_selection <-  ys ~ s(x.1) + s(x.2) + x.3
+f_outcome <-  yo ~ s(x.1) + s(x.2) + x.3
+# data2 <- data.frame(yo = y2obs_train,
+#                     ys = y2response_train,
+#                     x = Xmat_train)
+# tbartII_example <- tbart2c(Xmat_train,
+#                            Xmat_test,
+#                            Xmat_train,
+#                            Xmat_test,
+#                            y2obs_train,
+f_selection <-  ys ~ s(x.1) + s(x.2) #+ x.3
+f_outcome <-  yo ~ s(x.1) + s(x.2) #+ x.3
+f_selection <-  ys ~ s(x.1) + s(x.2) + x.3
+f_outcome <-  yo ~ s(x.1) + s(x.2) + x.3
+# f_selection <-  ys ~ x.1 + x.2 + x.3
+# f_outcome <-  yo ~ x.1 + x.2 + x.3
+data2$yo[is.na(data2$yo)] <-  0
+newdatatest.list <- split(newdatatest, seq(nrow(newdatatest)))
+newdatatest.list <- as.list(as.data.frame(t(newdatatest)))
+newdatatest <- data.frame(x = Xmat_test)
+f_selection <-  ys ~ s(x.1) + s(x.2) #+ x.3
+f_outcome <-  yo ~ s(x.1) + s(x.2) #+ x.3
+f_selection <-  ys ~ s(x.1) + s(x.2) + x.3
+f_outcome <-  yo ~ s(x.1) + s(x.2) + x.3
+# f_selection <-  ys ~ x.1 + x.2 + x.3
+# f_outcome <-  yo ~ x.1 + x.2 + x.3
+data2$yo[is.na(data2$yo)] <-  0
+newdatatest.list <- split(newdatatest, seq(nrow(newdatatest)))
+newdatatest.list <- as.list(as.data.frame(t(newdatatest)))
+newdatatest.list
+newdatatest
+newdatatest.list <- as.list(newdatatest$x.1,  newdatatest$x.2, newdatatest$x.1,  newdatatest$x.2  )
+sim=ssm(selection=f_selection,
+outcome=f_outcome,
+data=data2,#numBurnIn=10000,numSamples=40000,thin=40, numKnots=20
+x.pred = newdatatest.list,
+numBurnIn=1000,numSamples=10000,thin=5, numKnots=20,
+x.pred = newdatatest.list)
+sim=ssm(selection=f_selection,
+outcome=f_outcome,
+data=data2,#numBurnIn=10000,numSamples=40000,thin=40, numKnots=20
+x.pred = newdatatest.list,
+numBurnIn=1000,numSamples=10000,thin=5, numKnots=20
+)
+data2
+sim=ssm(selection=f_selection,
+outcome=f_outcome,
+data=data2,#numBurnIn=10000,numSamples=40000,thin=40, numKnots=20
+x.pred = newdatatest.list,
+numBurnIn=1000,numSamples=10000,thin=5, numKnots=20)
+newdatatest.list <- list(newdatatest$x.1,  newdatatest$x.2, newdatatest$x.1,  newdatatest$x.2  )
+sim=ssm(selection=f_selection,
+outcome=f_outcome,
+data=data2,#numBurnIn=10000,numSamples=40000,thin=40, numKnots=20
+x.pred = newdatatest.list,
+numBurnIn=1000,numSamples=10000,thin=5, numKnots=20)
+yhat = cbind(1, test$x1, test$x2) %*% sim$coefficients$outcome + sim$f.pred[[2]] + sim$f.pred[[3]]
+yhat = cbind(1, newdatatest.list$x1, newdatatest.list$x2) %*% sim$coefficients$outcome + sim$f.pred[[2]] + sim$f.pred[[3]]
+sim$coefficients$outcome
+yhat = cbind(1, newdatatest.list$x3) %*% sim$coefficients$outcome + sim$f.pred[[2]] + sim$f.pred[[3]]
+cbind(1, newdatatest.list$x3) %*% sim$coefficients$outcome
+sim$coefficients$outcome
+cbind(1, newdatatest.list$x3)
+cbind(1, newdatatest$x3) %*% sim$coefficients$outcome
+cbind(1, newdatatest$x3)
+newdatatest$x3
+newdatatest
+cbind(1, newdatatest$x.3) %*% sim$coefficients$outcome
+yhat = cbind(1, newdatatest$x.3) %*% sim$coefficients$outcome + sim$f.pred[[2]] + sim$f.pred[[3]]
+yhat
+sim$f.pred[[2]]
+sim$f.pred[[3]]
+sim$f.pre
+yhat = cbind(1, newdatatest$x.3) %*% sim$coefficients$outcome + sim$f.pred[[3]] + sim$f.pred[[4]]
+zhat = cbind(1, newdatatest$x.3) %*% sim$coefficients$selection + sim$f.pred[[1]] + sim$f.pred[[2]]
+pred_probs_spline_test <- as.numeric( pnorm(zhat))
+# maybe should be just pnorm(spline_z_preds)
+#Training (within-sample) Prediction Realization Table
+cutoff_point <- mean(y2response_train>0)
+test_bin_preds <- ifelse(pred_probs_spline_test > cutoff_point,1,0)
+test_bin_preds
+bayessplinetest_hr_temp <- sum(y2response_test == test_bin_preds)/length(y2response_test)
+bayessplinetest_hr_temp
+bayessplinetest_brier_temp <- mean( ( pred_probs_spline_test  -  y2response_test )^2)
+bayessplinetest_brier_temp
+predapp_bayesspline <- prediction(pred_probs_spline_test , y2response_test)
+app_bayesspline_perf <- performance(predapp_bayesspline, measure = "auc")
+bayesspline_AUC_temp <- app_bayesspline_perf@y.values
+bayesspline_MSE_temp_cens <- sqrt(mean((y2obs_test[y2response_test] - splinepreds[y2response_test]  )^2 ))
+bayesspline_MSE_temp_uncens <- sqrt(mean((y2star_test - splinepreds  )^2 ))
+bayesspline_MSE_temp_cens <- sqrt(mean((y2obs_test[y2response_test] - yhat[y2response_test]  )^2 ))
+bayesspline_MSE_temp_uncens <- sqrt(mean((y2star_test - yhat  )^2 ))
+bayesspline_MSE_temp_cens
+bayesspline_MSE_temp_uncens
+y2response_test
+y2obs_test
+y2obs_test[y2response_test]
+y2response_test
+y2obs_test[y2response_test]
+y2response_test <- ifelse(y1star_test>0, 1,0)
+y2obs_test[y2response_test]
+y2obs_test <- ifelse(y1star_test>0, y2star_test,NA)
+y2response_test <- ifelse(y1star_test>0, 1,0)
+cbind(y2obs_test, y2response_test)
+y2obs_test[y2response_test]
+y2obs_test[y2response_test==1]
+yhat = cbind(1, newdatatest$x.3) %*% sim$coefficients$outcome + sim$f.pred[[3]] + sim$f.pred[[4]]
+zhat = cbind(1, newdatatest$x.3) %*% sim$coefficients$selection + sim$f.pred[[1]] + sim$f.pred[[2]]
+pred_probs_spline_test <- as.numeric( pnorm(zhat))
+# maybe should be just pnorm(spline_z_preds)
+#Training (within-sample) Prediction Realization Table
+cutoff_point <- mean(y2response_train>0)
+test_bin_preds <- ifelse(pred_probs_spline_test > cutoff_point,1,0)
+# EDIT PREDICTIONS OF ALL METHODS.
+# DECIDE WHAT IS BEING PREDICTED.
+# UNCENSORED OUTCOMES for test obs
+# just censored outcomes for test obs
+# both?
+#Training (within-sample) Prediction Realization Table
+bayessplinetest_hr_temp <- sum(y2response_test == test_bin_preds)/length(y2response_test)
+bayessplinetest_brier_temp <- mean( ( pred_probs_spline_test  -  y2response_test )^2)
+predapp_bayesspline <- prediction(pred_probs_spline_test , y2response_test)
+app_bayesspline_perf <- performance(predapp_bayesspline, measure = "auc")
+bayesspline_AUC_temp <- app_bayesspline_perf@y.values
+bayesspline_MSE_temp_cens <- sqrt(mean((y2obs_test[y2response_test==1] - yhat[y2response_test==1]  )^2 ))
+bayesspline_MSE_temp_uncens <- sqrt(mean((y2star_test - yhat  )^2 ))
+bayesspline_MSE_temp_uncens
+bayesspline_MSE_temp_cens
+library(safeBart)
+library(MASS)
+library(BART)
+library(caret)
+library(ROCR)
+library(xtable)
+library(tidyverse)
+library(ranger)
+library(AER)
+#install.packages("fitdistrplus")
+library(fitdistrplus)
+library(TobitBART)
+library(AER)
+library(sampleSelection)
+library(doParallel)
+library(parallel)
+#R seed
+set.seed(100)
+#C++ seed
+seed <- 100
+nsims <- 10
+n_rep <- nsims
+#Type II tobit simulation
+# tbartistest_hr <- vector(mode= 'numeric', length=nsims)
+# tbartistest_brier <- vector(mode= 'numeric', length=nsims)
+# tbartis_AUC <- vector(mode= 'numeric', length=nsims)
+# tbartis_MSE <- vector(mode= 'numeric', length=nsims)
+# tobit1test_hr <- vector(mode= 'numeric', length=nsims)
+# tobit1test_brier <- vector(mode= 'numeric', length=nsims)
+# tobit1_AUC <- vector(mode= 'numeric', length=nsims)
+tobit2test_hr <- vector(mode= 'numeric', length=nsims)
+tobit2test_brier <- vector(mode= 'numeric', length=nsims)
+tobit2_AUC <- vector(mode= 'numeric', length=nsims)
+tobit2_MSE_cond <- vector(mode= 'numeric', length=nsims)
+tobit2_MSE_uncond <- vector(mode= 'numeric', length=nsims)
+tobit2mltest_hr <- vector(mode= 'numeric', length=nsims)
+tobit2mltest_brier <- vector(mode= 'numeric', length=nsims)
+tobit2ml_AUC <- vector(mode= 'numeric', length=nsims)
+tobit2ml_MSE_cond <- vector(mode= 'numeric', length=nsims)
+tobit2ml_MSE_uncond <- vector(mode= 'numeric', length=nsims)
+# lbartistest_hr <- vector(mode= 'numeric', length=nsims)
+# lbartistest_brier <- vector(mode= 'numeric', length=nsims)
+# lbartis_AUC <- vector(mode= 'numeric', length=nsims)
+probitBARTtest_hr <- vector(mode= 'numeric', length=nsims)
+probitBARTtest_brier <- vector(mode= 'numeric', length=nsims)
+probitBART_AUC <- vector(mode= 'numeric', length=nsims)
+probitBART_MSE <- vector(mode= 'numeric', length=nsims)
+probitBART_MSE_cond <- vector(mode= 'numeric', length=nsims)
+probitBART_MSE_uncond <- vector(mode= 'numeric', length=nsims)
+logitBARTtest_hr <- vector(mode= 'numeric', length=nsims)
+logitBARTtest_brier <- vector(mode= 'numeric', length=nsims)
+logitBART_AUC <- vector(mode= 'numeric', length=nsims)
+logitBART_MSE_cond <- vector(mode= 'numeric', length=nsims)
+logitBART_MSE_uncond <- vector(mode= 'numeric', length=nsims)
+logregtest_hr <- vector(mode= 'numeric', length=nsims)
+logregtest_brier <- vector(mode= 'numeric', length=nsims)
+logreg_AUC <- vector(mode= 'numeric', length=nsims)
+rftest_hr <- vector(mode= 'numeric', length=nsims)
+rftest_brier <- vector(mode= 'numeric', length=nsims)
+rf_AUC <- vector(mode= 'numeric', length=nsims)
+rf_MSE <- vector(mode= 'numeric', length=nsims)
+rf_MSE_cond <- vector(mode= 'numeric', length=nsims)
+rf_MSE_uncond <- vector(mode= 'numeric', length=nsims)
+# tbartmcmc1test_hr  <- vector(mode= 'numeric', length=nsims)
+# tbartmcmc1test_brier  <- vector(mode= 'numeric', length=nsims)
+# tbartmcmc1_AUC  <- vector(mode= 'numeric', length=nsims)
+# tbartmcmc1_MSE  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2test_hr  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2test_brier  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2_AUC  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2_MSE  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2_MSE_cond  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2_MSE_uncond  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2nptest_hr  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2nptest_brier  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2np_AUC  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2np_MSE  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2np_MSE_cond  <- vector(mode= 'numeric', length=nsims)
+tbartmcmc2np_MSE_uncond  <- vector(mode= 'numeric', length=nsims)
+penliksplinetest_hr  <- vector(mode= 'numeric', length=nsims)
+penliksplinetest_brier  <- vector(mode= 'numeric', length=nsims)
+penlikspline_AUC  <- vector(mode= 'numeric', length=nsims)
+penlikspline_MSE_cond  <- vector(mode= 'numeric', length=nsims)
+penlikspline_MSE_uncond  <- vector(mode= 'numeric', length=nsims)
+bayessplinetest_hr  <- vector(mode= 'numeric', length=nsims)
+bayessplinetest_brier  <- vector(mode= 'numeric', length=nsims)
+bayesspline_AUC  <- vector(mode= 'numeric', length=nsims)
+bayesspline_MSE_cond  <- vector(mode= 'numeric', length=nsims)
+bayesspline_MSE_uncond  <- vector(mode= 'numeric', length=nsims)
+rho_vec <- c(-0.9,-0.5,-0.1,0.1,0.5,0.9)
+dgp_vec <- 1:4
+param_mat <- expand.grid(rho_vec, dgp_vec)
+num_par_settings <- nrow(param_mat)
+num_covars <- 20
+cov_mat <- matrix(NA, nrow = num_covars,ncol = num_covars)
+for(i in 1:num_covars){
+for(j in 1:num_covars){
+cov_mat[i,j] <- 0.3^(abs(i-j))
+}
+}
+delta_vec <- rep(0,num_covars+1)
+beta_vec <- rep(0, num_covars)
+for(j in 2*(1:10)){
+delta_vec[j] <- 1/3
+beta_vec[j] <- 2/(3*(j^2))
+}
+delta_vec[num_covars+1] <- 1/3
+rep_ind <- 1
+library(safeBart)
+library(MASS)
+library(BART)
+library(caret)
+library(ROCR)
+library(xtable)
+library(tidyverse)
+library(ranger)
+library(AER)
+#install.packages("fitdistrplus")
+library(fitdistrplus)
+library(TobitBART)
+library(AER)
+library(sampleSelection)
+library(mvtnorm)
+library(bayesIV)
+library(GJRM)
+# source("C:/Users/77029eon/Dropbox/tobitBART/code/ssmnew.R")
+# j indexes parameter setting
+# i indexes iteration number for that parameter setting
+j <- ifelse( (rep_ind %% n_rep) ==0, n_rep, rep_ind %% n_rep)
+i <- ((rep_ind - 1) %/% n_rep ) + 1
+num_train <- 2500
+#consider increasing the number of covariates
+#
+#   Xmat_train <- matrix(NA,nrow = num_train,
+#                        ncol = 8)
+#
+#
+#
+#
+#   Xmat_train[,1] <- runif(num_train, min = -1, max = 1)
+#   Xmat_train[,2] <- rf(num_train,20,20)
+#   Xmat_train[,3] <- rbinom(num_train, size = 1, prob = 0.75)
+#   Xmat_train[,4] <- rnorm(num_train, mean = 1, sd = 1)
+#   Xmat_train[,5] <- rnorm(num_train)
+#   Xmat_train[,6] <- rbinom(num_train, size = 1, prob = 0.5)
+#   Xmat_train[,7] <- rf(num_train,20,200)
+#   Xmat_train[,8] <- runif(num_train, min = 0, max = 2)
+rho_sim <- param_mat[j,1]
+dgp_num <- param_mat[j,2]
+Xmat_train=rmvnorm(n=num_train,
+mean=rep(0,num_covars),
+sigma=cov_mat)
+U_train <- rnorm(num_train)
+zstarmean_train <- cbind(Xmat_train,U_train)%*%delta_vec
+errSigma <- matrix(c(1, rho_sim,
+rho_sim, 1),
+nrow = 2, ncol = 2, byrow = TRUE)
+mutemp <- c(0,0)
+#it would be better to test performance of the models when there is correlation in the error terms.
+# varepsilon1_train <- rnorm(num_train, mean = 0, sd = sqrt(0.0025))
+# varepsilon2_train <- rnorm(num_train, mean = 0, sd = sqrt(0.0025))
+varepsilontemp <- MASS::mvrnorm(num_train, mu = mutemp, Sigma = errSigma)
+varepsilon1_train <- varepsilontemp[,1]
+varepsilon2_train <- varepsilontemp[,2]
+y1star_train <- zstarmean_train + varepsilon1_train
+if(dgp_num ==1){
+ytrain_mean <- Xmat_train%*%beta_vec
+}
+if(dgp_num ==2){
+ytrain_mean <- -0.55 + 0.75*(Xmat_train%*%beta_vec - 0.5)^2
+}
+if(dgp_num ==3){
+ytrain_mean <- -0.25 + 1.25*sin(0.5*pi + (0.75*pi*Xmat_train%*%beta_vec))
+}
+if(dgp_num ==4){
+ytrain_mean <- -0.25 + 1.25*sin(0.5*pi + (0.75*pi*(Xmat_train%*%beta_vec  +
+(Xmat_train^2)%*%beta_vec  +
+(Xmat_train^3)%*%beta_vec)  )  )
+}
+y2star_train <- ytrain_mean + varepsilon2_train
+y2obs_train <- ifelse(y1star_train>0, y2star_train,NA)
+y2response_train <- ifelse(y1star_train>0, 1,0)
+#Type II tobit simulation
+num_test <- 2500
+#consider increasing the number of covariates
+Xmat_test=rmvnorm(n=num_test,
+mean=rep(0,num_covars),
+sigma=cov_mat)
+U_test <- rnorm(num_test)
+zstarmean_test <- cbind(Xmat_test,U_test)%*%delta_vec
+errSigma <- matrix(c(1, rho_sim,
+rho_sim, 1),
+nrow = 2, ncol = 2, byrow = TRUE)
+mutemp <- c(0,0)
+#it would be better to test performance of the models when there is correlation in the error terms.
+# varepsilon1_test <- rnorm(num_test, mean = 0, sd = sqrt(0.0025))
+# varepsilon2_test <- rnorm(num_test, mean = 0, sd = sqrt(0.0025))
+varepsilontemp <- MASS::mvrnorm(num_test, mu = mutemp, Sigma = errSigma)
+varepsilon1_test <- varepsilontemp[,1]
+varepsilon2_test <- varepsilontemp[,2]
+y1star_test <- zstarmean_test + varepsilon1_test
+if(dgp_num ==1){
+ytrain_mean <- Xmat_test%*%beta_vec
+}
+if(dgp_num ==2){
+ytrain_mean <- -0.55 + 0.75*(Xmat_test%*%beta_vec - 0.5)^2
+}
+if(dgp_num ==3){
+ytrain_mean <- -0.25 + 1.25*sin(0.5*pi + (0.75*pi*Xmat_test%*%beta_vec))
+}
+if(dgp_num ==4){
+ytrain_mean <- -0.25 + 1.25*sin(0.5*pi + (0.75*pi*(Xmat_test%*%beta_vec  +
+(Xmat_test^2)%*%beta_vec  +
+(Xmat_test^3)%*%beta_vec)  )  )
+}
+y2star_test <- ytrain_mean + varepsilon2_test
+y2obs_test <- ifelse(y1star_test>0, y2star_test,NA)
+y2response_test <- ifelse(y1star_test>0, 1,0)
+data2 <- data.frame(yo = y2obs_train,
+ys = y2response_train,
+x = Xmat_train)
+data2
+data2 <- data.frame(yo = y2obs_train,
+ys = y2response_train,
+x = Xmat_train)
+# data2x <- data2[, !(colnames(data2) %in% c("yo", "ys") )]
+#
+#
+# splinenamesx <-   sprintf("s(%s)", names(data2x))
+#
+#
+# f_selection <- paste( "ys ~", paste(splinenamesx, collapse=" + "))
+# f_outcome <- paste( "yo ~", paste(splinenamesx, collapse=" + "))
+# sapply(names(data2x), paste, ")", sep="")
+# sprintf("s(%s)", names(data2x))
+f_selection <-  ys ~ s(x.1) + s(x.2) + s(x.3)+ s(x.4)+ s(x.5)+
+s(x.6)+ s(x.7)+ s(x.8)+ s(x.9)+ s(x.10)+
+s(x.11)+ s(x.12)+ s(x.13)+ s(x.14)+ s(x.15)+
+s(x.16)+ s(x.17)+ s(x.18)+ s(x.19)+ s(x.20)
+f_outcome <-  yo ~ s(x.1) + s(x.2) + s(x.3)+ s(x.4)+ s(x.5)+
+s(x.6)+ s(x.7)+ s(x.8)+ s(x.9)+ s(x.10)+
+s(x.11)+ s(x.12)+ s(x.13)+ s(x.14)+ s(x.15)+
+s(x.16)+ s(x.17)+ s(x.18)+ s(x.19)+ s(x.20)
+newdatatest <- data.frame(x = Xmat_test)
+f_selection <-  ys ~ s(x.1) + s(x.2) + s(x.3)+ s(x.4)+ s(x.5)+
+s(x.6)+ s(x.7)+ s(x.8)+ s(x.9)+ s(x.10)+
+s(x.11)+ s(x.12)+ s(x.13)+ s(x.14)+ s(x.15)+
+s(x.16)+ s(x.17)+ s(x.18)+ s(x.19)+ s(x.20)
+f_outcome <-  yo ~ s(x.1) + s(x.2) + s(x.3)+ s(x.4)+ s(x.5)+
+s(x.6)+ s(x.7)+ s(x.8)+ s(x.9)+ s(x.10)+
+s(x.11)+ s(x.12)+ s(x.13)+ s(x.14)+ s(x.15)+
+s(x.16)+ s(x.17)+ s(x.18)+ s(x.19)+ s(x.20)
+# f_selection <-  ys ~ x.1 + x.2 + x.3
+# f_outcome <-  yo ~ x.1 + x.2 + x.3
+data2$yo[is.na(data2$yo)] <-  0
+# newdatatest.list <- split(newdatatest, seq(nrow(newdatatest)))
+# newdatatest.list <- as.list(as.data.frame(t(newdatatest)))
+newdatatest.list <- list(newdatatest$x.1, newdatatest$x.2, newdatatest$x.3, newdatatest$x.4, newdatatest$x.5,
+newdatatest$x.6, newdatatest$x.7, newdatatest$x.8, newdatatest$x.9, newdatatest$x.10,
+newdatatest$x.11, newdatatest$x.12, newdatatest$x.13, newdatatest$x.14, newdatatest$x.15,
+newdatatest$x.16, newdatatest$x.17, newdatatest$x.18, newdatatest$x.19, newdatatest$x.20,
+newdatatest$x.1, newdatatest$x.2, newdatatest$x.3, newdatatest$x.4, newdatatest$x.5,
+newdatatest$x.6, newdatatest$x.7, newdatatest$x.8, newdatatest$x.9, newdatatest$x.10,
+newdatatest$x.11, newdatatest$x.12, newdatatest$x.13, newdatatest$x.14, newdatatest$x.15,
+newdatatest$x.16, newdatatest$x.17, newdatatest$x.18, newdatatest$x.19, newdatatest$x.20)
+sim=ssm(selection=f_selection,
+outcome=f_outcome,
+data=data2,#numBurnIn=10000,numSamples=40000,thin=40, numKnots=20
+x.pred = newdatatest.list,
+numBurnIn=1000,numSamples=10000,thin=5, numKnots=20)
+yhat = cbind(1) %*% sim$coefficients$outcome +
+sim$f.pred[[21]] + sim$f.pred[[22]] + sim$f.pred[[23]] + sim$f.pred[[24]] + sim$f.pred[[25]] +
+sim$f.pred[[26]] +sim$f.pred[[27]] +sim$f.pred[[28]] +sim$f.pred[[29]] +sim$f.pred[[30]] +
+sim$f.pred[[31]] + sim$f.pred[[32]] + sim$f.pred[[33]] + sim$f.pred[[34]] + sim$f.pred[[35]] +
+sim$f.pred[[36]] +sim$f.pred[[37]] +sim$f.pred[[38]] +sim$f.pred[[39]] +sim$f.pred[[40]]
+zhat = cbind(1) %*% sim$coefficients$selection +
+sim$f.pred[[1]] + sim$f.pred[[2]] + sim$f.pred[[3]] + sim$f.pred[[4]] + sim$f.pred[[5]] +
+sim$f.pred[[6]] +sim$f.pred[[7]] +sim$f.pred[[8]] +sim$f.pred[[9]] +sim$f.pred[[10]] +
+sim$f.pred[[11]] + sim$f.pred[[12]] + sim$f.pred[[13]] + sim$f.pred[[14]] + sim$f.pred[[15]] +
+sim$f.pred[[16]] +sim$f.pred[[17]] +sim$f.pred[[18]] +sim$f.pred[[19]] +sim$f.pred[[20]]
+cbind(1) %*% sim$coefficients$outcome
+sim$f.pred[[21]]
+cbind(1) %*% sim$coefficients$outcome
+sim$coefficients$outcome
+yhat = #cbind(1) %*%
+sim$coefficients$outcome +
+sim$f.pred[[21]] + sim$f.pred[[22]] + sim$f.pred[[23]] + sim$f.pred[[24]] + sim$f.pred[[25]] +
+sim$f.pred[[26]] +sim$f.pred[[27]] +sim$f.pred[[28]] +sim$f.pred[[29]] +sim$f.pred[[30]] +
+sim$f.pred[[31]] + sim$f.pred[[32]] + sim$f.pred[[33]] + sim$f.pred[[34]] + sim$f.pred[[35]] +
+sim$f.pred[[36]] +sim$f.pred[[37]] +sim$f.pred[[38]] +sim$f.pred[[39]] +sim$f.pred[[40]]
+zhat = #cbind(1) %*%
+sim$coefficients$selection +
+sim$f.pred[[1]] + sim$f.pred[[2]] + sim$f.pred[[3]] + sim$f.pred[[4]] + sim$f.pred[[5]] +
+sim$f.pred[[6]] +sim$f.pred[[7]] +sim$f.pred[[8]] +sim$f.pred[[9]] +sim$f.pred[[10]] +
+sim$f.pred[[11]] + sim$f.pred[[12]] + sim$f.pred[[13]] + sim$f.pred[[14]] + sim$f.pred[[15]] +
+sim$f.pred[[16]] +sim$f.pred[[17]] +sim$f.pred[[18]] +sim$f.pred[[19]] +sim$f.pred[[20]]
+pred_probs_spline_test <- as.numeric( pnorm(zhat))
+# maybe should be just pnorm(spline_z_preds)
+#Training (within-sample) Prediction Realization Table
+cutoff_point <- mean(y2response_train>0)
+test_bin_preds <- ifelse(pred_probs_spline_test > cutoff_point,1,0)
+# EDIT PREDICTIONS OF ALL METHODS.
+# DECIDE WHAT IS BEING PREDICTED.
+# UNCENSORED OUTCOMES for test obs
+# just censored outcomes for test obs
+# both?
+#Training (within-sample) Prediction Realization Table
+bayessplinetest_hr_temp <- sum(y2response_test == test_bin_preds)/length(y2response_test)
+bayessplinetest_brier_temp <- mean( ( pred_probs_spline_test  -  y2response_test )^2)
+predapp_bayesspline <- prediction(pred_probs_spline_test , y2response_test)
+app_bayesspline_perf <- performance(predapp_bayesspline, measure = "auc")
+bayesspline_AUC_temp <- app_bayesspline_perf@y.values
+bayesspline_MSE_temp_cens <- sqrt(mean((y2obs_test[y2response_test==1] - yhat[y2response_test==1]  )^2 ))
+bayesspline_MSE_temp_uncens <- sqrt(mean((y2star_test - yhat  )^2 ))
+bayesspline_MSE_temp_cens
+bayesspline_MSE_temp_uncens
+bayesspline_AUC_temp
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
+gc()
