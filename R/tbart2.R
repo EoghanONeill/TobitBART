@@ -814,8 +814,24 @@ tbart2 <- function(x.train,
 
       #calculate conditional expectation
 
-      condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z - offsetz ))/(1-probcens_train)
-      condexptest <- mutemp_test_y + gamma1*(dnorm(- mutemp_test_z - offsetz ))/(1-probcens_test)
+      # condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z - offsetz ))/(1-probcens_train)
+      # condexptest <- mutemp_test_y + gamma1*(dnorm(- mutemp_test_z - offsetz ))/(1-probcens_test)
+
+
+      temp_ztrain <- mutemp_z + offsetz
+
+      IMR_train <- exp( dnorm(temp_ztrain,log=T) - pnorm(temp_ztrain,log.p = T) )
+
+
+      temp_ztest <- mutemp_test_z + offsetz
+
+      IMR_test <- exp( dnorm(temp_ztest,log=T) - pnorm(temp_ztest,log.p = T) )
+
+
+      condexptrain <- mutemp_y + gamma1*IMR_train
+      condexptest <- mutemp_test_y + gamma1*IMR_test
+
+
 
 
       # draw$Z.mat_train[,iter_min_burnin] <- z

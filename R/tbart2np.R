@@ -2282,11 +2282,48 @@ tbart2np <- function(x.train,
                               sd = sqrt(tau*phitilde))
 
 
+          if( (is.na(gammatilde)) | !is.finite(gammatilde)   ){
+            print("gammatilde = ")
+            print(gammatilde)
+
+            print("nzero = ")
+            print(nzero)
+
+
+            print("S0 = ")
+            print(S0)
+
+
+            print("gamma0 = ")
+            print(gamma0)
+            print("tau = ")
+            print(tau)
+            print("phitilde = ")
+            print(phitilde)
+
+            stop("gamma tilde stop")
+          }
+
           varthetamat_test[i,] <- c(mutilde, phitilde, gammatilde)
 
 
         }else{
           varthetamat_test[i,] <- varthetamat[temp_ind,]
+
+          if( any(is.na(gammatilde)) | any(!is.finite(gammatilde))   ){
+
+            print("varthetamat_test = ")
+            print(varthetamat_test)
+
+            print("i = ")
+            print(i)
+
+            print("temp_ind = ")
+            print(temp_ind)
+
+          }
+
+
         }
 
       } # end of for-loop of length ntest
@@ -2519,11 +2556,78 @@ tbart2np <- function(x.train,
       #calculate conditional expectation
 
       # condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z - offsetz ))/(1-probcens_train)
-      condexptrain <- mutemp_y + varthetamat[uncens_inds,2] + varthetamat[uncens_inds,4]*
-        (dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1]))/(1-probcens_train)
+
+      temp_ztrain <- mutemp_z[uncens_inds] + offsetz + varthetamat[uncens_inds,1]
+
+      IMR_train <- exp( dnorm(temp_ztrain,log=T) - pnorm(temp_ztrain,log.p = T) )
+
+
+      condexptrain <- mutemp_y + varthetamat[uncens_inds,2] + varthetamat[uncens_inds,4]*IMR_train#*
+        # (dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1]))/(1-probcens_train)
+
+      # (dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1] ))/(1-probcens_test)
+
+
+      temp_ztest <- mutemp_test_z + offsetz + varthetamat_test[,1]
+
+      IMR_test <- exp( dnorm(temp_ztest,log=T) - pnorm(temp_ztest,log.p = T) )
 
       condexptest <- mutemp_test_y + varthetamat_test[,2] +
-        varthetamat_test[,4]*(dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1] ))/(1-probcens_test)
+        varthetamat_test[,4]*IMR_test#(dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1] ))/(1-probcens_test)
+
+      # condexptest <- ifelse(probcens_test ==1,
+      #                       mutemp_test_y + varthetamat_test[,2],
+      #                       mutemp_test_y + varthetamat_test[,2] +
+      #                         varthetamat_test[,4]*(dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1] ))/(1-probcens_test)
+      #                       )
+
+      if( any(is.na(condexptest)) | any(!is.finite(condexptest))   ){
+
+        print("condexptest = ")
+        print(condexptest)
+
+        print("mutemp_test_y = ")
+        print(mutemp_test_y)
+
+        print("mutemp_test_z = ")
+        print(mutemp_test_z)
+
+        print(" varthetamat_test[,4] = ")
+        print( varthetamat_test[,4])
+
+        print("which(is.na(condexptest)) = ")
+        print(which(is.na(condexptest)))
+
+
+        print("which(!is.finite(condexptest)) = ")
+        print(which(!is.finite(condexptest)))
+
+        err_inds <- which(!is.finite(condexptest))
+
+        print("offsetz= ")
+        print(offsetz)
+
+        print("condexptest[err_inds] = ")
+        print(condexptest[err_inds])
+
+        print("mutemp_test_y[err_inds] = ")
+        print(mutemp_test_y[err_inds])
+
+        print("mutemp_test_z[err_inds] = ")
+        print(mutemp_test_z[err_inds])
+
+        print(" varthetamat_test[err_inds,] = ")
+        print( varthetamat_test[err_inds,])
+
+        print(" probcens_test[err_inds] = ")
+        print( probcens_test[err_inds])
+
+
+
+        stop("any(is.na(condexptest)) | any(!is.finite(condexptest))")
+
+      }
+
 
 
       # draw$Z.mat_train[,iter_min_burnin] <- z
