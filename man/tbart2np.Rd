@@ -45,7 +45,8 @@ tbart2np(
   alpha_prior = "vh",
   c1 = 2,
   c2 = 2,
-  alpha_gridsize = 100L
+  alpha_gridsize = 100L,
+  selection_test = 1
 )
 }
 \arguments{

@@ -229,7 +229,8 @@ tbart2np <- function(x.train,
                     alpha_prior = "vh",
                     c1 = 2,
                     c2 = 2,
-                    alpha_gridsize = 100L){
+                    alpha_gridsize = 100L,
+                    selection_test = 1){
 
 
   if(!(is.integer(alpha_gridsize))){
@@ -517,6 +518,8 @@ tbart2np <- function(x.train,
     # Y.mat_test = array(NA, dim = c(ntest, n.iter)),
     mu_y_train = array(NA, dim = c(n1, n.iter)),# array(NA, dim = c(n, n.iter)),
     mu_y_test = array(NA, dim = c(ntest, n.iter)),
+    mu_y_train_noerror = array(NA, dim = c(n1, n.iter)),# array(NA, dim = c(n, n.iter)),
+    mu_y_test_noerror = array(NA, dim = c(ntest, n.iter)),
     # mucens_y_train = array(NA, dim = c(n0, n.iter)),
     muuncens_y_train = array(NA, dim = c(n1, n.iter)),
     mu_z_train = array(NA, dim = c(n, n.iter)),
@@ -542,6 +545,26 @@ tbart2np <- function(x.train,
     # draw$ydraws_train <- array(NA, dim = c(n, n.iter))
     draw$ydraws_test <- array(NA, dim = c(ntest, n.iter))
   }
+
+
+  if(selection_test ==1){
+
+    #error draws
+    # save in array
+    #first slice is selection equation error
+    #second slice is outcome equation error
+    draw$error_draws <- array(NA, dim = c(n, n.iter,2))
+    draw$error_draws_test <- array(NA, dim = c(n.iter,2))
+
+    # draw correlations and other dependence measures
+    # just one value per iteration, so it is a vector
+    draw$pearsoncorr_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
+    draw$kendalltau_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
+    draw$spearmanrho_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
+
+
+  }
+
 
 
   ########## Initialize dbarts #####################
@@ -2508,6 +2531,61 @@ tbart2np <- function(x.train,
       iter_min_burnin <- iter-n.burnin
 
 
+
+      if(selection_test ==1){
+        utrain <- matrix(NA, nrow = n, ncol = 2)
+
+        for(i in 1:n){
+
+          Sigma_mattemp <- cbind(c(1,
+                                   varthetamat[i,4]),
+                                 c(varthetamat[i,4],
+                                   varthetamat[i,3]+varthetamat[i,4]^2))
+
+
+          utrain[i,] <- Rfast::rmvnorm(n = 1,
+                                       mu = c(0,
+                                              0),
+                                       sigma = Sigma_mattemp)
+        }
+
+
+
+        draw$error_draws[,iter_min_burnin,] <- utrain
+
+        # draw correlations
+        draw$pearsoncorr_draws[iter_min_burnin] <- cor(utrain[,1],utrain[,2])
+        draw$kendalltau_draws[iter_min_burnin] <- cor(utrain[,1],utrain[,2], method = "kendall") #array(NA, dim = c(n, n.iter))
+        draw$spearmanrho_draws[iter_min_burnin] <-  cor(utrain[,1],utrain[,2], method = "spearman") #array(NA, dim = c(n, n.iter))
+
+
+        # for(i in 1:ntest){
+
+          # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
+
+        #can use first element, just need one draw from posterior predictive
+
+        Sigma_mattemp <- cbind(c(1,
+                                 varthetamat_test[1,4]),
+                               c(varthetamat_test[1,4],
+                                 varthetamat_test[1,3]+varthetamat_test[1,4]^2))
+
+
+        draw$error_draws_test[iter_min_burnin,] <- Rfast::rmvnorm(n = 1,
+                                                                  mu = c(0,
+                                                                         0),
+                                                                  sigma = Sigma_mattemp)
+        # }
+
+
+
+
+
+      }
+
+
+
+
       #NOTE y and z training sample values saved here
       #do not correspond to the the same means and errors as
       #the test values and expectations saved here.
@@ -2635,7 +2713,11 @@ tbart2np <- function(x.train,
       # draw$Y.mat_train = array(NA, dim = c(n, n.iter)),
       # draw$Y.mat_test = array(NA, dim = c(ntest, n.iter)),
       draw$mu_y_train[, iter_min_burnin] <- mutemp_y + varthetamat[uncens_inds,2]
-      draw$mu_y_test[, iter_min_burnin] <- mutemp_test_y+ varthetamat_test[,2]
+      draw$mu_y_test[, iter_min_burnin] <- mutemp_test_y + varthetamat_test[,2]
+
+      draw$mu_y_train_noerror[, iter_min_burnin] <- mutemp_y #+ varthetamat[uncens_inds,2]
+      draw$mu_y_test_noerror[, iter_min_burnin] <- mutemp_test_y #+ varthetamat_test[,2]
+
 
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
