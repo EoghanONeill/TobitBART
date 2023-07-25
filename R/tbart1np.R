@@ -205,7 +205,8 @@ tbart1np <- function(x.train,
     error_mu_train =  array(NA, dim = c(n, n.iter)),
     error_mu_test = array(NA, dim = c(ntest, n.iter)),
     cond_exp_train =  array(NA, dim = c(n, n.iter)),
-    cond_exp_test =  array(NA, dim = c(ntest, n.iter))
+    cond_exp_test =  array(NA, dim = c(ntest, n.iter)),
+    alpha = rep(NA,n.iter)
     )
 
 
@@ -597,7 +598,8 @@ tbart1np <- function(x.train,
     draw$error_mu_test[, 1] = mu1_vec_test
     draw$cond_exp_train[, 1] = condexptrain
     draw$cond_exp_test[, 1] = condexptest
-}
+    draw$alpha[1] = 1
+  }
 
 
   # print("Begin For loop")
@@ -664,6 +666,9 @@ tbart1np <- function(x.train,
       # vartheta_unique_mat <- unique(varthetamattemp)
 
       tempcol <- varthetamattemp[,1, drop = FALSE]
+
+      # THERE IS PROBABLY A MUCH FASTER WAY OF DOING THIS JUST BY UPDATING IN ITERATION
+      # BY ACCOUNTING FOR LAST INCLUDED NUMBER AND DROPPPED ROW i
 
       tempord <- order(tempcol, method = "radix")
       tempsort <- tempcol[tempord]
@@ -845,6 +850,11 @@ tbart1np <- function(x.train,
       # rprime <- dqsample.int(num_unique+1, size = 1, replace = TRUE, prob = c(qi0, q_rs))-1
 
       if(rprime>0){
+
+        # if none equal to current varthetamat[i,] and there are more than one equal to i+1^th row
+        # then can keep same vartheta_unique_mat in next iteration and it is straightforward to update the counts.
+        # not implemented yet
+
         varthetamat[i,] <- vartheta_unique_mat[rprime,]
         mu1_vec_train[i] <- varthetamat[i,1]
         sigma1_vec_train[i] <- varthetamat[i,2]
@@ -887,12 +897,13 @@ tbart1np <- function(x.train,
 
         clust_mean <- mean(z[clust_inds] -  mu[clust_inds])
 
-        varthetamat[clust_inds,2] <- sqrt(1/rgamma(n = n_j,
+        varthetamat[clust_inds,2] <- sqrt(1/rgamma(n = 1,#n_j,
                                      shape =  (nu0+n_j)/2,
-                                     rate = (nu0*lambda0/2) + sum((z[clust_inds] -  mu[clust_inds] - clust_mean )^2)/2 +
+                                     rate = (nu0*lambda0/2) +
+                                       sum((z[clust_inds] -  mu[clust_inds] - clust_mean )^2)/2 +
                                        (k0*n_j/( k0 + n_j) )*( clust_mean^2 / 2) ) )
 
-        varthetamat[clust_inds,1] <- rnorm(n=n_j,
+        varthetamat[clust_inds,1] <- rnorm(n=1,#n_j,
                                   mean =  (n_j * clust_mean )/(k0+n_j) ,
                                   sd =  varthetamat[clust_inds,2]/sqrt(k0+n_j) )
 
@@ -946,8 +957,6 @@ tbart1np <- function(x.train,
         alpha <- rgamma(1,shape = c1 + k_uniq - 1, rate = c2 - log(kappa_aux))
 
       }
-
-
 
 
     }else{
@@ -1167,7 +1176,7 @@ tbart1np <- function(x.train,
 
       draw$cond_exp_train[, iter_min_burnin] = condexptrain
       draw$cond_exp_test[, iter_min_burnin] = condexptest
-
+      draw$alpha[iter_min_burnin] <- alpha
     }
 
     if(iter %% print.opt == 0){
