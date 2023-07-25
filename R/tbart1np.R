@@ -1,4 +1,17 @@
 
+#' @export
+fastcountuniq <- function(x)
+{
+  data.table(x)[, .N, keyby = x]$N
+}
+
+#' @export
+fastnormdens <- function(x, mean = 0, sd = 0){
+  (1/(sd*sqrt(2*pi)))*exp(-0.5*((x-mean)/sd)^2)
+}
+
+
+# speed up this function if necessary by replacing dt() with a faster function
 dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 
 
@@ -9,6 +22,10 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #' @import truncnorm
 #' @import mvtnorm
 #' @import censReg
+#' @import dqrng
+#' @import data.table
+#' @import accelerometry
+#' @import wrswoR
 #' @param x.train The training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param y The training data vector of outcomes. A continuous, censored outcome variable.
@@ -39,6 +56,8 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #' @param c1 If alpha_prior == "vh", then c1 is the shape parameter of the Gamma distribution.
 #' @param c2 If alpha_prior == "vh", then c2 is the rate parameter of the Gamma distribution.
 #' @param alpha_gridsize If alpha_prior = "george", this is the size of the grid to use for the discretized samples of alpha
+#' @param mixstep If TRUE, includes a mixing step to speed up convergence of the Dirichlet Process Mixture draws. Default is TRUE.
+#' @param init.many.clust If TRUE, initialize the Dirichlet Process Mixture with many clusters instead of 1 cluster. Default is FALSE.
 #' @export
 #' @return The following objects are returned:
 #' \item{Z.matcens}{Matrix of draws of latent (censored) outcomes for censored observations. Number of rows equals number of censored training observations. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data.}
@@ -115,7 +134,9 @@ tbart1np <- function(x.train,
                    alpha_prior = "vh",
                    c1 = 2,
                    c2 = 2,
-                   alpha_gridsize = 100L
+                   alpha_gridsize = 100L,
+                   mixstep=TRUE,
+                   init.many.clust = FALSE
                    ){
 
 
@@ -300,7 +321,7 @@ tbart1np <- function(x.train,
 
   k_s <- 10 # using default from fully nonparametric BART paper
 
-  #not obvous how to set this
+  #not obvious how to set this
   #could set to maximum of linear model residuals
   emax <- max(y-mu0)
 
@@ -315,9 +336,9 @@ tbart1np <- function(x.train,
   # print(nu0*lambda0/2)
 
 
-  sigma_init <- sqrt(1/rgamma(n = 1, shape =  nu0/2, rate = nu0*lambda0/2))
+  sigma_init <- sigest#sqrt(1/rgamma(n = 1, shape =  nu0/2, rate = nu0*lambda0/2))
 
-  mu_init <- rnorm(1, mean = mu0, sd = sigma_init/sqrt(k0))
+  mu_init <- 0#rnorm(1, mean = mu0, sd = sigma_init/sqrt(k0))
 
 
   sigma1_vec_train <- rep(sigma_init, n)
@@ -326,6 +347,19 @@ tbart1np <- function(x.train,
 
   mu1_vec_train <- rep(mu_init,n)
   mu1_vec_test <- rep(mu_init,ntest)
+
+
+  if(init.many.clust==TRUE){
+    # testinitinds <- sample(1:n, ntest, replace = FALSE)
+    # testinitinds <- sample.int(n, ntest, replace = FALSE)
+    testinitinds <- dqsample.int(n, ntest, replace = FALSE)
+
+    sigma1_vec_train <- sqrt(1/rgamma(n = n, shape =  nu0/2, rate = nu0*lambda0/2))
+    sigma1_vec_test <- sigma1_vec_train[testinitinds]
+
+    mu1_vec_train <- rnorm(n = n, mean = mu0, sd = sigma_init/sqrt(k0))
+    mu1_vec_test <- mu1_vec_train[testinitinds]
+  }
 
   # mu2_vec_train <- rep(0,n)
   # mu2_vec_test <- rep(0,ntest)
@@ -445,7 +479,10 @@ tbart1np <- function(x.train,
 
 
   # must draw test parameter values
-  test_clusts <-  sample(0:n, size = ntest, replace = TRUE, prob = c(alpha/(alpha+n), rep(1/(alpha+n) ,n) ))
+  # test_clusts <-  sample(0:n, size = ntest, replace = TRUE, prob = c(alpha/(alpha+n), rep(1/(alpha+n) ,n) ))
+  test_clusts <-  sample.int(n+1, size = ntest, replace = TRUE, prob = c(alpha/(alpha+n), rep(1/(alpha+n) ,n) ))-1
+  # test_clusts <-  dqsample.int(n+1, size = ntest, replace = TRUE, prob = c(alpha/(alpha+n), rep(1/(alpha+n) ,n) ))-1
+
 
   if(sum(test_clusts >0)==0){
     # skip
@@ -495,36 +532,36 @@ tbart1np <- function(x.train,
     }else{ # above_cens !=Inf
       condexptrain <-
         (mu + mu1_vec_train)*(1- probcensabove_train ) +
-        sigma1_vec_train*(  - dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+        sigma1_vec_train*(  - fastnormdens(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
         above_cens*probcensabove_train
 
       condexptest <-
         (mutest + mu1_vec_test)*(1- probcensabove ) +
-        sigma1_vec_test*(  -dnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
+        sigma1_vec_test*(  -fastnormdens(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
         above_cens*probcensabove
     }
   }else{ # below_cens != - Inf
     if(above_cens == Inf){
       condexptrain <- below_cens*probcensbelow_train +
         (mu + mu1_vec_train)*(1 - probcensbelow_train) +
-        sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
+        sigma1_vec_train*( fastnormdens(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
 
       condexptest <- below_cens*probcensbelow +
         (mutest + mu1_vec_test)*(1 - probcensbelow) +
-        sigma1_vec_test*( dnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test)  )
+        sigma1_vec_test*( fastnormdens(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test)  )
 
 
     }else{ # above_cens !=Inf
       condexptrain <- below_cens*probcensbelow_train +
         (mu + mu1_vec_train)*(1- probcensabove_train - probcensbelow_train) +
-        sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
-                             dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+        sigma1_vec_train*( fastnormdens(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
+                             fastnormdens(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
         above_cens*probcensabove_train
 
       condexptest <- below_cens*probcensbelow +
         (mutest + mu1_vec_test)*(1- probcensabove - probcensbelow) +
-        sigma1_vec_test*( dnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) -
-                            dnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
+        sigma1_vec_test*( fastnormdens(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) -
+                            fastnormdens(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
         above_cens*probcensabove
     }
   }
@@ -612,22 +649,50 @@ tbart1np <- function(x.train,
     ######### 4 draw components of mixture ####################
     # print(" 4 draw components of mixture")
 
+    qi0vec <- alpha*dt_ls(z, df = nu0, mu = mu, sigma =  lambda0*(1 + (1/k0)) )
 
     #loop over individuals for updates
     for(i in 1:n){
 
-      qi0 <- alpha*dt_ls(z[i], df = nu0, mu = mu[i], sigma =  lambda0*(1 + (1/k0)) )
+      # qi0 <- alpha*dt_ls(z[i], df = nu0, mu = mu[i], sigma =  lambda0*(1 + (1/k0)) )
 
+      qi0 <- qi0vec[i]
+
+      # check if should drop just i^th row or all in same cluster as i.
 
       varthetamattemp <- varthetamat[-i,, drop = FALSE]
       # vartheta_unique_mat <- unique(varthetamattemp)
 
       tempcol <- varthetamattemp[,1, drop = FALSE]
 
-      ux = sort(unique(tempcol)) #vartheta_unique_mat[,1, drop = FALSE] #sort(unique(tempcol))
-      idx = match(tempcol, ux)
-      tempuniinds <- unique(idx)
-      tempord <- order(ux[tempuniinds])
+      tempord <- order(tempcol, method = "radix")
+      tempsort <- tempcol[tempord]
+      tempuniinds <- tempord[!duplicated(tempsort)]
+      # tempuniinds <- unique(match(tempsort,tempcol))
+      counts_ord <- rle2(tempsort)[,2]
+      # counts_ord <- rle(tempsort)$lengths
+
+      # tempsort <- sort(tempcol, na.last = TRUE)
+      # # tempuniinds <- order(tempcol)[!duplicated(tempsort)]
+      # tempuniinds <- unique(match(tempsort,tempcol))
+      # counts_ord <- rle(tempsort)$lengths
+
+      # tempuniinds <- order(tempcol)[!duplicated(sort(tempcol))]
+      # temprle <- rle(sort(tempcol))$lengths
+      # counts_ord <- fastcountuniq(tempcol)
+
+      # CHECK THESE LINES
+      # ux = sort(unique(tempcol)) #vartheta_unique_mat[,1, drop = FALSE] #sort(unique(tempcol))
+      # idx = match(tempcol, ux)
+      # tempuniinds <- unique(idx)
+      # counts_ord = tabulate(idx, nbins=length(ux))
+
+
+      # tempord <- order(ux[tempuniinds])
+
+
+
+
       vartheta_unique_mat <- varthetamattemp[tempuniinds, , drop = FALSE]
 
 
@@ -665,7 +730,9 @@ tbart1np <- function(x.train,
       #
       # print("length(ux)")
       # print(length(ux))
-      counts_ord = tabulate(idx, nbins=length(ux))
+      # counts_ord = tabulate(idx, nbins=length(ux))
+
+
 
 
       num_unique <- nrow(vartheta_unique_mat)
@@ -677,6 +744,12 @@ tbart1np <- function(x.train,
       # print(num_unique)
 
       if( sum(counts_ord) != n-1 ){
+        print("tempcol = ")
+        print(tempcol)
+        print("fastcountuniq(1:5) = ")
+        print(fastcountuniq(1:5))
+        print("fastcountuniq(tempcol) = ")
+        print(fastcountuniq(tempcol))
         print("counts_ord = ")
         print(counts_ord)
         print("num_unique = ")
@@ -698,17 +771,43 @@ tbart1np <- function(x.train,
         stop("Bug in count of unique values")
       }
 
+
+      # if(any(is.na(counts_ord))){
+      #
+      #   print("counts_ord = ")
+      #   print(counts_ord)
+      #   print("tempuniinds = ")
+      #   print(tempuniinds)
+      #   stop("counts_ord NA")
+      # }
+
+
       q_rs <- rep(NA, nrow(vartheta_unique_mat))
 
-      q_rs <- counts_ord*dnorm(z[i],
-                                     mean = vartheta_unique_mat[,1],
-                                     sd =  vartheta_unique_mat[,2])
+      # CHECK THIS AND SPEED IT UP
+      q_rs <- counts_ord*fastnormdens(z[i],
+                               mean = vartheta_unique_mat[,1],
+                               sd =  vartheta_unique_mat[,2])
 
 
       # for(j in 1:num_unique){
-      #   q_rs[j] <- counts_ord[j]*dnorm(z[i],
+      #   q_rs[j] <- counts_ord[j]*fastnormdens(z[i],
       #                                  mean = vartheta_unique_mat[j,1],
       #                                  sd =  vartheta_unique_mat[j,2])
+      # }
+      # if(is.na(qi0)){
+      #
+      #   print("qi0 = ")
+      #   print(qi0)
+      #   print("q_rs = ")
+      #   print(q_rs)
+      #   print("counts_ord = ")
+      #   print(counts_ord)
+      #   print("tempuniinds = ")
+      #   print(tempuniinds)
+      #   print("vartheta_unique_mat = ")
+      #   print(vartheta_unique_mat)
+      #   stop("qi0 NA before normalize")
       # }
 
       tempdemon <- qi0 + sum(q_rs)
@@ -716,7 +815,34 @@ tbart1np <- function(x.train,
       qi0 <- qi0/tempdemon
       q_rs <- q_rs/tempdemon
 
-      rprime <- sample(0:num_unique, size = 1, replace = TRUE, prob = c(qi0, q_rs))
+      # if(is.na(qi0)){
+      #
+      #   print("qi0 = ")
+      #   print(qi0)
+      #   print("q_rs = ")
+      #   print(q_rs)
+      #   print("counts_ord = ")
+      #   print(counts_ord)
+      #   print("tempuniinds = ")
+      #   print(tempuniinds)
+      #   print("vartheta_unique_mat = ")
+      #   print(vartheta_unique_mat)
+      #   stop("qi0 NA")
+      # }
+      # if(any(is.na(q_rs))){
+      #
+      #   print("qi0 = ")
+      #   print(qi0)
+      #   print("q_rs = ")
+      #   print(q_rs)
+      #   stop("q_rs NA")
+      # }
+
+      # SPEED UP THIS STEP
+      # rprime <- sample(0:num_unique, size = 1, replace = TRUE, prob = c(qi0, q_rs))
+      # rprime <- sample.int(num_unique+1, size = 1, replace = TRUE, prob = c(qi0, q_rs))-1
+      rprime <- sample_int_expj(num_unique+1, size = 1, prob = c(qi0, q_rs))-1
+      # rprime <- dqsample.int(num_unique+1, size = 1, replace = TRUE, prob = c(qi0, q_rs))-1
 
       if(rprime>0){
         varthetamat[i,] <- vartheta_unique_mat[rprime,]
@@ -724,10 +850,13 @@ tbart1np <- function(x.train,
         sigma1_vec_train[i] <- varthetamat[i,2]
 
       }else{
+
+        # speed up these samples
         varthetamat[i,2] <- sqrt(1/rgamma(n = 1,
                                      shape =  (nu0+1)/2,
                                      rate = (nu0*lambda0/2) + (z[i] -  mu[i] )^2/( 2*(1 + 1/k0))  ) )
 
+        # speed this up
         varthetamat[i,1] <- rnorm(n=1,
                                   mean =  (z[i] -  mu[i] )/(k0+1) ,
                                   sd =  varthetamat[i,2]/sqrt(k0+1) )
@@ -746,33 +875,31 @@ tbart1np <- function(x.train,
     ######### 5 mixing step ##########################
     # print("5 mixing step")
 
+    if(mixstep==TRUE){
+      vartheta_unique_mat <- unique(varthetamat)
 
-    vartheta_unique_mat <- unique(varthetamat)
+      for(j in 1:nrow(vartheta_unique_mat)){
 
-    for(j in 1:nrow(vartheta_unique_mat)){
+        #speed up sampling if possible
+        clust_inds <- which(varthetamat[,1, drop = FALSE] == vartheta_unique_mat[j,1])
 
-      clust_inds <- which(varthetamat[,1, drop = FALSE] == vartheta_unique_mat[j,1])
+        n_j <- length(clust_inds)
 
-      n_j <- length(clust_inds)
+        clust_mean <- mean(z[clust_inds] -  mu[clust_inds])
 
-      clust_mean <- mean(z[clust_inds] -  mu[clust_inds])
+        varthetamat[clust_inds,2] <- sqrt(1/rgamma(n = n_j,
+                                     shape =  (nu0+n_j)/2,
+                                     rate = (nu0*lambda0/2) + sum((z[clust_inds] -  mu[clust_inds] - clust_mean )^2)/2 +
+                                       (k0*n_j/( k0 + n_j) )*( clust_mean^2 / 2) ) )
 
-      varthetamat[clust_inds,2] <- sqrt(1/rgamma(n = n_j,
-                                   shape =  (nu0+n_j)/2,
-                                   rate = (nu0*lambda0/2) + sum((z[clust_inds] -  mu[clust_inds] - clust_mean )^2)/2 +
-                                     (k0*n_j/( k0 + n_j) )*( clust_mean^2 / 2) ) )
+        varthetamat[clust_inds,1] <- rnorm(n=n_j,
+                                  mean =  (n_j * clust_mean )/(k0+n_j) ,
+                                  sd =  varthetamat[clust_inds,2]/sqrt(k0+n_j) )
 
-      varthetamat[clust_inds,1] <- rnorm(n=n_j,
-                                mean =  (n_j * clust_mean )/(k0+n_j) ,
-                                sd =  varthetamat[clust_inds,2]/sqrt(k0+n_j) )
-
-      mu1_vec_train[clust_inds] <- varthetamat[clust_inds,1]
-      sigma1_vec_train[clust_inds] <- varthetamat[clust_inds,2]
-
-
+        mu1_vec_train[clust_inds] <- varthetamat[clust_inds,1]
+        sigma1_vec_train[clust_inds] <- varthetamat[clust_inds,2]
+      }
     }
-
-
 
     ######### 6 sample alpha ######################
     # print("6 sample alpha")
@@ -898,7 +1025,9 @@ tbart1np <- function(x.train,
         # print(post_probs_alphs)
 
         #sample from 1 to alpha_gridsize
-        index_alpha <- sample.int(n = alpha_gridsize, size = 1, prob = post_probs_alphs, replace = TRUE)
+        # index_alpha <- sample.int(n = alpha_gridsize, size = 1, prob = post_probs_alphs, replace = TRUE)
+        index_alpha <- sample_int_expj(n = alpha_gridsize, size = 1, prob = post_probs_alphs)
+
 
         alpha <- alpha_values[index_alpha]
 
@@ -922,7 +1051,9 @@ tbart1np <- function(x.train,
     # print("draw y value predictions ")
 
     # must draw test parameter values
-    test_clusts <-  sample(0:n, size = ntest, replace = TRUE, prob = c(alpha/(alpha+n), rep(1/(alpha+n) ,n) ))
+    # test_clusts <-  sample(0:n, size = ntest, replace = TRUE, prob = c(alpha/(alpha+n), rep(1/(alpha+n) ,n) ))
+    test_clusts <-  sample.int(n+1, size = ntest, replace = TRUE, prob = c(alpha/(alpha+n), rep(1/(alpha+n) ,n) ))-1
+    # test_clusts <-  dqsample.int(n+1, size = ntest, replace = TRUE, prob = c(alpha/(alpha+n), rep(1/(alpha+n) ,n) ))-1
 
     if(sum(test_clusts >0)==0){
       # skip
@@ -971,36 +1102,36 @@ tbart1np <- function(x.train,
       }else{ # above_cens !=Inf
         condexptrain <-
           (mu + mu1_vec_train)*(1- probcensabove_train ) +
-          sigma1_vec_train*(  - dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+          sigma1_vec_train*(  - fastnormdens(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
           above_cens*probcensabove_train
 
         condexptest <-
           (mutest + mu1_vec_test)*(1- probcensabove ) +
-          sigma1_vec_test*(  -dnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
+          sigma1_vec_test*(  -fastnormdens(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
           above_cens*probcensabove
       }
     }else{ # below_cens != - Inf
       if(above_cens == Inf){
         condexptrain <- below_cens*probcensbelow_train +
           (mu + mu1_vec_train)*(1 - probcensbelow_train) +
-          sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
+          sigma1_vec_train*( fastnormdens(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
 
         condexptest <- below_cens*probcensbelow +
           (mutest + mu1_vec_test)*(1 - probcensbelow) +
-          sigma1_vec_test*( dnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test)  )
+          sigma1_vec_test*( fastnormdens(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test)  )
 
 
       }else{ # above_cens !=Inf
         condexptrain <- below_cens*probcensbelow_train +
           (mu + mu1_vec_train)*(1- probcensabove_train - probcensbelow_train) +
-          sigma1_vec_train*( dnorm(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
-                               dnorm(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+          sigma1_vec_train*( fastnormdens(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
+                               fastnormdens(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
           above_cens*probcensabove_train
 
         condexptest <- below_cens*probcensbelow +
           (mutest + mu1_vec_test)*(1- probcensabove - probcensbelow) +
-          sigma1_vec_test*( dnorm(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) -
-                              dnorm(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
+          sigma1_vec_test*( fastnormdens(below_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) -
+                              fastnormdens(above_cens, mean = mutest+ mu1_vec_test, sd = sigma1_vec_test) ) +
           above_cens*probcensabove
       }
     }

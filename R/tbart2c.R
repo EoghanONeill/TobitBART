@@ -218,7 +218,7 @@ tbart2c <- function(x.train,
                     eq_by_eq = TRUE,
                     accelerate = FALSE,
                     vh_prior = TRUE,
-                    tau = 0.5){
+                    tau = 1){
 
 
 
@@ -647,22 +647,22 @@ tbart2c <- function(x.train,
   for(iter in 1:(n.iter+n.burnin)){
 
 
-    if(eq_by_eq){
-      sig_zdraw <- 1
-      sig_ydraw <- phi1
-
-    }else{
-      sig_zdraw <- phi1/(gamma1^2+phi1)
-      sig_ydraw <- phi1
-
-    }
+    # if(eq_by_eq){
+    #   var_zdraw <- 1
+    #   # sig_ydraw <- phi1
+    #
+    # }else{
+    #   var_zdraw <- phi1/(gamma1^2+phi1)
+    #   # sig_ydraw <- phi1
+    #
+    # }
 
     temp_sd_z <- sqrt( phi1/(phi1+gamma1^2)   )
 
     #draw the latent outcome
     # z[cens_inds] <- rtruncnorm(n0, a= below_cens, b = above_cens, mean = mu[cens_inds], sd = sigma)
     if(length(cens_inds)>0){
-      temp_sd_y <- sqrt(phi1 + gamma1^2)
+      # temp_sd_y <- sqrt(phi1 + gamma1^2)
 
       # print("mutemp_y[cens_inds] = ")
       # print(mutemp_y[cens_inds])
@@ -694,7 +694,7 @@ tbart2c <- function(x.train,
 
     z_epsilon <- z - offsetz - mutemp_z
 
-    y_epsilon <- rep (0, n)
+    y_epsilon <- rep(0, n)
     y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
 
     # print("temp_sd_z = ")
@@ -822,10 +822,12 @@ tbart2c <- function(x.train,
 
     # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
     G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
+    # G1inv <- (1/tau) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
     G1 <- (1/G1inv)[1,1]
 
     # gamma_one <- (G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
     gamma_one <- (G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
+    # gamma_one <- (G1*( (1/tau)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
 
     # print("phi1 = ")
     # print(phi1)
@@ -869,11 +871,14 @@ tbart2c <- function(x.train,
 
     # S1 <- S0 + (gamma1^2)*crossprod(z_epsilon) - 2*gamma1*crossprod(z_epsilon , y_epsilon   )  + crossprod(y_epsilon)
 
-    S1 <- S0 + (gamma1^2)/G0 + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
+    S1 <- 0 #S0 + (gamma1^2)/G0 + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
 
     if(vh_prior == TRUE){
       # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
-      S1 <- S0 + (gamma1^2)/tau + crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  ) # + crossprod(y_epsilon)
+      S1 <- S0 + #(gamma1^2)/tau +
+        crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  ) # + crossprod(y_epsilon)
+    }else{
+      S1 <- S0 + (gamma1^2)/G0 + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
     }
     # print("S1 = ")
     # print(S1)
@@ -908,7 +913,7 @@ tbart2c <- function(x.train,
     ###### Accelerated sampler  ###############################
 
 
-    if(accelerate){
+    if(accelerate == TRUE){
 
 
       #if prior mean for mu parameters is zero (does this make sense? require an offset for y?)

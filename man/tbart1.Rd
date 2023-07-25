@@ -29,7 +29,8 @@ tbart1(
   resid.prior = dbarts:::chisq,
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
   sigmadbarts = NA_real_,
-  print.opt = 100
+  print.opt = 100,
+  fast = TRUE
 )
 }
 \arguments{
@@ -76,6 +77,8 @@ tbart1(
 \item{sigmadbarts}{(dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.}
 
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
+
+\item{fast}{If equal to TRUE, then implements faster truncated normal draws and approximates normal pdf.}
 }
 \value{
 The following objects are returned:

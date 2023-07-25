@@ -40,7 +40,7 @@ tbart2c(
   eq_by_eq = TRUE,
   accelerate = FALSE,
   vh_prior = TRUE,
-  tau = 0.5
+  tau = 1
 )
 }
 \arguments{

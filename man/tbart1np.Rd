@@ -37,7 +37,9 @@ tbart1np(
   alpha_prior = "vh",
   c1 = 2,
   c2 = 2,
-  alpha_gridsize = 100L
+  alpha_gridsize = 100L,
+  mixstep = TRUE,
+  init.many.clust = FALSE
 )
 }
 \arguments{
@@ -100,6 +102,10 @@ tbart1np(
 \item{c2}{If alpha_prior == "vh", then c2 is the rate parameter of the Gamma distribution.}
 
 \item{alpha_gridsize}{If alpha_prior = "george", this is the size of the grid to use for the discretized samples of alpha}
+
+\item{mixstep}{If TRUE, includes a mixing step to speed up convergence of the Dirichlet Process Mixture draws. Default is TRUE.}
+
+\item{init.many.clust}{If TRUE, initialize the Dirichlet Process Mixture with many clusters instead of 1 cluster. Default is FALSE.}
 }
 \value{
 The following objects are returned:

@@ -8,7 +8,7 @@ Description: Attempt to implement Tobit Bayesian Additive Regression Trees by ad
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.2
+RoxygenNote: 7.2.3
 Imports: 
     dbarts,
     GIGrvg,
@@ -16,7 +16,13 @@ Imports:
     truncnorm,
     mvtnorm,
     Rfast,
-    censReg
+    censReg,
+    dqrng,
+    fastncdf,
+    tnorm,
+    data.table,
+    accelerometry,
+    wrswoR
 Depends: 
     R (>= 2.10)
 LazyData: true
@@ -28,4 +34,10 @@ LinkingTo:
     MASS,
     GIGrvg,
     mvtnorm,
-    Rfast
+    Rfast,
+    dqrng,
+    fastncdf,
+    tnorm,
+    data.table,
+    accelerometry,
+    wrswoR
