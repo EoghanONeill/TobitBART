@@ -17,7 +17,7 @@ tbart1np(
   n.samples = 1L,
   n.thin = 1L,
   n.chains = 1,
-  n.threads = guessNumCores(),
+  n.threads = 1L,
   printEvery = 100L,
   printCutoffs = 0L,
   rngKind = "default",
@@ -39,7 +39,8 @@ tbart1np(
   c2 = 2,
   alpha_gridsize = 100L,
   mixstep = TRUE,
-  init.many.clust = FALSE
+  init.many.clust = FALSE,
+  k0_resids = FALSE
 )
 }
 \arguments{
@@ -106,6 +107,8 @@ tbart1np(
 \item{mixstep}{If TRUE, includes a mixing step to speed up convergence of the Dirichlet Process Mixture draws. Default is TRUE.}
 
 \item{init.many.clust}{If TRUE, initialize the Dirichlet Process Mixture with many clusters instead of 1 cluster. Default is FALSE.}
+
+\item{k0_resids}{If FALSE (default) the maximum absolute value of the outcome determines k0 (with lambda0). If TRUE, the maximum residual from a linear regression determines k0.}
 }
 \value{
 The following objects are returned:

@@ -17,7 +17,7 @@ tbart1(
   n.samples = 1L,
   n.thin = 1L,
   n.chains = 1,
-  n.threads = guessNumCores(),
+  n.threads = 1L,
   printEvery = 100L,
   printCutoffs = 0L,
   rngKind = "default",
