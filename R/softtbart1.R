@@ -1,15 +1,14 @@
 
 
-#' @title Type I Tobit Bayesian Additive Regression Trees implemented using MCMC
+#' @title Type I Tobit Soft Bayesian Additive Regression Trees with sparsity inducing hyperprior implemented using MCMC
 #'
-#' @description Type I Tobit Bayesian Additive Regression Trees implemented using MCMC
+#' @description Type I Tobit Soft Bayesian Additive Regression Trees with sparsity inducing hyperprior implemented using MCMC
 #' @import dbarts
 #' @import truncnorm
 #' @import mvtnorm
 #' @import censReg
 #' @import fastncdf
 #' @import tnorm
-#' @import SoftBart
 #' @param x.train The training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param y The training data vector of outcomes. A continuous, censored outcome variable.
@@ -17,20 +16,7 @@
 #' @param n.burnin Number of burnin iterations.
 #' @param below_cens Number at or below which observations are censored.
 #' @param above_cens Number at or above which observations are censored.
-#' @param n.trees (dbarts control option) A positive integer giving the number of trees used in the sum-of-trees formulation.
-#' @param n.chains (dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
-#' @param n.threads  (dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.
-#' @param printEvery (dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.
-#' @param printCutoffs (dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode
-#' @param rngKind (dbarts control option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.
-#' @param rngNormalKind (dbarts control option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind
-#' @param rngSeed (dbarts control option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
-#' @param updateState (dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
-#' @param tree.prior (dbarts option) An expression of the form dbarts:::cgm or dbarts:::cgm(power,base) setting the tree prior used in fitting.
-#' @param node.prior (dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.
-#' @param resid.prior (dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance
-#' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
-#' @param sigmadbarts (dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.
+#' @param n.trees A positive integer giving the number of trees used in the sum-of-trees formulation.
 #' @param print.opt Print every print.opt number of Gibbs samples.
 #' @param fast If equal to TRUE, then implements faster truncated normal draws and approximates normal pdf.
 #' @export
@@ -77,7 +63,7 @@
 #'
 #' @export
 
-tbart1 <- function(x.train,
+softtbart1 <- function(x.train,
                    x.test,
                    y,
                    n.iter=1000,
@@ -85,22 +71,23 @@ tbart1 <- function(x.train,
                    below_cens = 0,
                    above_cens = Inf,
                    n.trees = 50L,
-                   n.burn = 0L,
-                   n.samples = 1L,
-                   n.thin = 1L,
-                   n.chains = 1,
-                   n.threads = 1L,#guessNumCores(),
-                   printEvery = 100L,
-                   printCutoffs = 0L,
-                   rngKind = "default",
-                   rngNormalKind = "default",
-                   rngSeed = NA_integer_,
-                   updateState = TRUE,
-                   tree.prior = dbarts:::cgm,
-                   node.prior = dbarts:::normal,
-                   resid.prior = dbarts:::chisq,
-                   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
-                   sigmadbarts = NA_real_,
+                   SB_group = NULL,
+                   SB_alpha = 1,
+                   SB_beta = 2,
+                   SB_gamma = 0.95,
+                   SB_k = 2,
+                   SB_sigma_hat = NULL,
+                   SB_shape = 1,
+                   SB_width = 0.1,
+                   # SB_num_tree = 20,
+                   SB_alpha_scale = NULL,
+                   SB_alpha_shape_1 = 0.5,
+                   SB_alpha_shape_2 = 1,
+                   SB_tau_rate = 10,
+                   SB_num_tree_prob = NULL,
+                   SB_temperature = 1,
+                   SB_weights = NULL,
+                   SB_normalize_Y = TRUE,
                    print.opt = 100,
                    fast=TRUE){
 
@@ -115,6 +102,31 @@ tbart1 <- function(x.train,
 
   if(nrow(x.train) != length(y)) stop("number of rows in x.train must equal length of y.train")
   if((ncol(x.test)!=ncol(x.train))) stop("input x.test must have the same number of columns as x.train")
+
+
+  # mu_Y <- mean(y)
+  # sd_Y <- sd(y)
+  # y <- (y - mu_Y) / sd_Y
+  # below_cens <- (below_cens - mu_Y) / sd_Y
+  # above_cens <- (above_cens - mu_Y) / sd_Y
+
+  make_01_norm <- function(x) {
+    a <- min(x)
+    b <- max(x)
+    return(function(y0) (y0 - a) / (b - a))
+  }
+
+  ecdfs   <- list()
+  for(i in 1:ncol(x.train)) {
+    ecdfs[[i]] <- ecdf(x.train[,i])
+    if(length(unique(x.train[,i])) == 1) ecdfs[[i]] <- identity
+    if(length(unique(x.train[,i])) == 2) ecdfs[[i]] <- make_01_norm(x.train[,i])
+  }
+  for(i in 1:ncol(x.train)) {
+    x.train[,i] <- ecdfs[[i]](x.train[,i])
+    x.test[,i] <- ecdfs[[i]](x.test[,i])
+  }
+
 
 
   #indexes of censored observations
@@ -168,29 +180,55 @@ tbart1 <- function(x.train,
     sigma = rep(NA, n.iter),
     cond_exp_train =  array(NA, dim = c(n, n.iter)),
     cond_exp_test =  array(NA, dim = c(ntest, n.iter))
-    )
+  )
+
+
+
+
+  hypers <- Hypers(x.train, y,
+                   num_tree = n.trees, #sigma_hat = 1,
+                   group = SB_group,
+                   alpha = SB_alpha,
+                   beta = SB_beta,
+                   gamma = SB_gamma,
+                   k = SB_k,
+                   # sigma_hat = NULL,
+                   shape = SB_shape,
+                   width = SB_width,
+                   # num_tree = 20,
+                   alpha_scale = SB_alpha_scale,
+                   alpha_shape_1 = SB_alpha_shape_1,
+                   alpha_shape_2 = SB_alpha_shape_2,
+                   tau_rate = SB_tau_rate,
+                   num_tree_prob = SB_num_tree_prob,
+                   temperature = SB_temperature,
+                   weights = SB_weights,
+                   normalize_Y = SB_normalize_Y
+                   )
+
+
+  opts <- Opts(update_sigma = TRUE, num_print = print.opt)
+
+
+  sampler_forest <- MakeForest(hypers, opts)
 
 
 
 
 
-
-
-
-
-  control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                           keepTrees = TRUE,
-                           n.trees = n.trees,
-                           n.burn = n.burn,
-                           n.samples = n.samples,
-                           n.thin = n.thin,
-                           n.chains = n.chains,
-                           n.threads = n.threads,
-                           printEvery = printEvery,
-                           printCutoffs = printCutoffs,
-                           rngKind = rngKind,
-                           rngNormalKind = rngNormalKind,
-                           rngSeed = rngSeed)
+  # control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+  #                          keepTrees = TRUE,
+  #                          n.trees = n.trees,
+  #                          n.burn = n.burn,
+  #                          n.samples = n.samples,
+  #                          n.thin = n.thin,
+  #                          n.chains = n.chains,
+  #                          n.threads = n.threads,
+  #                          printEvery = printEvery,
+  #                          printCutoffs = printCutoffs,
+  #                          rngKind = rngKind,
+  #                          rngNormalKind = rngNormalKind,
+  #                          rngSeed = rngSeed)
 
 
   # print(colnames(Xmat.train))
@@ -198,52 +236,57 @@ tbart1 <- function(x.train,
   # print("begin dbarts")
 
 
-  if(nrow(x.test )==0){
-    sampler <- dbarts(y ~ .,
-                      data = as.data.frame(x.train),
-                      #test = x.test,
-                      control = control,
-                      tree.prior = tree.prior,
-                      node.prior = node.prior,
-                      resid.prior = resid.prior,
-                      proposal.probs = proposal.probs,
-                      sigma = sigmadbarts
-    )
-
-  }else{
-    sampler <- dbarts(y ~ .,
-                      data = as.data.frame(x.train),
-                      test = as.data.frame(x.test),
-                      control = control,
-                      tree.prior = tree.prior,
-                      node.prior = node.prior,
-                      resid.prior = resid.prior,
-                      proposal.probs = proposal.probs,
-                      sigma = sigmadbarts
-    )
-
-  }
-
-
+  # if(nrow(x.test )==0){
+  #   sampler <- dbarts(y ~ .,
+  #                     data = as.data.frame(x.train),
+  #                     #test = x.test,
+  #                     control = control,
+  #                     tree.prior = tree.prior,
+  #                     node.prior = node.prior,
+  #                     resid.prior = resid.prior,
+  #                     proposal.probs = proposal.probs,
+  #                     sigma = sigmadbarts
+  #   )
+  #
+  # }else{
+  #   sampler <- dbarts(y ~ .,
+  #                     data = as.data.frame(x.train),
+  #                     test = as.data.frame(x.test),
+  #                     control = control,
+  #                     tree.prior = tree.prior,
+  #                     node.prior = node.prior,
+  #                     resid.prior = resid.prior,
+  #                     proposal.probs = proposal.probs,
+  #                     sigma = sigmadbarts
+  #   )
+  #
+  # }
 
 
-  sampler$setResponse(y = z)
+
+
+  # sampler$setResponse(y = z)
   # sampler$setSigma(sigma = 1)
 
   #sampler$setPredictor(x= Xmat.train$x, column = 1, forceUpdate = TRUE)
 
   #mu = as.vector( alpha + X.mat %*% beta )
-  sampler$sampleTreesFromPrior()
-  samplestemp <- sampler$run()
+  # sampler$sampleTreesFromPrior()
+  # samplestemp <- sampler$run()
 
   #mutemp <- samplestemp$train[,1]
   #suppose there are a number of samples
 
-  # print("sigma = ")
-  sigma <- samplestemp$sigma
 
-  mu <- samplestemp$train[,1]
-  mutest <- samplestemp$test[,1]
+  mu <- sampler_forest$do_gibbs(x.train, z, x.train, 1)
+  mutest <- sampler_forest$do_predict(x.test)
+
+
+  # print("sigma = ")
+  sigma <- sampler_forest$get_sigma()
+
+  # mu <- samplestemp$train[,1]
+  # mutest <- samplestemp$test[,1]
 
   ystar <- rnorm(n,mean = mu, sd = sigma)
   ystartest <- rnorm(ntest,mean = mutest, sd = sigma)
@@ -254,7 +297,7 @@ tbart1 <- function(x.train,
   #
   #
   # }else{
-    ystartestcens <-rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
+  ystartestcens <-rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
 
   # }
 
@@ -341,35 +384,35 @@ tbart1 <- function(x.train,
 
 
 
-#save the first round of values
+  #save the first round of values
   if(n.burnin == 0){
-    draw$Z.mat[,1] = z
-    draw$Z.matcens[,1] = z[cens_inds]
+    draw$Z.mat[,1] = z # * sd_Y + mu_Y
+    draw$Z.matcens[,1] = z[cens_inds] # * sd_Y + mu_Y
     # draw$Z.matuncens[,1] = z[uncens_inds]
-    draw$Z.matcensbelow[,1] = z[censbelow_inds]
-    draw$Z.matcensabove[,1] = z[censabove_inds]
-    draw$mu[,1] = mu
-    draw$mucens[,1] = mu[cens_inds]
-    draw$muuncens[,1] = mu[uncens_inds]
-    draw$mucensbelow[,1] = mu[censbelow_inds]
-    draw$mucensabove[,1] = mu[censabove_inds]
-    draw$ystar[,1] = ystar
-    draw$ystarcens[,1] = ystar[cens_inds]
-    draw$ystaruncens[,1] = ystar[uncens_inds]
-    draw$ystarcensbelow[,1] = ystar[censbelow_inds]
-    draw$ystarcensabove[,1] = ystar[censabove_inds]
-    draw$test.mu[,1] = mutest
-    draw$test.y_nocensoring[,1] = ystartest
-    draw$test.y_withcensoring[,1] = ystartestcens
+    draw$Z.matcensbelow[,1] = z[censbelow_inds] # * sd_Y + mu_Y
+    draw$Z.matcensabove[,1] = z[censabove_inds] # * sd_Y + mu_Y
+    draw$mu[,1] = mu # * sd_Y + mu_Y
+    draw$mucens[,1] = mu[cens_inds] # * sd_Y + mu_Y
+    draw$muuncens[,1] = mu[uncens_inds] # * sd_Y + mu_Y
+    draw$mucensbelow[,1] = mu[censbelow_inds] # * sd_Y + mu_Y
+    draw$mucensabove[,1] = mu[censabove_inds] # * sd_Y + mu_Y
+    draw$ystar[,1] = ystar # * sd_Y + mu_Y
+    draw$ystarcens[,1] = ystar[cens_inds] # * sd_Y + mu_Y
+    draw$ystaruncens[,1] = ystar[uncens_inds] # * sd_Y + mu_Y
+    draw$ystarcensbelow[,1] = ystar[censbelow_inds] # * sd_Y + mu_Y
+    draw$ystarcensabove[,1] = ystar[censabove_inds] # * sd_Y + mu_Y
+    draw$test.mu[,1] = mutest # * sd_Y + mu_Y
+    draw$test.y_nocensoring[,1] = ystartest # * sd_Y + mu_Y
+    draw$test.y_withcensoring[,1] = ystartestcens # * sd_Y + mu_Y
     draw$test.probcensbelow[,1] = probcensbelow
     draw$test.probcensabove[,1] = probcensabove
-    draw$sigma[1] <- sigma
+    draw$sigma[1] <- sigma # * sd_Y
 
-    draw$cond_exp_train[, 1] <- condexptrain
-    draw$cond_exp_test[, 1] <- condexptest
-}
+    draw$cond_exp_train[, 1] <- condexptrain # * sd_Y + mu_Y
+    draw$cond_exp_test[, 1] <- condexptest # * sd_Y + mu_Y
+  }
 
-  #loop through the Gibbs sampler iterations
+  ######## loop through the Gibbs sampler iterations ###############
   for(iter in 2:(n.iter+n.burnin)){
 
     #draw the latent outcome
@@ -385,17 +428,27 @@ tbart1 <- function(x.train,
     #set the response.
     #Check that 0 is a reasonable initial value
     #perhaps makes more sense to use initial values of Z
-    sampler$setResponse(y = z)
+    # sampler$setResponse(y = z)
     # sampler$setSigma(sigma = 1)
     #sampler$setPredictor(x= Xmat.train$x, column = 1, forceUpdate = TRUE)
 
     #mu = as.vector( alpha + X.mat %*% beta )
-    samplestemp <- sampler$run()
+    # samplestemp <- sampler$run()
+    #
+    # sigma <- samplestemp$sigma
+    #
+    # mu <- samplestemp$train[,1]
+    # mutest <- samplestemp$test[,1]
 
-    sigma <- samplestemp$sigma
 
-    mu <- samplestemp$train[,1]
-    mutest <- samplestemp$test[,1]
+    mu <- sampler_forest$do_gibbs(x.train, z, x.train, 1)
+    mutest <- sampler_forest$do_predict(x.test)
+
+
+    # print("sigma = ")
+    sigma <- sampler_forest$get_sigma()
+
+
 
     #draw uncensored predictions of y
     ystar <- rnorm(n,mean = mu, sd = sigma)
@@ -473,13 +526,13 @@ tbart1 <- function(x.train,
         condexptrain <- below_cens*probcensbelow_train +
           (mu )*(1- probcensabove_train - probcensbelow_train) +
           sigma*( fastnormdens(below_cens, mean = mu , sd = sigma) -
-                               fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+                    fastnormdens(above_cens, mean = mu , sd = sigma) ) +
           above_cens*probcensabove_train
 
         condexptest <- below_cens*probcensbelow +
           (mutest )*(1- probcensabove - probcensbelow) +
           sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma) -
-                              fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+                    fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
           above_cens*probcensabove
       }
     }
@@ -487,34 +540,34 @@ tbart1 <- function(x.train,
 
 
 
-
+  #### save iteration output ##############
 
     if(iter>n.burnin){
       iter_min_burnin <- iter-n.burnin
-      draw$Z.mat[,iter_min_burnin] = z
-      draw$Z.matcens[,iter_min_burnin] = z[cens_inds]
-      # draw$Z.matuncens[,iter_min_burnin] = z[uncens_inds]
-      draw$Z.matcensbelow[,iter_min_burnin] = z[censbelow_inds]
-      draw$Z.matcensabove[,iter_min_burnin] = z[censabove_inds]
-      draw$mu[,iter_min_burnin] = mu
-      draw$mucens[,iter_min_burnin] = mu[cens_inds]
-      draw$muuncens[,iter_min_burnin] = mu[uncens_inds]
-      draw$mucensbelow[,iter_min_burnin] = mu[censbelow_inds]
-      draw$mucensabove[,iter_min_burnin] = mu[censabove_inds]
-      draw$ystar[,iter_min_burnin] = ystar
-      draw$ystarcens[,iter_min_burnin] = ystar[cens_inds]
-      draw$ystaruncens[,iter_min_burnin] = ystar[uncens_inds]
-      draw$ystarcensbelow[,iter_min_burnin] = ystar[censbelow_inds]
-      draw$ystarcensabove[,iter_min_burnin] = ystar[censabove_inds]
-      draw$test.mu[,iter_min_burnin] = mutest
-      draw$test.y_nocensoring[,iter_min_burnin] = ystartest
-      draw$test.y_withcensoring[,iter_min_burnin] = ystartestcens
+      draw$Z.mat[,iter_min_burnin] = z # * sd_Y + mu_Y
+      draw$Z.matcens[,iter_min_burnin] = z[cens_inds] # * sd_Y + mu_Y
+      # draw$Z.matuncens[,iter_min_burnin] = z[uncens_inds] # * sd_Y + mu_Y
+      draw$Z.matcensbelow[,iter_min_burnin] = z[censbelow_inds] # * sd_Y + mu_Y
+      draw$Z.matcensabove[,iter_min_burnin] = z[censabove_inds] # * sd_Y + mu_Y
+      draw$mu[,iter_min_burnin] = mu # * sd_Y + mu_Y
+      draw$mucens[,iter_min_burnin] = mu[cens_inds] # * sd_Y + mu_Y
+      draw$muuncens[,iter_min_burnin] = mu[uncens_inds] # * sd_Y + mu_Y
+      draw$mucensbelow[,iter_min_burnin] = mu[censbelow_inds] # * sd_Y + mu_Y
+      draw$mucensabove[,iter_min_burnin] = mu[censabove_inds] # * sd_Y + mu_Y
+      draw$ystar[,iter_min_burnin] = ystar # * sd_Y + mu_Y
+      draw$ystarcens[,iter_min_burnin] = ystar[cens_inds] # * sd_Y + mu_Y
+      draw$ystaruncens[,iter_min_burnin] = ystar[uncens_inds] # * sd_Y + mu_Y
+      draw$ystarcensbelow[,iter_min_burnin] = ystar[censbelow_inds] # * sd_Y + mu_Y
+      draw$ystarcensabove[,iter_min_burnin] = ystar[censabove_inds] # * sd_Y + mu_Y
+      draw$test.mu[,iter_min_burnin] = mutest # * sd_Y + mu_Y
+      draw$test.y_nocensoring[,iter_min_burnin] = ystartest # * sd_Y + mu_Y
+      draw$test.y_withcensoring[,iter_min_burnin] = ystartestcens # * sd_Y + mu_Y
       draw$test.probcensbelow[,iter_min_burnin] = probcensbelow
       draw$test.probcensabove[,iter_min_burnin] = probcensabove
-      draw$sigma[iter_min_burnin] <- sigma
+      draw$sigma[iter_min_burnin] <- sigma # * sd_Y
 
-      draw$cond_exp_train[, iter_min_burnin] <- condexptrain
-      draw$cond_exp_test[, iter_min_burnin] <- condexptest
+      draw$cond_exp_train[, iter_min_burnin] <- condexptrain # * sd_Y + mu_Y
+      draw$cond_exp_test[, iter_min_burnin] <- condexptest # * sd_Y + mu_Y
 
     }
 

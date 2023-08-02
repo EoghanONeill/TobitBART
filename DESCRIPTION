@@ -22,7 +22,8 @@ Imports:
     tnorm,
     data.table,
     accelerometry,
-    wrswoR
+    wrswoR,
+    SoftBart
 Depends: 
     R (>= 2.10)
 LazyData: true
@@ -40,4 +41,5 @@ LinkingTo:
     tnorm,
     data.table,
     accelerometry,
-    wrswoR
+    wrswoR,
+    SoftBart
