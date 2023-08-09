@@ -36,7 +36,16 @@ Van Hasselt, M. (2011). Bayesian inference in a sample selection model. Journal 
 You can install the development version of TobitBART like so:
 
 ``` r
+
 library(devtools)
+
+install.packages("dbarts")
+install.packages("GIGrvg")
+install.packages("Rfast")
+install.packages("censReg")
+install.packages("accelerometry")
+install.packages("wrswoR")
+install_github("boennecd/fastncdf")
 install_github("EoghanONeill/TobitBART")
 ```
 
