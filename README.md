@@ -45,6 +45,7 @@ install.packages("Rfast")
 install.packages("censReg")
 install.packages("accelerometry")
 install.packages("wrswoR")
+install.packages("dqrng")
 install_github("boennecd/fastncdf")
 install_github("EoghanONeill/TobitBART")
 ```
