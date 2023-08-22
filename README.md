@@ -13,7 +13,13 @@ The `tbart1` function runs Type 1 TOBART.
 
 The `tbart1np` function runs Type 1 TOBART with a Dirichlet Process mixture distribution for the error (George et al. 2019).
 
+The `softtbart1` function runs Type 1 TOBART with soft trees and a hyperprior on splitting variables for sparse data generating processes (Linero and Yang 2018). 
+
+The `softtbart1np` function runs Type 1 TOBART with with soft trees, a hyperprior on splitting variables for sparse data generating processes (Linero and Yang 2018), and a Dirichlet Process mixture distribution for the error (George et al. 2019).
+
 The `tbart2c` function runs Type 2 TOBART with bivariate normal errors in the selection and outcome equations. [Not tested yet]
+
+The `softtbart2` function runs Type 2 TOBART with bivariate normal errors in the selection and outcome equations, soft trees, and a hyperprior on splitting variables for sparse data generating processes (Linero and Yang 2018) . [Not tested yet]
 
 The `tbart2np` function runs nonparametric Type 2 TOBART. The errors in the selection and outcome equations are jointly distributed as a Dirichlet Process mixture of bivariate normal distributions. [Not tested yet]
 
@@ -23,6 +29,8 @@ The `tbart2np` function runs nonparametric Type 2 TOBART. The errors in the sele
 Chib, S. (1992). Bayes inference in the Tobit censored regression model. Journal of Econometrics, 51(1-2), 79-99.
 
 George, E., Laud, P., Logan, B., McCulloch, R., & Sparapani, R. (2019). Fully nonparametric Bayesian additive regression trees. In Topics in Identification, Limited Dependent Variables, Partial Observability, Experimentation, and Flexible Modeling: Part B (Vol. 40, pp. 89-110). Emerald Publishing Limited.
+
+Linero, A. R., & Yang, Y. (2018). Bayesian regression tree ensembles that adapt to smoothness and sparsity. Journal of the Royal Statistical Society Series B: Statistical Methodology, 80(5), 1087-1110.
 
 Omori, Y. (2007). Efficient Gibbs sampler for Bayesian analysis of a sample selection model. Statistics & probability letters, 77(12), 1300-1311.
 
