@@ -1,14 +1,15 @@
 
 
-#' @title Type II Tobit Bayesian Additive Regression Trees implemented using MCMC
+#' @title Type II Tobit Soft Bayesian Additive Regression Trees with sparsity inducing hyperprior implemented using MCMC
 #'
-#' @description Type II Tobit Bayesian Additive Regression Trees implemented using MCMC
+#' @description Type II Tobit Soft Bayesian Additive Regression Trees with sparsity inducing hyperprior implemented using MCMC
 #' @import dbarts
 #' @import truncnorm
 #' @import MASS
 #' @import GIGrvg
 #' @import mvtnorm
 #' @import sampleSelection
+#' @import SoftBart
 #' @param x.train The outcome model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The outcome model test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param w.train The censoring model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
@@ -43,7 +44,6 @@
 #' @param cov_prior Prior for the covariance of the error terms. If VH, apply the prior of van Hasselt (2011), N(gamma0, tau*phi), imposing dependence between gamma and phi. If Omori, apply the prior N(gamma0,G0). If mixture, then a mixture of the VH and Omori priors with probability mixprob applied to the VH prior.
 #' @param mixprob If cov_prior equals Mixture, then mixprob is the probability applied to the Van Hasselt covariance prior, and one minus mixprob is the probability applied to the Omori prior.
 #' @param tau Parameter for the prior of van Hasselt (2011) on the covariance of the error terms.
-#' @param simultaneous_covmat If TRUE, jointly sample the parameters that determine the covariance matrix instead of sampling from separate full conditionals.
 #' @export
 #' @return The following objects are returned:
 #' \item{Z.mat_train}{Matrix of draws of censoring model latent outcomes for training observations. Number of rows equals number of training observations. Number of columns equals n.iter . Rows are ordered in order of observations in the training data.}
@@ -186,7 +186,7 @@
 #'
 #' @export
 
-tbart2c <- function(x.train,
+softtbart2 <- function(x.train,
                     x.test,
                     w.train,
                     w.test,
@@ -201,23 +201,24 @@ tbart2c <- function(x.train,
                     sigest = NA,
                     n.trees_outcome = 50L,
                     n.trees_censoring = 50L,
-                    n.burn = 0L,
-                    n.samples = 1L,
-                    n.thin = 1L,
-                    n.chains = 1L,
-                    n.threads = 1L, #guessNumCores(),
-                    printEvery = 100L,
-                    printCutoffs = 0L,
-                    rngKind = "default",
-                    rngNormalKind = "default",
-                    rngSeed = NA_integer_,
-                    updateState = TRUE,
-                    tree.prior = dbarts:::cgm,
-                    node.prior = dbarts:::normal,
-                    resid.prior = dbarts:::chisq,
-                    proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
-                    sigmadbarts = NA_real_,
-                    print.opt = 100,
+                    SB_group = NULL,
+                    SB_alpha = 1,
+                    SB_beta = 2,
+                    SB_gamma = 0.95,
+                    SB_k = 2,
+                    SB_sigma_hat = NULL,
+                    SB_shape = 1,
+                    SB_width = 0.1,
+                    # SB_num_tree = 20,
+                    SB_alpha_scale = NULL,
+                    SB_alpha_shape_1 = 0.5,
+                    SB_alpha_shape_2 = 1,
+                    SB_tau_rate = 10,
+                    SB_num_tree_prob = NULL,
+                    SB_temperature = 1,
+                    SB_weights = NULL,
+                    SB_normalize_Y = TRUE,
+                    print.opt = 1000,
                     eq_by_eq = TRUE,
                     accelerate = FALSE,
                     cov_prior = "VH",
@@ -303,6 +304,8 @@ tbart2c <- function(x.train,
 
 
 
+
+
   #create z vector
 
 
@@ -381,9 +384,9 @@ tbart2c <- function(x.train,
       outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
 
       heckit.2step <- heckit(selection = as.formula(seleq),
-                          outcome = as.formula(outeq),
-                          data = df,
-                          method = "2step")
+                             outcome = as.formula(outeq),
+                             data = df,
+                             method = "2step")
 
       correst <- heckit.2step$coefficients["rho"]
       sigest <- heckit.2step$coefficients["sigma"]
@@ -416,9 +419,9 @@ tbart2c <- function(x.train,
   # if(sigest > G0){
   #   S0 <- (nzero - 2)*(sigest-G0)
   # }else{
-    # sigquant <- 0.9
-    # qchi <- qchisq(1.0-sigquant,nzero/2)
-    # S0 <- 2*(sigest*sigest*qchi)/(nzero/2)
+  # sigquant <- 0.9
+  # qchi <- qchisq(1.0-sigquant,nzero/2)
+  # S0 <- 2*(sigest*sigest*qchi)/(nzero/2)
   # }
 
   # S0 <- (sigest^2)*(nzero-2)/(1+tau)
@@ -459,43 +462,98 @@ tbart2c <- function(x.train,
   }
 
 
-  ########## Initialize dbarts #####################
+  ########## Initialize SoftBart #####################
 
-  control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                             keepTrees = TRUE,
-                             n.trees = n.trees_censoring,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
-                             rngKind = rngKind,
-                             rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
+  hypers_y <- Hypers(x.train[uncens_inds,], ystar[uncens_inds],
+                   num_tree = n.trees_outcome, #sigma_hat = 1,
+                   group = SB_group,
+                   alpha = SB_alpha,
+                   beta = SB_beta,
+                   gamma = SB_gamma,
+                   k = SB_k,
+                   # sigma_hat = NULL,
+                   shape = SB_shape,
+                   width = SB_width,
+                   # num_tree = 20,
+                   alpha_scale = SB_alpha_scale,
+                   alpha_shape_1 = SB_alpha_shape_1,
+                   alpha_shape_2 = SB_alpha_shape_2,
+                   tau_rate = SB_tau_rate,
+                   num_tree_prob = SB_num_tree_prob,
+                   temperature = SB_temperature,
+                   weights = SB_weights,
+                   normalize_Y = SB_normalize_Y
+  )
 
-  control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                             keepTrees = TRUE,
-                             n.trees = n.trees_outcome,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
-                             rngKind = rngKind,
-                             rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
+
+  opts_y <- Opts(update_sigma = TRUE, num_print = print.opt)
+
+  sampler_forest_y <- MakeForest(hypers_y, opts_y)
+
+
+  hypers_z <- Hypers(w.train, z - offsetz,
+                   num_tree = n.trees_censoring, #sigma_hat = 1,
+                   group = SB_group,
+                   alpha = SB_alpha,
+                   beta = SB_beta,
+                   gamma = SB_gamma,
+                   k = SB_k,
+                   # sigma_hat = NULL,
+                   shape = SB_shape,
+                   width = SB_width,
+                   # num_tree = 20,
+                   alpha_scale = SB_alpha_scale,
+                   alpha_shape_1 = SB_alpha_shape_1,
+                   alpha_shape_2 = SB_alpha_shape_2,
+                   tau_rate = SB_tau_rate,
+                   num_tree_prob = SB_num_tree_prob,
+                   temperature = SB_temperature,
+                   weights = SB_weights,
+                   normalize_Y = SB_normalize_Y
+  )
+
+
+  opts_z <- Opts(update_sigma = TRUE, num_print = print.opt)
+
+  sampler_forest_z <- MakeForest(hypers_z, opts_z)
+
+
+
+  # control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+  #                            keepTrees = TRUE,
+  #                            n.trees = n.trees_censoring,
+  #                            n.burn = n.burn,
+  #                            n.samples = n.samples,
+  #                            n.thin = n.thin,
+  #                            n.chains = n.chains,
+  #                            n.threads = n.threads,
+  #                            printEvery = printEvery,
+  #                            printCutoffs = printCutoffs,
+  #                            rngKind = rngKind,
+  #                            rngNormalKind = rngNormalKind,
+  #                            rngSeed = rngSeed)
+  #
+  # control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+  #                            keepTrees = TRUE,
+  #                            n.trees = n.trees_outcome,
+  #                            n.burn = n.burn,
+  #                            n.samples = n.samples,
+  #                            n.thin = n.thin,
+  #                            n.chains = n.chains,
+  #                            n.threads = n.threads,
+  #                            printEvery = printEvery,
+  #                            printCutoffs = printCutoffs,
+  #                            rngKind = rngKind,
+  #                            rngNormalKind = rngNormalKind,
+  #                            rngSeed = rngSeed)
   # print(colnames(Xmat.train))
 
   # print("begin dbarts")
 
 
-  weightstemp <- rep(1,n)
+  weightstemp_z <- rep(1,n)
 
-  weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
+  weightstemp_z[uncens_inds] <- (gamma1^2 + phi1)/phi1
 
   # print("weightstemp = ")
   # print(weightstemp)
@@ -510,48 +568,48 @@ tbart2c <- function(x.train,
 
 
     xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
-    sampler_y <- dbarts(y ~ .,
-                        data = xdf_y,
-                        #test = x.test,
-                        control = control_y,
-                        tree.prior = tree.prior,
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
-    )
+    # sampler_y <- dbarts(y ~ .,
+    #                     data = xdf_y,
+    #                     #test = x.test,
+    #                     control = control_y,
+    #                     tree.prior = tree.prior,
+    #                     node.prior = node.prior,
+    #                     resid.prior = resid.prior,
+    #                     proposal.probs = proposal.probs,
+    #                     sigma = sigmadbarts
+    # )
 
     # print("Line 425")
 
     xdf_z <- data.frame(y = z - offsetz, x = w.train)
 
-    sampler_z <- dbarts(y ~ .,
-                        data = xdf_z,
-                        #test = x.test,
-                        weights = weightstemp,
-                        control = control_z,
-                        tree.prior = tree.prior,
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
-    )
+    # sampler_z <- dbarts(y ~ .,
+    #                     data = xdf_z,
+    #                     #test = x.test,
+    #                     weights = weightstemp,
+    #                     control = control_z,
+    #                     tree.prior = tree.prior,
+    #                     node.prior = node.prior,
+    #                     resid.prior = resid.prior,
+    #                     proposal.probs = proposal.probs,
+    #                     sigma = sigmadbarts
+    # )
 
   }else{
 
     xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
     xdf_y_test <- data.frame(x = x.test)
 
-    sampler_y <- dbarts(y ~ .,
-                        data = xdf_y,
-                        test = xdf_y_test,
-                        control = control_y,
-                        tree.prior = tree.prior,
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
-    )
+    # sampler_y <- dbarts(y ~ .,
+    #                     data = xdf_y,
+    #                     test = xdf_y_test,
+    #                     control = control_y,
+    #                     tree.prior = tree.prior,
+    #                     node.prior = node.prior,
+    #                     resid.prior = resid.prior,
+    #                     proposal.probs = proposal.probs,
+    #                     sigma = sigmadbarts
+    # )
 
     # print("Line 425")
 
@@ -560,17 +618,17 @@ tbart2c <- function(x.train,
     xdf_z_test <- data.frame(x = w.test)
 
 
-    sampler_z <- dbarts(y ~ .,
-                        data = xdf_z,
-                        test = xdf_z_test,
-                        # weights = weightstemp,
-                        control = control_z,
-                        tree.prior = tree.prior,
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = 1#sigmadbarts
-    )
+    # sampler_z <- dbarts(y ~ .,
+    #                     data = xdf_z,
+    #                     test = xdf_z_test,
+    #                     # weights = weightstemp,
+    #                     control = control_z,
+    #                     tree.prior = tree.prior,
+    #                     node.prior = node.prior,
+    #                     resid.prior = resid.prior,
+    #                     proposal.probs = proposal.probs,
+    #                     sigma = 1#sigmadbarts
+    # )
 
   }
 
@@ -595,28 +653,39 @@ tbart2c <- function(x.train,
   z_resids <- z - offsetz #z_epsilon
   z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - 0)*gamma1/(phi1 + gamma1^2)
 
-  sampler_z$setResponse(y = z_resids)
 
-  sampler_z$setSigma(sigma = 1)
-  sampler_z$setWeights(weights = weightstemp)
+  sampler_forest_z$set_sigma(1)
+
+  mutemp_z <- sampler_forest_z$do_gibbs_weighted(w.train,
+                                           z_resids,
+                                           weightstemp_z,
+                                           w.train,
+                                           1)
+
+  mutemp_test_z <- sampler_forest_z$do_predict(w.test)
+
+
+  # sampler_z$setResponse(y = z_resids)
+  # sampler_z$setSigma(sigma = 1)
+  # sampler_z$setWeights(weights = weightstemp)
 
 
   # print("Line 509")
 
 
-  sampler_z$sampleTreesFromPrior()
+  # sampler_z$sampleTreesFromPrior()
 
   # priormean_z <- sampler_z$predict(xdf_z)[1,]
 
-  sampler_z$sampleNodeParametersFromPrior()
+  # sampler_z$sampleNodeParametersFromPrior()
 
-  samplestemp_z <- sampler_z$run()
+  # samplestemp_z <- sampler_z$run()
 
   # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
   # mutemp_test_z <- rep(0,ntest) #samplestemp_z$test[,1]
 
-  mutemp_z <- samplestemp_z$train[,1]
-  mutemp_test_z <- samplestemp_z$test[,1]
+  # mutemp_z <- samplestemp_z$train[,1]
+  # mutemp_test_z <- samplestemp_z$test[,1]
 
   # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
@@ -634,45 +703,60 @@ tbart2c <- function(x.train,
   # print("nrow(xdf_z_test) = ")
   # print(nrow(xdf_z_test))
 
+  weightstemp_y <- rep(1/sqrt(phi1), n1)
   y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
-  sampler_y$setResponse(y = y_resids)
-  sampler_y$setSigma(sigma = sqrt(phi1) )
 
-  sampler_y$setSigma(sigma = sigest)
 
-  sampler_y$sampleTreesFromPrior()
+  sampler_forest_y$set_sigma(1)
 
-  # priormean_y <- sampler_y$predict(xdf_y)[1,]
+  mutemp_y <- sampler_forest_y$do_gibbs_weighted(x.train[uncens_inds,],
+                                                 y_resids,
+                                                 weightstemp_y,
+                                                 x.train[uncens_inds,],
+                                                 1)
 
-  sampler_y$sampleNodeParametersFromPrior()
+  mutemp_test_y <- sampler_forest_y$do_predict(x.test)
 
-  samplestemp_y <- sampler_y$run()
 
-  # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
-  # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
 
-  mutemp_y <- samplestemp_y$train[,1]
-  mutemp_test_y <- samplestemp_y$test[,1]
+  # sampler_y$setResponse(y = y_resids)
+  # sampler_y$setSigma(sigma = sqrt(phi1) )
+  #
+  # sampler_y$setSigma(sigma = sigest)
+  #
+  # sampler_y$sampleTreesFromPrior()
+  #
+  # # priormean_y <- sampler_y$predict(xdf_y)[1,]
+  #
+  # sampler_y$sampleNodeParametersFromPrior()
+  #
+  # samplestemp_y <- sampler_y$run()
+  #
+  # # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
+  # # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
+  #
+  # mutemp_y <- samplestemp_y$train[,1]
+  # mutemp_test_y <- samplestemp_y$test[,1]
 
   # print("length(mutemp_test_y) = ")
   # print(length(mutemp_test_y))
 
-  if(sigest != samplestemp_y$sigma){
-    print("sigest = ")
-    print(sigest)
-    print("dbarts sigma estimate =")
-    print(samplestemp_y$sigma)
-
-    df = data.frame(x.train,y)
-    lmf = lm(y~.,df)
-    sigest2 = summary(lmf)$sigma
-
-    print("sigest2 = ")
-    print(sigest2)
-
-    # stop("sigest != samplestemp_y$sigma")
-
-  }
+  # if(sigest != samplestemp_y$sigma){
+  #   print("sigest = ")
+  #   print(sigest)
+  #   print("dbarts sigma estimate =")
+  #   print(samplestemp_y$sigma)
+  #
+  #   df = data.frame(x.train,y)
+  #   lmf = lm(y~.,df)
+  #   sigest2 = summary(lmf)$sigma
+  #
+  #   print("sigest2 = ")
+  #   print(sigest2)
+  #
+  #   # stop("sigest != samplestemp_y$sigma")
+  #
+  # }
 
   # sigest <-  samplestemp_y$sigma
   # S0 <- 2*(sigest^2 -   (1/(8*(G0^2))) - 4*(gamma0^2)*G0   )
@@ -757,7 +841,7 @@ tbart2c <- function(x.train,
 
     temp_sd_z <- sqrt( phi1/(phi1+gamma1^2)   )
 
-    ######### #draw the latent outcome z ##########################
+    #draw the latent outcome
     # z[cens_inds] <- rtruncnorm(n0, a= below_cens, b = above_cens, mean = mu[cens_inds], sd = sigma)
     if(length(cens_inds)>0){
       # temp_sd_y <- sqrt(phi1 + gamma1^2)
@@ -821,15 +905,15 @@ tbart2c <- function(x.train,
     #   sd_zdraw <- sqrt(phi1 / (phi1 + gamma1^2)  )
     # }
 
-    z_resids <- z - offsetz #z_epsilon
-    z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
-
-    #set the response for draws of z trees
-    sampler_z$setResponse(y = z_resids)
-    #set the standard deivation
-    sampler_z$setSigma(sigma = 1)
-
-    weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
+    # z_resids <- z - offsetz #z_epsilon
+    # z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
+    #
+    # #set the response for draws of z trees
+    # sampler_z$setResponse(y = z_resids)
+    # #set the standard deivation
+    # sampler_z$setSigma(sigma = 1)
+    #
+    # weightstemp_z[uncens_inds] <- (gamma1^2 + phi1)/phi1
 
 
     # print("Line 737")
@@ -842,14 +926,29 @@ tbart2c <- function(x.train,
     # print("phi1 = ")
     # print(phi1)
 
-    sampler_z$setWeights(weights = weightstemp)
+    z_resids <- z - offsetz #z_epsilon
+    z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
 
-    # print("Line 741")
 
-    samplestemp_z <- sampler_z$run()
+    sampler_forest_z$set_sigma(1)
 
-    mutemp_z <- samplestemp_z$train[,1]
-    mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+    mutemp_z <- sampler_forest_z$do_gibbs_weighted(w.train,
+                                                   z_resids,
+                                                   weightstemp_z,
+                                                   w.train,
+                                                   1)
+
+    mutemp_test_z <- sampler_forest_z$do_predict(w.test)
+
+
+    # sampler_z$setWeights(weights = weightstemp)
+    #
+    # # print("Line 741")
+    #
+    # samplestemp_z <- sampler_z$run()
+    #
+    # mutemp_z <- samplestemp_z$train[,1]
+    # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
     # print("length(mutemp_test_z) = ")
     # print(length(mutemp_test_z))
@@ -886,30 +985,45 @@ tbart2c <- function(x.train,
     #   y_resids <- ystar[uncens_inds] - gamma1*z_epsilon[uncens_inds]
     #   sd_ydraw <- sqrt(phi1)
     # }
+#
+#     y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
+#     sd_ydraw <- sqrt(phi1)
 
+
+    weightstemp_y <- rep(1/sqrt(phi1), n1)
     y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
-    sd_ydraw <- sqrt(phi1)
 
 
-    # print("y_resids = ")
+    sampler_forest_y$set_sigma(1)
+
+    mutemp_y <- sampler_forest_y$do_gibbs_weighted(x.train[uncens_inds,],
+                                                   y_resids,
+                                                   weightstemp_y,
+                                                   x.train[uncens_inds,],
+                                                   1)
+
+    mutemp_test_y <- sampler_forest_y$do_predict(x.test)
+
+
     #
-    # print(y_resids)
-
-    #set the response for draws of z trees
-    sampler_y$setResponse(y = y_resids)
-    #set the standard deviation
-    sampler_y$setSigma(sigma = sd_ydraw)
-
-
-    samplestemp_y <- sampler_y$run()
-
-    mutemp_y <- samplestemp_y$train[,1]
-    mutemp_test_y <- samplestemp_y$test[,1]
+    # # print("y_resids = ")
+    # #
+    # # print(y_resids)
+    #
+    # #set the response for draws of z trees
+    # sampler_y$setResponse(y = y_resids)
+    # #set the standard deviation
+    # sampler_y$setSigma(sigma = sd_ydraw)
+    #
+    #
+    # samplestemp_y <- sampler_y$run()
+    #
+    # mutemp_y <- samplestemp_y$train[,1]
+    # mutemp_test_y <- samplestemp_y$test[,1]
 
 
     #update z_epsilon
     y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
-
 
 
     ########### Simultaneous phi and gamma draw #####################
@@ -934,8 +1048,6 @@ tbart2c <- function(x.train,
         stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
       }
     }else{
-
-
 
       #########  set parameters for gamma draw  ######################################################
 
@@ -1058,8 +1170,7 @@ tbart2c <- function(x.train,
       # print("n1 = ")
       # print(n1)
 
-    } # end of else statement, for simultaneous_covmat = FALSE
-
+    }
 
     ######### update Sigma matrix #####################################################
 

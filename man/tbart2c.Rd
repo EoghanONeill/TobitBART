@@ -14,7 +14,7 @@ tbart2c(
   n.burnin = 100,
   censored_value = NA,
   gamma0 = 0,
-  G0 = 10,
+  G0 = 1,
   nzero = 6,
   S0 = 12,
   sigest = NA,
@@ -24,7 +24,7 @@ tbart2c(
   n.samples = 1L,
   n.thin = 1L,
   n.chains = 1L,
-  n.threads = guessNumCores(),
+  n.threads = 1L,
   printEvery = 100L,
   printCutoffs = 0L,
   rngKind = "default",
@@ -39,8 +39,10 @@ tbart2c(
   print.opt = 100,
   eq_by_eq = TRUE,
   accelerate = FALSE,
-  vh_prior = TRUE,
-  tau = 1
+  cov_prior = "VH",
+  tau = 1/3,
+  mixprob = 0.5,
+  simultaneous_covmat = TRUE
 )
 }
 \arguments{
@@ -62,7 +64,7 @@ tbart2c(
 
 \item{gamma0}{The mean of the normal prior on the covariance of the errors in the censoring and outcome models.}
 
-\item{G0}{The variance of the normal prior on the covariance of the errors in the censoring and outcome models.}
+\item{G0}{The variance of the normal prior on the covariance of the errors in the censoring and outcome models (only if cov_prior equals Omori).}
 
 \item{nzero}{A prior parameter which when divided by 2 gives the mean of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.}
 
@@ -106,9 +108,13 @@ tbart2c(
 
 \item{accelerate}{If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).}
 
-\item{vh_prior}{If TRUE, apply the prior of van Hasselt (2011) on the covariance of the error terms. This prior, N(gamma0, tau*phi), imposes dependence between gamma and phi.}
+\item{cov_prior}{Prior for the covariance of the error terms. If VH, apply the prior of van Hasselt (2011), N(gamma0, tau*phi), imposing dependence between gamma and phi. If Omori, apply the prior N(gamma0,G0). If mixture, then a mixture of the VH and Omori priors with probability mixprob applied to the VH prior.}
 
 \item{tau}{Parameter for the prior of van Hasselt (2011) on the covariance of the error terms.}
+
+\item{mixprob}{If cov_prior equals Mixture, then mixprob is the probability applied to the Van Hasselt covariance prior, and one minus mixprob is the probability applied to the Omori prior.}
+
+\item{simultaneous_covmat}{If TRUE, jointly sample the parameters that determine the covariance matrix instead of sampling from separate full conditionals.}
 }
 \value{
 The following objects are returned:

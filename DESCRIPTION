@@ -19,11 +19,13 @@ Imports:
     censReg,
     dqrng,
     fastncdf,
-    tnorm,
     data.table,
     accelerometry,
     wrswoR,
-    SoftBart
+    SoftBart,
+    sampleSelection
+Remotes:
+  github::boennecd/fastncdf
 Depends: 
     R (>= 2.10)
 LazyData: true
@@ -38,7 +40,6 @@ LinkingTo:
     Rfast,
     dqrng,
     fastncdf,
-    tnorm,
     data.table,
     accelerometry,
     wrswoR,

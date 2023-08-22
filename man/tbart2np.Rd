@@ -46,7 +46,8 @@ tbart2np(
   c1 = 2,
   c2 = 2,
   alpha_gridsize = 100L,
-  selection_test = 1
+  selection_test = 1,
+  init.many.clust = TRUE
 )
 }
 \arguments{

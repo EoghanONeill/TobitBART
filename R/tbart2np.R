@@ -230,7 +230,8 @@ tbart2np <- function(x.train,
                     c1 = 2,
                     c2 = 2,
                     alpha_gridsize = 100L,
-                    selection_test = 1){
+                    selection_test = 1,
+                    init.many.clust = TRUE){
 
 
   if(!(is.integer(alpha_gridsize))){
@@ -294,12 +295,14 @@ tbart2np <- function(x.train,
 
   z[uncens_inds] <- qnorm(0.999) #rtruncnorm(n1, a= 0, b = Inf, mean = offsetz, sd = 1)
 
+  z[cens_inds] <- rtruncnorm(n0, a= -Inf, b = 0, mean = offsetz, sd = 1)
+  z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = offsetz, sd = 1)
 
   # z <- rnorm(n = length(y), mean = offsetz, sd =1)
 
 
-  meanmu_z <- (min(z - offsetz) +max(z- offsetz))/(2*n.trees_censoring)
-  sigmu_z <- (max(z- offsetz) - min(z- offsetz))/(2*2*sqrt(n.trees_censoring))
+  # meanmu_z <- (min(z - offsetz) +max(z- offsetz))/(2*n.trees_censoring)
+  # sigmu_z <- (max(z- offsetz) - min(z- offsetz))/(2*2*sqrt(n.trees_censoring))
   #set prior parameter values
 
 
@@ -394,105 +397,143 @@ tbart2np <- function(x.train,
   u_y <- ystar[uncens_inds] #- mutemp_y[uncens_inds]
 
 
-  uncens_count <- 0
 
-  for(i in 1:n){
+  if(init.many.clust == TRUE){
+    uncens_count <- 0
 
-    if(i %in% cens_inds){
-      #censored observation
+    for(i in 1:n){
 
-      phi1_vec_train[i] <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
+      if(i %in% cens_inds){
+        #censored observation
 
-      phitilde <- phi1_vec_train[i]
+        phi1_vec_train[i] <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
 
-      gamma1_vec_train[i] <- rnorm(1,
-                                   mean = gamma0,
-                                   sd = sqrt(tau*phitilde))
+        phitilde <- phi1_vec_train[i]
 
-
-      mutilde <- c(NA,NA)
-
-      mu1_vec_train[i] <- rnorm(n = 1,
-                                mean = u_z[i]/( (1/M_mat[1,1]) + 1  ),
-                                sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
-
-      mutilde[1] <- mu1_vec_train[i]
-      mu2_vec_train[i] <- rnorm(n = 1,
-                                mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
-                                sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
-
-      mutilde[2] <- mu2_vec_train[i]
+        gamma1_vec_train[i] <- rnorm(1,
+                                     mean = gamma0,
+                                     sd = sqrt(tau*phitilde))
 
 
-    }else{
-      # uncensored observation, must use Gibbs sampler to obtain initial value
-      # Maybe it would be more efficient to just sample from the prior?
+        mutilde <- c(NA,NA)
 
-      #increase count of uncensored observation index
-      uncens_count <- uncens_count +1
+        mu1_vec_train[i] <- rnorm(n = 1,
+                                  mean = u_z[i]/( (1/M_mat[1,1]) + 1  ),
+                                  sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
 
+        mutilde[1] <- mu1_vec_train[i]
+        mu2_vec_train[i] <- rnorm(n = 1,
+                                  mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
+                                  sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
 
-
-      num_sample <- 1
-
-      # initialize (could even use draws from prior to initialize this)
-      mutilde <- c(mu1_vec_train[i],mu2_vec_train[i])
-
-      phitilde <- phi1_vec_train[i]
-      gammatilde <- gamma1_vec_train[i]
-
-      for(samp_ind in 1:num_sample){
-
-        # print("samp_ind = ")
-        # print(samp_ind)
+        mutilde[2] <- mu2_vec_train[i]
 
 
-        Sigma_mat_temp_j <- cbind(c(1,
-                                    gammatilde),
-                                  c(gammatilde,
-                                    phitilde+gammatilde^2))
+      }else{
+        # uncensored observation, must use Gibbs sampler to obtain initial value
+        # Maybe it would be more efficient to just sample from the prior?
 
-        # print("Sigma_mat_temp_j = ")
-        # print(Sigma_mat_temp_j)
-
-        tempsigmainv <- solve(Sigma_mat_temp_j)
-        tempsigmamat <- solve(solve(M_mat)+ tempsigmainv )
-
-        mutilde <- Rfast::rmvnorm(n = 1,
-                           mu = tempsigmamat%*%tempsigmainv %*%
-                             c((u_z[i]),(u_y[uncens_count])),
-                           sigma = tempsigmamat )
-
-
-        dbar_temp <- (S0/2) + (gammatilde^2/tau) +
-          (1/2)*( (u_y[uncens_count] - mutilde[2] - gammatilde*(u_z[i] - mutilde[1]) )^2 )
-
-        phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  1, rate = dbar_temp)
-
-
-        gammabar_temp <- ( (u_z[i] - mutilde[1])*(u_y[uncens_count] - mutilde[2]) ) /
-          ((1/tau) + ( (u_z[i] - mutilde[1])^2 ) )
-
-
-        gammatilde <- rnorm(1,
-                            mean = gammabar_temp,
-                            sd = sqrt( phitilde / ((1/tau) + ( (u_z[i] - mutilde[1])^2 ) )   ))
+        #increase count of uncensored observation index
+        uncens_count <- uncens_count +1
 
 
 
+        num_sample <- 1
 
-      } # end of Gibbs sampler loop
+        # initialize (could even use draws from prior to initialize this)
+        mutilde <- c(mu1_vec_train[i],mu2_vec_train[i])
+
+        phitilde <- phi1_vec_train[i]
+        gammatilde <- gamma1_vec_train[i]
+
+        for(samp_ind in 1:num_sample){
+
+          # print("samp_ind = ")
+          # print(samp_ind)
 
 
-      mu1_vec_train[i] <- mutilde[1]
-      mu2_vec_train[i] <- mutilde[2]
+          Sigma_mat_temp_j <- cbind(c(1,
+                                      gammatilde),
+                                    c(gammatilde,
+                                      phitilde+gammatilde^2))
 
-      phi1_vec_train[i] <- phitilde
-      gamma1_vec_train[i] <- gammatilde
+          # print("Sigma_mat_temp_j = ")
+          # print(Sigma_mat_temp_j)
+
+          tempsigmainv <- solve(Sigma_mat_temp_j)
+          tempsigmamat <- solve(solve(M_mat)+ tempsigmainv )
+
+          mutilde <- Rfast::rmvnorm(n = 1,
+                             mu = tempsigmamat%*%tempsigmainv %*%
+                               c((u_z[i]),(u_y[uncens_count])),
+                             sigma = tempsigmamat )
+
+
+          dbar_temp <- (S0/2) + (gammatilde^2/tau) +
+            (1/2)*( (u_y[uncens_count] - mutilde[2] - gammatilde*(u_z[i] - mutilde[1]) )^2 )
+
+          phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  1, rate = dbar_temp)
+
+
+          gammabar_temp <- ( (u_z[i] - mutilde[1])*(u_y[uncens_count] - mutilde[2]) ) /
+            ((1/tau) + ( (u_z[i] - mutilde[1])^2 ) )
+
+
+          gammatilde <- rnorm(1,
+                              mean = gammabar_temp,
+                              sd = sqrt( phitilde / ((1/tau) + ( (u_z[i] - mutilde[1])^2 ) )   ))
+
+
+
+
+        } # end of Gibbs sampler loop
+
+
+        mu1_vec_train[i] <- mutilde[1]
+        mu2_vec_train[i] <- mutilde[2]
+
+        phi1_vec_train[i] <- phitilde
+        gamma1_vec_train[i] <- gammatilde
+
+      }
 
     }
+  }else{ #just one cluster for initial values
+          # for both selected and unselected observations?
+
+
+    phi1_vec_train <- sigest #  1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
+
+    phitilde <- phi1_vec_train[1]
+
+    gamma1_vec_train <- gamma0 # rnorm(1, mean = gamma0, sd = sqrt(tau*phitilde))
+
+    # mutilde <- c(NA,NA)
+    #
+    # mu1_vec_train[i] <- rnorm(n = 1,
+    #                           mean = u_z[i]/( (1/M_mat[1,1]) + 1  ),
+    #                           sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
+    #
+    # mutilde[1] <- mu1_vec_train[i]
+    # mu2_vec_train[i] <- rnorm(n = 1,
+    #                           mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
+    #                           sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
+    #
+    # mutilde[2] <- mu2_vec_train[i]
+
+    mutilde <- c(0,0)
+
+    mu1_vec_train[i] <- 0
+
+    mu2_vec_train[i] <- 0
+
+    mutilde[2] <- 0
+
 
   }
+
+
+
 
   varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
 
@@ -535,7 +576,8 @@ tbart2np <- function(x.train,
     ycond_draws_train = list(),
     ycond_draws_test = list(),
     vartheta_draws = array(NA, dim = c(n, 4, n.iter)),
-    vartheta_test_draws = array(NA, dim = c(ntest, 4, n.iter))
+    vartheta_test_draws = array(NA, dim = c(ntest, 4, n.iter)),
+    alpha = rep(NA,n.iter)
     # Sigma_draws = array(NA, dim = c(2, 2, n.iter))
   )
 
@@ -1058,7 +1100,7 @@ tbart2np <- function(x.train,
 
 
     #update z_epsilon
-    y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y- mu2_vec_train[uncens_inds]
+    y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
 
 
 
@@ -2758,6 +2800,7 @@ tbart2np <- function(x.train,
         draw$ydraws_test[, iter_min_burnin] <- ifelse(zytest[,1] < 0, censored_value, zytest[,2] )
       }
 
+      draw$alpha[iter_min_burnin] <- alpha
 
 
     } # end if iter > burnin

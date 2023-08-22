@@ -4,11 +4,16 @@
 #'
 #' @description Type I Tobit Bayesian Additive Regression Trees implemented using MCMC
 #' @import dbarts
+#' @import GIGrvg
+#' @import MASS
+#' @import dqrng
+#' @import data.table
+#' @import accelerometry
+#' @import wrswoR
 #' @import truncnorm
 #' @import mvtnorm
 #' @import censReg
 #' @import fastncdf
-#' @import tnorm
 #' @import SoftBart
 #' @param x.train The training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
