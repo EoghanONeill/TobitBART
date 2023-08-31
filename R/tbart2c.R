@@ -9,6 +9,8 @@
 #' @import GIGrvg
 #' @import mvtnorm
 #' @import sampleSelection
+#' @import progress
+#' @import LaplacesDemon
 #' @param x.train The outcome model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The outcome model test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param w.train The censoring model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
@@ -21,7 +23,7 @@
 #' @param G0 The variance of the normal prior on the covariance of the errors in the censoring and outcome models (only if cov_prior equals Omori).
 #' @param nzero A prior parameter which when divided by 2 gives the mean of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.
 #' @param S0 A prior parameter which when divided by 2 gives the variance of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.
-#' @param sigest If variance of the error term is the
+#' @param sigest Estimate of variance of hte error term.
 #' @param n.trees_outcome (dbarts control option) A positive integer giving the number of trees used in the outcome model sum-of-trees formulation.
 #' @param n.trees_censoring (dbarts control option) A positive integer giving the number of trees used in the censoring model sum-of-trees formulation.
 #' @param n.chains (dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
@@ -44,6 +46,9 @@
 #' @param mixprob If cov_prior equals Mixture, then mixprob is the probability applied to the Van Hasselt covariance prior, and one minus mixprob is the probability applied to the Omori prior.
 #' @param tau Parameter for the prior of van Hasselt (2011) on the covariance of the error terms.
 #' @param simultaneous_covmat If TRUE, jointly sample the parameters that determine the covariance matrix instead of sampling from separate full conditionals.
+#' @param fast If equal to true, takes faster samples of z and y and makes faster approximate calculations of selection probabilities.
+#' @param nu0 For the inverseWishart prior Winv(nu0,c*I_2) of Ding (2014) on an unidentified unrestricted covariance matrix. nu = 3 corresponds to a uniform correlation prior. nu > 3 centers the correlation prior at 0, while nu < 3 places more prior probability on selection on unobservables.
+#' @param quantsig For the inverseWishart prior Winv(nu0,c*I_2) of Ding (2014). The parameter c is determined by quantsig so that the marginal prior on the standard deviation of the outcome has 90% quantile equal to an estimate from a linear tobit model or sigest if sigest is not NA.
 #' @export
 #' @return The following objects are returned:
 #' \item{Z.mat_train}{Matrix of draws of censoring model latent outcomes for training observations. Number of rows equals number of training observations. Number of columns equals n.iter . Rows are ordered in order of observations in the training data.}
@@ -220,14 +225,17 @@ tbart2c <- function(x.train,
                     print.opt = 100,
                     eq_by_eq = TRUE,
                     accelerate = FALSE,
-                    cov_prior = "VH",
+                    cov_prior = "Ding",
                     tau = 1/3,
                     mixprob = 0.5,
-                    simultaneous_covmat = TRUE){
+                    simultaneous_covmat = TRUE,
+                    fast = TRUE,
+                    nu0 = 3,
+                    quantsig = 0.9){
 
 
-  if(!(cov_prior %in% c("VH","Omori","Mixture"))){
-    stop("cov_prior must equal VH, Omori, or Mixture")
+  if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
+    stop("cov_prior must equal VH, Omori, Mixture, or Ding")
   }
   if((mixprob < 0)| (mixprob > 1) ){
     stop("mixprob must be between zero and one.")
@@ -377,7 +385,7 @@ tbart2c <- function(x.train,
 
       df = data.frame(x = cbind(x.train,w.train)  ,y = y,d = dtemp )
 
-      seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):ncol(w.train),sep = "."),collapse = " + "))
+      seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
       outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
 
       heckit.2step <- heckit(selection = as.formula(seleq),
@@ -388,7 +396,16 @@ tbart2c <- function(x.train,
       correst <- heckit.2step$coefficients["rho"]
       sigest <- heckit.2step$coefficients["sigma"]
 
-
+      # print("heckit.2step$coefficients = ")
+      # print(heckit.2step$coefficients)
+      # print("heckit.2step$lm$coefficients = ")
+      # print(heckit.2step$lm$coefficients)
+      # print("correst = ")
+      # print(correst)
+      # print("correst = ")
+      # print(correst)
+      # print("correst = ")
+      # print(correst)
     } else {
       sigest = sd(y[uncens_inds])
       correst <- 0
@@ -413,6 +430,16 @@ tbart2c <- function(x.train,
   phi1 <- sigest^2 - gamma1^2
 
 
+  # print("phi1 = ")
+  # print(phi1)
+  # print("correst = ")
+  # print(correst)
+  # print("sigest = ")
+  # print(sigest)
+  # print("gamma1 = ")
+  # print(gamma1)
+
+
   # if(sigest > G0){
   #   S0 <- (nzero - 2)*(sigest-G0)
   # }else{
@@ -426,6 +453,28 @@ tbart2c <- function(x.train,
   S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
 
   gamma0 <- correst*sigest
+
+
+
+  if(cov_prior == "Ding"){
+    gamma0 <- 0
+
+
+    sigquant <- 0.9
+    qchi <- qchisq(1.0-sigquant,nu0)
+    cdivnu <- (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
+    cding <- cdivnu*nu0
+
+    rhoinit <- 0
+    siginit <- sigest
+
+  }
+
+
+
+
+
+
 
   draw = list(
     # Z.mat_train = array(NA, dim = c(n, n.iter)),
@@ -506,7 +555,7 @@ tbart2c <- function(x.train,
   # print("length(uncens_inds) = ")
   # print(length(uncens_inds))
 
-  if(nrow(x.test )==0){
+  if(nrow(x.test ) == 0){
 
 
     xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
@@ -740,6 +789,10 @@ tbart2c <- function(x.train,
 
   #########  Begin Gibbs sampler ######################################################
 
+  # pb <- progress_bar$new(total = n.iter+n.burnin)
+  # pb <- progress_bar$new(
+  #   format = " [:bar] :percent eta: :eta",
+  #   total = n.iter+n.burnin, clear = FALSE, width= 60)
 
   #loop through the Gibbs sampler iterations
   for(iter in 1:(n.iter+n.burnin)){
@@ -832,6 +885,9 @@ tbart2c <- function(x.train,
     weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
 
 
+    # print("weightstemp = ")
+    # print(weightstemp)
+
     # print("Line 737")
     # print("weightstemp = ")
     # print(weightstemp)
@@ -849,7 +905,9 @@ tbart2c <- function(x.train,
     samplestemp_z <- sampler_z$run()
 
     mutemp_z <- samplestemp_z$train[,1]
-    mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+    mutemp_test_z <- samplestemp_z$test[,1]
+    # mutemp_test_z <- sampler_z$test[,1]#samplestemp_z$test[,1]
+    # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
     # print("length(mutemp_test_z) = ")
     # print(length(mutemp_test_z))
@@ -911,155 +969,192 @@ tbart2c <- function(x.train,
     y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
 
 
+    ############# Covariance matrix samples ##########################
 
-    ########### Simultaneous phi and gamma draw #####################
 
-    if(simultaneous_covmat == TRUE){
+    if(cov_prior == "Ding"){
+      rho1 <- gamma1/sqrt(Sigma_mat[2,2])
 
-      if(cov_prior == "VH"){
-        h_num <- (gamma0/tau) + crossprod(z_epsilon[uncens_inds], y_epsilon[uncens_inds])[1]
-        a_temp <- (1/tau) + crossprod(z_epsilon[uncens_inds], z_epsilon[uncens_inds])[1]
+      sigz2 <- 1/rgamma(n = 1,
+                        shape = nu0/2,
+                        rate = cding/(2*(1- (rho1^2))))
 
-        h_temp <- h_num/a_temp
-        k_temp <- ((gamma0^2)/tau)+S0 +
-          crossprod(y_epsilon[uncens_inds], y_epsilon[uncens_inds])[1] -
-          ((h_num^2)/(a_temp))
 
-        phi1 <- 1/rgamma(n = 1,
-                         shape =  (nzero + n1 + 1)/2,
-                         rate = k_temp/2)
+      z_epsilon2 <- sqrt(sigz2)*(z - offsetz - mutemp_z)
 
-        gamma1 <- rnorm(n = 1, mean = h_temp, sd = sqrt(phi1/a_temp))
-      }else{
-        stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
-      }
+      zsquares <- crossprod(z_epsilon2[uncens_inds], z_epsilon2[uncens_inds])[1]
+      ysquares <- crossprod(y_epsilon[uncens_inds], y_epsilon[uncens_inds])[1]
+      zycross <- crossprod(z_epsilon2[uncens_inds], y_epsilon[uncens_inds])[1]
+
+      Stemp <- cbind(c(ysquares,zycross),
+                     c(zycross, zsquares))
+
+
+      tempsigma <- rinvwishart(nu = n1 + nu0,
+                               S = Stemp+cding*diag(2))
+
+
+      transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+      tempomega <- (transmat %*% tempsigma) %*% transmat
+
+      temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
+
+      gamma1 <- tempomega[1,2]
+      phi1 <- tempomega[1,1] - (gamma1^2)
+
+
+
     }else{
 
+      ########### Simultaneous phi and gamma draw #####################
 
+      if(simultaneous_covmat == TRUE){
 
-      #########  set parameters for gamma draw  ######################################################
+        if(cov_prior == "VH"){
+          h_num <- (gamma0/tau) + crossprod(z_epsilon[uncens_inds], y_epsilon[uncens_inds])[1]
+          a_temp <- (1/tau) + crossprod(z_epsilon[uncens_inds], z_epsilon[uncens_inds])[1]
 
-      # if(cov_prior == TRUE){
-      #   G0 <- tau*phi1
-      # }
-      if(cov_prior == "VH"){
-        G0draw <- tau*phi1
-      }else{
-        if(cov_prior == "Omori"){
-          G0draw <- G0
+          h_temp <- h_num/a_temp
+          k_temp <- ((gamma0^2)/tau)+S0 +
+            crossprod(y_epsilon[uncens_inds], y_epsilon[uncens_inds])[1] -
+            ((h_num^2)/(a_temp))
+
+          phi1 <- 1/rgamma(n = 1,
+                           shape =  (nzero + n1 + 1)/2,
+                           rate = k_temp/2)
+
+          gamma1 <- rnorm(n = 1, mean = h_temp, sd = sqrt(phi1/a_temp))
         }else{
-          mixind <- rbinom(n = 1,size = 1,prob = mixprob)
-          if(mixind == 1){
-            G0draw <- tau*phi1
-          }else{
+          stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
+        }
+      }else{
+
+
+
+        #########  set parameters for gamma draw  ######################################################
+
+        # if(cov_prior == TRUE){
+        #   G0 <- tau*phi1
+        # }
+        if(cov_prior == "VH"){
+          G0draw <- tau*phi1
+        }else{
+          if(cov_prior == "Omori"){
             G0draw <- G0
+          }else{
+            mixind <- rbinom(n = 1,size = 1,prob = mixprob)
+            if(mixind == 1){
+              G0draw <- tau*phi1
+            }else{
+              G0draw <- G0
+            }
           }
         }
-      }
 
-      # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
-      G1inv <- (1/G0draw) + (1/phi1)*crossprod(z_epsilon[uncens_inds])[1]
-      # G1inv <- (1/tau) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
-      G1 <- (1/G1inv)#[1,1]
+        # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
+        G1inv <- (1/G0draw) + (1/phi1)*crossprod(z_epsilon[uncens_inds])[1]
+        # G1inv <- (1/tau) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
+        G1 <- (1/G1inv)#[1,1]
 
-      # gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
-      gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1]   ))
-      # gamma_one <- (G1*( (1/tau)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
+        # gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
+        gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1]   ))
+        # gamma_one <- (G1*( (1/tau)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
 
-      # print("phi1 = ")
-      # print(phi1)
-      # print("G0draw = ")
-      # print(G0draw)
-      #
-      # print("(G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )) = ")
-      # print((G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )))
-      #
-      # print("gamma_one = ")
-      # print(gamma_one)
-      #
-      # print("crossprod(z_epsilon , y_epsilon   ) = ")
-      # print(crossprod(z_epsilon , y_epsilon   ))
-      #
-      # print("crossprod(z_epsilon    ) = ")
-      # print(crossprod(z_epsilon   ))
-      #
-      # print("crossprod(z_epsilon[uncens_inds])[1]     = ")
-      # print(crossprod(z_epsilon[uncens_inds])[1]   )
-      #
-      # print("G1 = ")
-      # print(G1)
+        # print("phi1 = ")
+        # print(phi1)
+        # print("G0draw = ")
+        # print(G0draw)
+        #
+        # print("(G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )) = ")
+        # print((G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )))
+        #
+        # print("gamma_one = ")
+        # print(gamma_one)
+        #
+        # print("crossprod(z_epsilon , y_epsilon   ) = ")
+        # print(crossprod(z_epsilon , y_epsilon   ))
+        #
+        # print("crossprod(z_epsilon    ) = ")
+        # print(crossprod(z_epsilon   ))
+        #
+        # print("crossprod(z_epsilon[uncens_inds])[1]     = ")
+        # print(crossprod(z_epsilon[uncens_inds])[1]   )
+        #
+        # print("G1 = ")
+        # print(G1)
 
-      gamma1 <- rnorm(n = 1, mean = gamma_one, sd =  sqrt(G1) )
+        gamma1 <- rnorm(n = 1, mean = gamma_one, sd =  sqrt(G1) )
 
-      # print("gamma1 = ")
-      # print(gamma1)
+        # print("gamma1 = ")
+        # print(gamma1)
 
 
-      #########  set parameters for phi draw  ######################################################
+        #########  set parameters for phi draw  ######################################################
 
-      n_one <- nzero + n1 + 1
+        n_one <- nzero + n1 + 1
 
-      # print("S0 = ")
-      # print(S0)
-      # print("(gamma1^2)*crossprod(z_epsilon) = ")
-      # print((gamma1^2)*crossprod(z_epsilon))
-      #
-      # print("2*gamma1*crossprod(z_epsilon , y_epsilon   ) = ")
-      # print(2*gamma1*crossprod(z_epsilon , y_epsilon   ))
-      #
-      # print("crossprod(y_epsilon) = ")
-      # print(crossprod(y_epsilon))
+        # print("S0 = ")
+        # print(S0)
+        # print("(gamma1^2)*crossprod(z_epsilon) = ")
+        # print((gamma1^2)*crossprod(z_epsilon))
+        #
+        # print("2*gamma1*crossprod(z_epsilon , y_epsilon   ) = ")
+        # print(2*gamma1*crossprod(z_epsilon , y_epsilon   ))
+        #
+        # print("crossprod(y_epsilon) = ")
+        # print(crossprod(y_epsilon))
 
-      # S1 <- S0 + (gamma1^2)*crossprod(z_epsilon) - 2*gamma1*crossprod(z_epsilon , y_epsilon   )  + crossprod(y_epsilon)
+        # S1 <- S0 + (gamma1^2)*crossprod(z_epsilon) - 2*gamma1*crossprod(z_epsilon , y_epsilon   )  + crossprod(y_epsilon)
 
-      S1 <- 0 #S0 + (gamma1^2)/G0 + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
+        S1 <- 0 #S0 + (gamma1^2)/G0 + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
 
-      if(cov_prior == "VH"){
-        # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
-        S1 <- S0 + (gamma1^2)/tau +
-          crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] # + crossprod(y_epsilon)
-      }else{
-        if(cov_prior == "Omori"){
-          S1 <- S0 + #+ (gamma1^2)/G0 +
-            crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1]  #+crossprod(y_epsilon)[1]
+        if(cov_prior == "VH"){
+          # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
+          S1 <- S0 + (gamma1^2)/tau +
+            crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] # + crossprod(y_epsilon)
         }else{
-          mixind <- rbinom(n = 1,size = 1,prob = mixprob)
-          if(mixind == 1){
-            # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
-            S1 <- S0 + (gamma1^2)/tau +
-              crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] # + crossprod(y_epsilon)
-          }else{
+          if(cov_prior == "Omori"){
             S1 <- S0 + #+ (gamma1^2)/G0 +
               crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1]  #+crossprod(y_epsilon)[1]
+          }else{
+            mixind <- rbinom(n = 1,size = 1,prob = mixprob)
+            if(mixind == 1){
+              # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
+              S1 <- S0 + (gamma1^2)/tau +
+                crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] # + crossprod(y_epsilon)
+            }else{
+              S1 <- S0 + #+ (gamma1^2)/G0 +
+                crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1]  #+crossprod(y_epsilon)[1]
+            }
           }
         }
-      }
-      # print("S1 = ")
-      # print(S1)
-      # print("n_one = ")
-      # print(n_one)
+        # print("S1 = ")
+        # print(S1)
+        # print("n_one = ")
+        # print(n_one)
 
 
-      # print("Line 883 phi1 = ")
-      # print(phi1)
+        # print("Line 883 phi1 = ")
+        # print(phi1)
 
-      # draw from inverse gamma
-      phi1 <- 1/rgamma(n = 1, shape =  n_one/2, rate = S1/2)
+        # draw from inverse gamma
+        phi1 <- 1/rgamma(n = 1, shape =  n_one/2, rate = S1/2)
 
 
-      # print("Line 890 phi1 = ")
-      # print(phi1)
-      #
-      # print("Line 890 n_one = ")
-      # print(n_one)
-      #
-      # print("Line 890 S1 = ")
-      # print(S1)
-      # print("n1 = ")
-      # print(n1)
+        # print("Line 890 phi1 = ")
+        # print(phi1)
+        #
+        # print("Line 890 n_one = ")
+        # print(n_one)
+        #
+        # print("Line 890 S1 = ")
+        # print(S1)
+        # print("n1 = ")
+        # print(n1)
 
-    } # end of else statement, for simultaneous_covmat = FALSE
+      } # end of else statement, for simultaneous_covmat = FALSE
 
+    }
 
     ######### update Sigma matrix #####################################################
 
@@ -1123,7 +1218,7 @@ tbart2c <- function(x.train,
 
       }
 
-      if(accept_bin ==1){
+      if(accept_bin == 1){
         g_accepted <- gprime
 
         phi1 <- (gprime^2)*phi1
@@ -1149,7 +1244,7 @@ tbart2c <- function(x.train,
 
 
 
-    if(iter>n.burnin){
+    if(iter > n.burnin){
       iter_min_burnin <- iter-n.burnin
 
 
@@ -1161,9 +1256,20 @@ tbart2c <- function(x.train,
       #draw z and y for test observations
       zytest <- matrix(NA, nrow = ntest, ncol = 2)
 
-      zytest <- mvrnorm(n = ntest,
-                        mu = c(0, 0),
-                        Sigma = Sigma_mat)
+
+      if(fast == TRUE){
+        zytest <- Rfast::rmvnorm(n = ntest,
+                                 mu = c(0, 0),
+                                 sigma = Sigma_mat)
+
+      }else{
+        zytest <- mvrnorm(n = ntest,
+                          mu = c(0, 0),
+                          Sigma = Sigma_mat)
+
+      }
+
+
 
       # print("length(mutemp_test_z) = ")
       # print(length(mutemp_test_z))
@@ -1183,9 +1289,13 @@ tbart2c <- function(x.train,
       #                         Sigma = Sigma_mat)
       # }
 
-
-      probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz )
-      probcens_test <- pnorm(- mutemp_test_z - offsetz)
+      if(fast == TRUE){
+        probcens_train <- fastpnorm(- mutemp_z[uncens_inds] - offsetz )
+        probcens_test <- fastpnorm(- mutemp_test_z - offsetz)
+      }else{
+        probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz )
+        probcens_test <- pnorm(- mutemp_test_z - offsetz)
+      }
 
       #calculate conditional expectation
 
@@ -1193,16 +1303,19 @@ tbart2c <- function(x.train,
       # condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z[uncens_inds] - offsetz ))/(1-probcens_train)
       # condexptest <- mutemp_test_y + gamma1*(dnorm(- mutemp_test_z - offsetz ))/(1-probcens_test)
 
-
-
       temp_ztrain <- mutemp_z[uncens_inds] + offsetz
-
-      IMR_train <- exp( dnorm(temp_ztrain,log=T) - pnorm(temp_ztrain,log.p = T) )
-
-
       temp_ztest <- mutemp_test_z + offsetz
-
-      IMR_test <- exp( dnorm(temp_ztest,log=T) - pnorm(temp_ztest,log.p = T) )
+#
+#       if(fast == TRUE){
+#         IMR_train <- exp( dnorm(temp_ztrain,log=T) - log(fastpnorm(temp_ztrain) ))
+#         IMR_test <- exp( dnorm(temp_ztest,log=T) - log(fastpnorm(temp_ztest) ))
+#
+#         # IMR_train <- fastnormdens(temp_ztrain)/fastpnorm(temp_ztrain)
+#         # IMR_test <- fastnormdens(temp_ztest)/fastpnorm(temp_ztest)
+#       }else{
+        IMR_train <- exp( dnorm(temp_ztrain,log=T) - pnorm(temp_ztrain,log.p = T) )
+        IMR_test <- exp( dnorm(temp_ztest,log=T) - pnorm(temp_ztest,log.p = T) )
+      # }
 
 
       condexptrain <- mutemp_y + gamma1*IMR_train
@@ -1256,6 +1369,8 @@ tbart2c <- function(x.train,
 
 
     } # end if iter > burnin
+
+    # pb$tick()
 
     if(iter %% print.opt == 0){
       print(paste("Gibbs Iteration", iter))

@@ -210,7 +210,7 @@ softtbart1 <- function(x.train,
   opts <- Opts(update_sigma = TRUE, num_print = print.opt)
 
 
-  sampler_forest <- MakeForest(hypers, opts)
+  sampler_forest <- MakeForest(hypers, opts, warn = FALSE)
 
 
 

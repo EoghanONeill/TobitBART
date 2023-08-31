@@ -39,10 +39,13 @@ tbart2c(
   print.opt = 100,
   eq_by_eq = TRUE,
   accelerate = FALSE,
-  cov_prior = "VH",
+  cov_prior = "Ding",
   tau = 1/3,
   mixprob = 0.5,
-  simultaneous_covmat = TRUE
+  simultaneous_covmat = TRUE,
+  fast = TRUE,
+  nu0 = 3,
+  quantsig = 0.9
 )
 }
 \arguments{
@@ -70,7 +73,7 @@ tbart2c(
 
 \item{S0}{A prior parameter which when divided by 2 gives the variance of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.}
 
-\item{sigest}{If variance of the error term is the}
+\item{sigest}{Estimate of variance of hte error term.}
 
 \item{n.trees_outcome}{(dbarts control option) A positive integer giving the number of trees used in the outcome model sum-of-trees formulation.}
 
@@ -115,6 +118,12 @@ tbart2c(
 \item{mixprob}{If cov_prior equals Mixture, then mixprob is the probability applied to the Van Hasselt covariance prior, and one minus mixprob is the probability applied to the Omori prior.}
 
 \item{simultaneous_covmat}{If TRUE, jointly sample the parameters that determine the covariance matrix instead of sampling from separate full conditionals.}
+
+\item{fast}{If equal to true, takes faster samples of z and y and makes faster approximate calculations of selection probabilities.}
+
+\item{nu0}{For the inverseWishart prior Winv(nu0,c*I_2) of Ding (2014) on an unidentified unrestricted covariance matrix. nu = 3 corresponds to a uniform correlation prior. nu > 3 centers the correlation prior at 0, while nu < 3 places more prior probability on selection on unobservables.}
+
+\item{quantsig}{For the inverseWishart prior Winv(nu0,c*I_2) of Ding (2014). The parameter c is determined by quantsig so that the marginal prior on the standard deviation of the outcome has 90\% quantile equal to an estimate from a linear tobit model or sigest if sigest is not NA.}
 }
 \value{
 The following objects are returned:
