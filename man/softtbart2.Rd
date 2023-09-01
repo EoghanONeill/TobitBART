@@ -39,7 +39,7 @@ softtbart2(
   print.opt = 1000,
   eq_by_eq = TRUE,
   accelerate = FALSE,
-  cov_prior = "VH",
+  cov_prior = "Ding",
   tau = 1/3,
   mixprob = 0.5,
   simultaneous_covmat = TRUE,

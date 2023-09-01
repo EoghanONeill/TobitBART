@@ -226,7 +226,7 @@ softtbart2 <- function(x.train,
                     print.opt = 1000,
                     eq_by_eq = TRUE,
                     accelerate = FALSE,
-                    cov_prior = "VH",
+                    cov_prior = "Ding",
                     tau = 1/3,
                     mixprob = 0.5,
                     simultaneous_covmat = TRUE,
@@ -939,6 +939,8 @@ softtbart2 <- function(x.train,
     #
     # weightstemp_z[uncens_inds] <- (gamma1^2 + phi1)/phi1
 
+    weightstemp_z[uncens_inds] <- (gamma1^2 + phi1)/phi1
+
 
     # print("Line 737")
     # print("weightstemp = ")
@@ -1070,11 +1072,16 @@ softtbart2 <- function(x.train,
                      c(zycross, zsquares))
 
 
-      print("line ")
+      # print("line 1073")
 
       tempsigma <- rinvwishart(nu = n1 + nu0,
                                S = Stemp+cding*diag(2))
 
+
+      # print("line 1079")
+      #
+      # print("tempsigma = ")
+      # print(tempsigma)
 
       transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
       tempomega <- (transmat %*% tempsigma) %*% transmat
