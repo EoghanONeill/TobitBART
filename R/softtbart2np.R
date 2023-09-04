@@ -1,8 +1,8 @@
 
 
-#' @title Nonparametric Type II Tobit Bayesian Additive Regression Trees implemented using MCMC
+#' @title Nonparametric Type II Tobit Soft Bayesian Additive Regression Trees with sparsity inducing hyperprior implemented using MCMC
 #'
-#' @description Nonparametric Type II Tobit Bayesian Additive Regression Trees implemented using MCMC. The errors in the selection and outcome equations are modelled by a Dirichlet Process mixture of bivariate normal distributions.
+#' @description Nonparametric Type II Tobit Soft Bayesian Additive Regression Trees with sparsity inducing hyperprior implemented using MCMC. The errors in the selection and outcome equations are modelled by a Dirichlet Process mixture of bivariate normal distributions.
 #' @import dbarts
 #' @import truncnorm
 #' @import MASS
@@ -189,51 +189,52 @@
 #'
 #' @export
 
-tbart2np <- function(x.train,
-                    x.test,
-                    w.train,
-                    w.test,
-                    y,
-                    n.iter=1000,
-                    n.burnin=100,
-                    censored_value = NA,
-                    gamma0 = 0,
-                    G0=10,
-                    nzero = 6,#0.002,
-                    S0= 12,#0.002,
-                    sigest = NA,
-                    n.trees_outcome = 50L,
-                    n.trees_censoring = 50L,
-                    n.burn = 0L,
-                    n.samples = 1L,
-                    n.thin = 1L,
-                    n.chains = 1L,
-                    n.threads = guessNumCores(),
-                    printEvery = 100L,
-                    printCutoffs = 0L,
-                    rngKind = "default",
-                    rngNormalKind = "default",
-                    rngSeed = NA_integer_,
-                    updateState = TRUE,
-                    tree.prior = dbarts:::cgm,
-                    node.prior = dbarts:::normal,
-                    resid.prior = dbarts:::chisq,
-                    proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
-                    sigmadbarts = NA_real_,
-                    print.opt = 100,
-                    eq_by_eq = TRUE,
-                    accelerate = FALSE,
-                    cov_prior = "VH",
-                    tau = 0.5,
-                    M_mat = 2*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
-                    alpha_prior = "vh",
-                    c1 = 2,
-                    c2 = 2,
-                    alpha_gridsize = 100L,
-                    selection_test = 1,
-                    init.many.clust = TRUE,
-                    nu0 = 3,
-                    quantsig = 0.95){
+softtbart2np <- function(x.train,
+                     x.test,
+                     w.train,
+                     w.test,
+                     y,
+                     n.iter=1000,
+                     n.burnin=100,
+                     censored_value = NA,
+                     gamma0 = 0,
+                     G0=10,
+                     nzero = 6,#0.002,
+                     S0= 12,#0.002,
+                     sigest = NA,
+                     n.trees_outcome = 50L,
+                     n.trees_censoring = 50L,
+                     SB_group = NULL,
+                     SB_alpha = 1,
+                     SB_beta = 2,
+                     SB_gamma = 0.95,
+                     SB_k = 2,
+                     SB_sigma_hat = NULL,
+                     SB_shape = 1,
+                     SB_width = 0.1,
+                     # SB_num_tree = 20,
+                     SB_alpha_scale = NULL,
+                     SB_alpha_shape_1 = 0.5,
+                     SB_alpha_shape_2 = 1,
+                     SB_tau_rate = 10,
+                     SB_num_tree_prob = NULL,
+                     SB_temperature = 1,
+                     SB_weights = NULL,
+                     SB_normalize_Y = TRUE,
+                     print.opt = 100,
+                     eq_by_eq = TRUE,
+                     accelerate = FALSE,
+                     cov_prior = "VH",
+                     tau = 0.5,
+                     M_mat = 2*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
+                     alpha_prior = "vh",
+                     c1 = 2,
+                     c2 = 2,
+                     alpha_gridsize = 100L,
+                     selection_test = 1,
+                     init.many.clust = TRUE,
+                     nu0 = 3,
+                     quantsig = 0.95){
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -466,6 +467,9 @@ tbart2np <- function(x.train,
   # print("gamma1 = ")
   # print(gamma1)
 
+
+
+
   gamma0 <- correst*sigest
 
   if(cov_prior == "Ding"){
@@ -601,9 +605,9 @@ tbart2np <- function(x.train,
           tempsigmamat <- solve(M_inv + tempsigmainv )
 
           mutilde <- Rfast::rmvnorm(n = 1,
-                             mu = (tempsigmamat%*%tempsigmainv) %*%
-                               c((u_z[i]),(u_y[uncens_count])),
-                             sigma = tempsigmamat )
+                                    mu = (tempsigmamat%*%tempsigmainv) %*%
+                                      c((u_z[i]),(u_y[uncens_count])),
+                                    sigma = tempsigmamat )
 
           if(cov_prior == "Ding"){
 
@@ -675,7 +679,7 @@ tbart2np <- function(x.train,
 
     } # end loop over i
   }else{ #just one cluster for initial values
-        # for both selected and unselected observations?
+    # for both selected and unselected observations?
 
     # phi1_vec_train <- phi1 #sigest #  1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
     phi1_vec_train <- rep(phi1, n)
@@ -783,36 +787,94 @@ tbart2np <- function(x.train,
   }
 
 
+  ########## Initialize SoftBart #####################
 
-  ########## Initialize dbarts #####################
+  hypers_y <- Hypers(x.train[uncens_inds,], ystar[uncens_inds],
+                     num_tree = n.trees_outcome, #sigma_hat = 1,
+                     group = SB_group,
+                     alpha = SB_alpha,
+                     beta = SB_beta,
+                     gamma = SB_gamma,
+                     k = SB_k,
+                     # sigma_hat = NULL,
+                     shape = SB_shape,
+                     width = SB_width,
+                     # num_tree = 20,
+                     alpha_scale = SB_alpha_scale,
+                     alpha_shape_1 = SB_alpha_shape_1,
+                     alpha_shape_2 = SB_alpha_shape_2,
+                     tau_rate = SB_tau_rate,
+                     num_tree_prob = SB_num_tree_prob,
+                     temperature = SB_temperature,
+                     weights = SB_weights,
+                     normalize_Y = SB_normalize_Y
+  )
 
-  control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                             keepTrees = TRUE,
-                             n.trees = n.trees_censoring,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
-                             rngKind = rngKind,
-                             rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
 
-  control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                             keepTrees = TRUE,
-                             n.trees = n.trees_outcome,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
-                             rngKind = rngKind,
-                             rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
+  opts_y <- Opts(update_sigma = TRUE, num_print = num_burnin + num_iter + 1)
+
+  sampler_forest_y <- MakeForest(hypers_y, opts_y, warn = FALSE)
+
+
+  hypers_z <- Hypers(w.train, z - offsetz,
+                     num_tree = n.trees_censoring, #sigma_hat = 1,
+                     group = SB_group,
+                     alpha = SB_alpha,
+                     beta = SB_beta,
+                     gamma = SB_gamma,
+                     k = SB_k,
+                     # sigma_hat = NULL,
+                     shape = SB_shape,
+                     width = SB_width,
+                     # num_tree = 20,
+                     alpha_scale = SB_alpha_scale,
+                     alpha_shape_1 = SB_alpha_shape_1,
+                     alpha_shape_2 = SB_alpha_shape_2,
+                     tau_rate = SB_tau_rate,
+                     num_tree_prob = SB_num_tree_prob,
+                     temperature = SB_temperature,
+                     weights = SB_weights,
+                     normalize_Y = SB_normalize_Y
+  )
+
+
+  opts_z <- Opts(update_sigma = TRUE, num_print = num_burnin + num_iter + 1)
+
+  sampler_forest_z <- MakeForest(hypers_z, opts_z, warn = FALSE)
+
+
+
+  # ########## Initialize dbarts #####################
+  #
+  # control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+  #                            keepTrees = TRUE,
+  #                            n.trees = n.trees_censoring,
+  #                            n.burn = n.burn,
+  #                            n.samples = n.samples,
+  #                            n.thin = n.thin,
+  #                            n.chains = n.chains,
+  #                            n.threads = n.threads,
+  #                            printEvery = printEvery,
+  #                            printCutoffs = printCutoffs,
+  #                            rngKind = rngKind,
+  #                            rngNormalKind = rngNormalKind,
+  #                            rngSeed = rngSeed)
+  #
+  # control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+  #                            keepTrees = TRUE,
+  #                            n.trees = n.trees_outcome,
+  #                            n.burn = n.burn,
+  #                            n.samples = n.samples,
+  #                            n.thin = n.thin,
+  #                            n.chains = n.chains,
+  #                            n.threads = n.threads,
+  #                            printEvery = printEvery,
+  #                            printCutoffs = printCutoffs,
+  #                            rngKind = rngKind,
+  #                            rngNormalKind = rngNormalKind,
+  #                            rngSeed = rngSeed)
+
+
   # print(colnames(Xmat.train))
 
   # print("begin dbarts")
@@ -832,48 +894,49 @@ tbart2np <- function(x.train,
 
 
     xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
-    sampler_y <- dbarts(y ~ .,
-                        data = xdf_y,
-                        #test = x.test,
-                        weights = weightstemp_y,
-                        control = control_y,
-                        tree.prior = tree.prior,
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
-    )
+
+    # sampler_y <- dbarts(y ~ .,
+    #                     data = xdf_y,
+    #                     #test = x.test,
+    #                     weights = weightstemp_y,
+    #                     control = control_y,
+    #                     tree.prior = tree.prior,
+    #                     node.prior = node.prior,
+    #                     resid.prior = resid.prior,
+    #                     proposal.probs = proposal.probs,
+    #                     sigma = sigmadbarts
+    #                     )
 
     xdf_z <- data.frame(y = z - offsetz, x = w.train)
 
-    sampler_z <- dbarts(y ~ .,
-                        data = xdf_z,
-                        #test = x.test,
-                        weights = weightstemp,
-                        control = control_z,
-                        tree.prior = tree.prior,
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = 1#sigmadbarts
-    )
+    # sampler_z <- dbarts(y ~ .,
+    #                     data = xdf_z,
+    #                     #test = x.test,
+    #                     weights = weightstemp,
+    #                     control = control_z,
+    #                     tree.prior = tree.prior,
+    #                     node.prior = node.prior,
+    #                     resid.prior = resid.prior,
+    #                     proposal.probs = proposal.probs,
+    #                     sigma = 1#sigmadbarts
+    #                     )
 
   }else{
 
     xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
     xdf_y_test <- data.frame(x = x.test)
 
-    sampler_y <- dbarts(y ~ .,
-                        data = xdf_y,
-                        test = xdf_y_test,
-                        # weights = weightstemp_y,
-                        control = control_y,
-                        tree.prior = tree.prior,
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
-    )
+    # sampler_y <- dbarts(y ~ .,
+    #                     data = xdf_y,
+    #                     test = xdf_y_test,
+    #                     # weights = weightstemp_y,
+    #                     control = control_y,
+    #                     tree.prior = tree.prior,
+    #                     node.prior = node.prior,
+    #                     resid.prior = resid.prior,
+    #                     proposal.probs = proposal.probs,
+    #                     sigma = sigmadbarts
+    #                     )
 
 
     # print("length(z - offsetz) = ")
@@ -885,17 +948,17 @@ tbart2np <- function(x.train,
     xdf_z <- data.frame(y = z - offsetz, x = w.train)
     xdf_z_test <- data.frame(x = w.test)
 
-    sampler_z <- dbarts(y ~ .,
-                        data = xdf_z,
-                        test = xdf_z_test,
-                        # weights = weightstemp,
-                        control = control_z,
-                        tree.prior = tree.prior,
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = 1#sigmadbarts
-    )
+    # sampler_z <- dbarts(y ~ .,
+    #                     data = xdf_z,
+    #                     test = xdf_z_test,
+    #                     # weights = weightstemp,
+    #                     control = control_z,
+    #                     tree.prior = tree.prior,
+    #                     node.prior = node.prior,
+    #                     resid.prior = resid.prior,
+    #                     proposal.probs = proposal.probs,
+    #                     sigma = 1#sigmadbarts
+    #                     )
 
   }
 
@@ -914,34 +977,47 @@ tbart2np <- function(x.train,
   z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
     (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - 0)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
 
-  #set the response for draws of z trees
-  sampler_z$setResponse(y = z_resids)
-  #set the standard deivation
-  sampler_z$setSigma(sigma = 1)
 
-  # weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
+  sampler_forest_z$set_sigma(1)
 
-  # print("weightstemp = ")
-  # print(weightstemp)
+  mutemp_z <- sampler_forest_z$do_gibbs_weighted(w.train,
+                                                 z_resids,
+                                                 weightstemp_z,
+                                                 w.train,
+                                                 1)
 
+  mutemp_test_z <- sampler_forest_z$do_predict(w.test)
+
+
+
+  # #set the response for draws of z trees
+  # sampler_z$setResponse(y = z_resids)
+  # #set the standard deivation
   # sampler_z$setSigma(sigma = 1)
-  sampler_z$setWeights(weights = weightstemp)
-
-  # sampler_z$sampleTreesFromPrior()
-
-  # priormean_z <- sampler_z$predict(xdf_z)[1,]
-
-  # sampler_z$sampleNodeParametersFromPrior()
-
-  samplestemp_z <- sampler_z$run()
-
-  # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
-  # mutemp_test_z <- rep(0,ntest) #samplestemp_z$test[,1]
-
-  mutemp_z <- samplestemp_z$train[,1]
-  mutemp_test_z <- samplestemp_z$test[,1]
-
-  # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+  #
+  # # weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
+  #
+  # # print("weightstemp = ")
+  # # print(weightstemp)
+  #
+  # # sampler_z$setSigma(sigma = 1)
+  # sampler_z$setWeights(weights = weightstemp)
+  #
+  # # sampler_z$sampleTreesFromPrior()
+  #
+  # # priormean_z <- sampler_z$predict(xdf_z)[1,]
+  #
+  # # sampler_z$sampleNodeParametersFromPrior()
+  #
+  # samplestemp_z <- sampler_z$run()
+  #
+  # # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
+  # # mutemp_test_z <- rep(0,ntest) #samplestemp_z$test[,1]
+  #
+  # mutemp_z <- samplestemp_z$train[,1]
+  # mutemp_test_z <- samplestemp_z$test[,1]
+  #
+  # # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
 
 
@@ -971,26 +1047,37 @@ tbart2np <- function(x.train,
   #
   # print(y_resids)
 
-  #set the response for draws of z trees
-  sampler_y$setResponse(y = y_resids)
-  sampler_y$setSigma(sigma = 1)
 
-  # sampler_y$setSigma(sigma = sigest)
-  sampler_y$setWeights(weights = weightstemp_y)
+  sampler_forest_y$set_sigma(1)
 
-  # sampler_y$sampleTreesFromPrior()
+  mutemp_y <- sampler_forest_y$do_gibbs_weighted(x.train[uncens_inds,],
+                                                 y_resids,
+                                                 weightstemp_y,
+                                                 x.train[uncens_inds,],
+                                                 1)
 
-  # priormean_y <- sampler_y$predict(xdf_y)[1,]
+  mutemp_test_y <- sampler_forest_y$do_predict(x.test)
 
-  # sampler_y$sampleNodeParametersFromPrior()
-
-  samplestemp_y <- sampler_y$run()
-
-  # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
-  # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
-
-  mutemp_y <- samplestemp_y$train[,1]
-  mutemp_test_y <- samplestemp_y$test[,1]
+  # #set the response for draws of z trees
+  # sampler_y$setResponse(y = y_resids)
+  # sampler_y$setSigma(sigma = 1)
+  #
+  # # sampler_y$setSigma(sigma = sigest)
+  # sampler_y$setWeights(weights = weightstemp_y)
+  #
+  # # sampler_y$sampleTreesFromPrior()
+  #
+  # # priormean_y <- sampler_y$predict(xdf_y)[1,]
+  #
+  # # sampler_y$sampleNodeParametersFromPrior()
+  #
+  # samplestemp_y <- sampler_y$run()
+  #
+  # # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
+  # # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
+  #
+  # mutemp_y <- samplestemp_y$train[,1]
+  # mutemp_test_y <- samplestemp_y$test[,1]
 
   # print("length(mutemp_test_y) = ")
   # print(length(mutemp_test_y))
@@ -1214,10 +1301,10 @@ tbart2np <- function(x.train,
     # print("length(z) =")
     # print(length(z))
 
-    #set the response for draws of z trees
-    sampler_z$setResponse(y = z_resids)
-    #set the standard deivation
-    sampler_z$setSigma(sigma = 1)
+    # #set the response for draws of z trees
+    # sampler_z$setResponse(y = z_resids)
+    # #set the standard deivation
+    # sampler_z$setSigma(sigma = 1)
 
     weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
 
@@ -1232,12 +1319,22 @@ tbart2np <- function(x.train,
     # print("length(weightstemp) = ")
     # print(length(weightstemp))
 
-    sampler_z$setWeights(weights = weightstemp)
 
-    samplestemp_z <- sampler_z$run()
+    sampler_forest_z$set_sigma(1)
 
-    mutemp_z <- samplestemp_z$train[,1]
-    mutemp_test_z <- samplestemp_z$test[,1]
+    mutemp_z <- sampler_forest_z$do_gibbs_weighted(w.train,
+                                                   z_resids,
+                                                   weightstemp_z,
+                                                   w.train,
+                                                   1)
+
+    mutemp_test_z <- sampler_forest_z$do_predict(w.test)
+
+    # sampler_z$setWeights(weights = weightstemp)
+    #
+    # samplestemp_z <- sampler_z$run()
+    #
+    # mutemp_z <- samplestemp_z$train[,1]
     # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
     # print("length(mutemp_test_z) = ")
@@ -1284,20 +1381,31 @@ tbart2np <- function(x.train,
     #
     # print(y_resids)
 
-    #set the response for draws of z trees
-    sampler_y$setResponse(y = y_resids)
-    #set the standard deviation
-    # sampler_y$setSigma(sigma = sd_ydraw)
+    sampler_forest_y$set_sigma(1)
 
-    sampler_y$setSigma(sigma = 1)
+    mutemp_y <- sampler_forest_y$do_gibbs_weighted(x.train[uncens_inds,],
+                                                   y_resids,
+                                                   weightstemp_y,
+                                                   x.train[uncens_inds,],
+                                                   1)
 
-    weightstemp_y  <- 1/phi1_vec_train[uncens_inds]
-    sampler_y$setWeights(weights = weightstemp_y)
+    mutemp_test_y <- sampler_forest_y$do_predict(x.test)
 
-    samplestemp_y <- sampler_y$run()
 
-    mutemp_y <- samplestemp_y$train[,1]
-    mutemp_test_y <- samplestemp_y$test[,1]
+    # #set the response for draws of z trees
+    # sampler_y$setResponse(y = y_resids)
+    # #set the standard deviation
+    # # sampler_y$setSigma(sigma = sd_ydraw)
+    #
+    # sampler_y$setSigma(sigma = 1)
+    #
+    # weightstemp_y  <- 1/phi1_vec_train[uncens_inds]
+    # sampler_y$setWeights(weights = weightstemp_y)
+    #
+    # samplestemp_y <- sampler_y$run()
+    #
+    # mutemp_y <- samplestemp_y$train[,1]
+    # mutemp_test_y <- samplestemp_y$test[,1]
 
 
     #update z_epsilon
@@ -1456,150 +1564,150 @@ tbart2np <- function(x.train,
     itemp <- 0
 
 
-#     print("calculating matrix of probabilities for uncensored observations")
-#
-#     # uncens_inds
-#
-#
-#     for(j in 1:n){
-#       # print("j = ")
-#       # print(j)
-#
-#       # for(i in uncens_inds){
-#       #   itemp <- itemp +1
-#       #   print("itemp")
-#       #
-#       #   print(itemp)
-#       #
-#       #   print("i = ")
-#       #   print(i)
-#
-#         #can calculate manually using the formula for the bivariate probability
-#
-#
-#       # print("length(mutemp_y) = ")
-#       # print(length(mutemp_y))
-#       #
-#       # print("length(uncens_inds = ")
-#       # print(length(uncens_inds))
-#
-#         jointdens_mat[uncens_inds,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
-#           exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
-#            ( (z - offsetz)[uncens_inds] - mutemp_z[uncens_inds] - mu1_vec_train[j] )^2 -
-#              2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
-#              ((z - offsetz)[uncens_inds] - mutemp_z[uncens_inds] - mu1_vec_train[j] )*
-#              (ystar[uncens_inds] - mutemp_y  - mu2_vec_train[j] ) +
-#              ((ystar[uncens_inds] - mutemp_y  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
-#           ) )
-#
-# #
-# #         Sigma_mat_temp_j <- cbind(c(1,
-# #                                     gamma1_vec_train[j]),
-# #                                   c(gamma1_vec_train[j],
-# #                                     phi1_vec_train[j]+gamma1_vec_train[j]^2))
-# #
-# #
-# #         # print("calcaulte density")
-# #
-# #         #or can use a pre-defined function
-# #         jointdens_mat[i,j] <-  dmvnorm(c((z - offsetz)[i],
-# #                                          ystar[i]),
-# #                                        mean = c(mutemp_z[i] + mu1_vec_train[j],
-# #                                                 mutemp_y[itemp]+ mu2_vec_train[j]),
-# #                                        sigma = Sigma_mat_temp_j)
-#
-#
-#       # }
-#
-#         if(any(is.nan(jointdens_mat[uncens_inds,j]))){
-#
-#           print("j = ")
-#           print(j)
-#
-#           print("phi1_vec_train[j]= ")
-#           print(phi1_vec_train[j])
-#
-#           print("phi1_vec_train = ")
-#           print(phi1_vec_train)
-#
-#
-#           print("gamma1_vec_train[j] = ")
-#           print(gamma1_vec_train[j])
-#
-#           print("mu1_vec_train[j] =")
-#           print(mu1_vec_train[j])
-#
-#           print("mu2_vec_train[j] =")
-#           print(mu2_vec_train[j])
-#
-#
-#           print("jointdens_mat[uncens_inds,j] = ")
-#           print(jointdens_mat[uncens_inds,j])
-#           stop("There are some NAN probabilities")
-#         }
-#
-#
-#     }
-#
-#
-#     print("calculating matrix of probabilities for censored observations")
-#
-#
-#     # cens_inds
-#     # for(i in cens_inds){
-#       # itemp <- itemp +1
-#       for(j in 1:n){
-#
-#
-#
-#         #can calculate manually using the formula for the biavariate probability
-#         # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
-#         #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
-#         #    ( (z - offsetz)[i] - mu1_vec_train[j] )^2 -
-#         #      2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
-#         #      ((z - offsetz)[i] - mu1_vec_train[j] )*
-#         #      (ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j] ) +
-#         #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
-#         #   ) )
-#
-#
-#         # Sigma_mat_temp_j <- cbind(c(1,
-#         #                             gamma1_vec_train[j]),
-#         #                           c(gamma1_vec_train[j],
-#         #                             phi1_vec_train[j]+gamma1_vec_train[j]^2))
-#
-#
-#         #or can use a pre-defined function
-#
-#         # tempvec <- dnorm((z - offsetz)[cens_inds] ,
-#         #       mean = mutemp_z[cens_inds] + mu1_vec_train[j],
-#         #       sd = 1)
-#         #
-#         # print("length(tempvec) = ")
-#         # print(length(tempvec) )
-#         #
-#         # print("length(mutemp_z[cens_inds]) = ")
-#         # print(length(mutemp_z[cens_inds]) )
-#         #
-#         # print("length((z - offsetz)[cens_inds]) = ")
-#         # print(length((z - offsetz)[cens_inds]) )
-#
-#
-#         jointdens_mat[cens_inds,j] <- dnorm((z - offsetz)[cens_inds] ,
-#                                     mean = mutemp_z[cens_inds] + mu1_vec_train[j],
-#                                     sd = 1)
-#
-#         if(any(is.nan(jointdens_mat[cens_inds,j]))){
-#           print("jointdens_mat[cens_inds,j] = ")
-#           print(jointdens_mat[cens_inds,j])
-#           stop("There are some NAN probabilities")
-#         }
-#
-#
-#
-#       }
-#
-#     # }
+    #     print("calculating matrix of probabilities for uncensored observations")
+    #
+    #     # uncens_inds
+    #
+    #
+    #     for(j in 1:n){
+    #       # print("j = ")
+    #       # print(j)
+    #
+    #       # for(i in uncens_inds){
+    #       #   itemp <- itemp +1
+    #       #   print("itemp")
+    #       #
+    #       #   print(itemp)
+    #       #
+    #       #   print("i = ")
+    #       #   print(i)
+    #
+    #         #can calculate manually using the formula for the bivariate probability
+    #
+    #
+    #       # print("length(mutemp_y) = ")
+    #       # print(length(mutemp_y))
+    #       #
+    #       # print("length(uncens_inds = ")
+    #       # print(length(uncens_inds))
+    #
+    #         jointdens_mat[uncens_inds,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
+    #           exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
+    #            ( (z - offsetz)[uncens_inds] - mutemp_z[uncens_inds] - mu1_vec_train[j] )^2 -
+    #              2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
+    #              ((z - offsetz)[uncens_inds] - mutemp_z[uncens_inds] - mu1_vec_train[j] )*
+    #              (ystar[uncens_inds] - mutemp_y  - mu2_vec_train[j] ) +
+    #              ((ystar[uncens_inds] - mutemp_y  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
+    #           ) )
+    #
+    # #
+    # #         Sigma_mat_temp_j <- cbind(c(1,
+    # #                                     gamma1_vec_train[j]),
+    # #                                   c(gamma1_vec_train[j],
+    # #                                     phi1_vec_train[j]+gamma1_vec_train[j]^2))
+    # #
+    # #
+    # #         # print("calcaulte density")
+    # #
+    # #         #or can use a pre-defined function
+    # #         jointdens_mat[i,j] <-  dmvnorm(c((z - offsetz)[i],
+    # #                                          ystar[i]),
+    # #                                        mean = c(mutemp_z[i] + mu1_vec_train[j],
+    # #                                                 mutemp_y[itemp]+ mu2_vec_train[j]),
+    # #                                        sigma = Sigma_mat_temp_j)
+    #
+    #
+    #       # }
+    #
+    #         if(any(is.nan(jointdens_mat[uncens_inds,j]))){
+    #
+    #           print("j = ")
+    #           print(j)
+    #
+    #           print("phi1_vec_train[j]= ")
+    #           print(phi1_vec_train[j])
+    #
+    #           print("phi1_vec_train = ")
+    #           print(phi1_vec_train)
+    #
+    #
+    #           print("gamma1_vec_train[j] = ")
+    #           print(gamma1_vec_train[j])
+    #
+    #           print("mu1_vec_train[j] =")
+    #           print(mu1_vec_train[j])
+    #
+    #           print("mu2_vec_train[j] =")
+    #           print(mu2_vec_train[j])
+    #
+    #
+    #           print("jointdens_mat[uncens_inds,j] = ")
+    #           print(jointdens_mat[uncens_inds,j])
+    #           stop("There are some NAN probabilities")
+    #         }
+    #
+    #
+    #     }
+    #
+    #
+    #     print("calculating matrix of probabilities for censored observations")
+    #
+    #
+    #     # cens_inds
+    #     # for(i in cens_inds){
+    #       # itemp <- itemp +1
+    #       for(j in 1:n){
+    #
+    #
+    #
+    #         #can calculate manually using the formula for the biavariate probability
+    #         # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
+    #         #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
+    #         #    ( (z - offsetz)[i] - mu1_vec_train[j] )^2 -
+    #         #      2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
+    #         #      ((z - offsetz)[i] - mu1_vec_train[j] )*
+    #         #      (ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j] ) +
+    #         #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
+    #         #   ) )
+    #
+    #
+    #         # Sigma_mat_temp_j <- cbind(c(1,
+    #         #                             gamma1_vec_train[j]),
+    #         #                           c(gamma1_vec_train[j],
+    #         #                             phi1_vec_train[j]+gamma1_vec_train[j]^2))
+    #
+    #
+    #         #or can use a pre-defined function
+    #
+    #         # tempvec <- dnorm((z - offsetz)[cens_inds] ,
+    #         #       mean = mutemp_z[cens_inds] + mu1_vec_train[j],
+    #         #       sd = 1)
+    #         #
+    #         # print("length(tempvec) = ")
+    #         # print(length(tempvec) )
+    #         #
+    #         # print("length(mutemp_z[cens_inds]) = ")
+    #         # print(length(mutemp_z[cens_inds]) )
+    #         #
+    #         # print("length((z - offsetz)[cens_inds]) = ")
+    #         # print(length((z - offsetz)[cens_inds]) )
+    #
+    #
+    #         jointdens_mat[cens_inds,j] <- dnorm((z - offsetz)[cens_inds] ,
+    #                                     mean = mutemp_z[cens_inds] + mu1_vec_train[j],
+    #                                     sd = 1)
+    #
+    #         if(any(is.nan(jointdens_mat[cens_inds,j]))){
+    #           print("jointdens_mat[cens_inds,j] = ")
+    #           print(jointdens_mat[cens_inds,j])
+    #           stop("There are some NAN probabilities")
+    #         }
+    #
+    #
+    #
+    #       }
+    #
+    #     # }
 
 
     # print("jointdens_mat = ")
@@ -1744,9 +1852,9 @@ tbart2np <- function(x.train,
 
 
         Sigma_mat_temp_tilde <- cbind(c(1,
-                                    gammatilde),
-                                  c(gammatilde,
-                                    phitilde+gammatilde^2))
+                                        gammatilde),
+                                      c(gammatilde,
+                                        phitilde+gammatilde^2))
 
 
         #or can use a pre-defined function
@@ -2322,12 +2430,12 @@ tbart2np <- function(x.train,
         }
 
         mutilde[1] <- rnorm(n = 1,
-                           mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
-                           sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
+                            mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
+                            sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
 
         mutilde[2] <- rnorm(n = 1,
-                           mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
-                           sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
+                            mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
+                            sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
 
 
       }
@@ -2366,9 +2474,9 @@ tbart2np <- function(x.train,
           tempsigmamat <- solve(M_inv+ n_rho_j*tempsigmainv )
 
           mutilde <- Rfast::rmvnorm(n = 1,
-                             mu = (tempsigmamat%*%tempsigmainv) %*%
-                               c(sum(u_z[clust_uncens_boolvec]),sum(u_y[clust_uncens_for_y])),
-                             sigma = tempsigmamat )
+                                    mu = (tempsigmamat%*%tempsigmainv) %*%
+                                      c(sum(u_z[clust_uncens_boolvec]),sum(u_y[clust_uncens_for_y])),
+                                    sigma = tempsigmamat )
 
 
 
@@ -2519,7 +2627,7 @@ tbart2np <- function(x.train,
         # sum(u_y[clust_cens_inds] -  gammatilde*(u_z[clust_cens_inds]  -mutilde[1] ))
 
         mu2bar <- M2bar*( ( M_mat[1,1]*mutilde[1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  +
-          (sum(u_y[clust_uncens_for_y] -  gammatilde*(u_z[clust_uncens_boolvec]  -mutilde[1] ))/phitilde ) )
+                            (sum(u_y[clust_uncens_for_y] -  gammatilde*(u_z[clust_uncens_boolvec]  -mutilde[1] ))/phitilde ) )
 
 
         mutilde[2] <- rnorm(n = 1,
@@ -2681,8 +2789,8 @@ tbart2np <- function(x.train,
 
 
             mutilde <- Rfast::rmvnorm(n = 1,
-                               mu = c(0, 0),
-                               sigma = M_mat)
+                                      mu = c(0, 0),
+                                      sigma = M_mat)
 
             tempsigma <- rinvwishart(nu = nu0,
                                      S = cding*diag(2))
@@ -2966,7 +3074,7 @@ tbart2np <- function(x.train,
 
         # for(i in 1:ntest){
 
-          # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
+        # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
 
         #can use first element, just need one draw from posterior predictive
 
@@ -3027,9 +3135,9 @@ tbart2np <- function(x.train,
 
 
         zytest[i,] <- Rfast::rmvnorm(n = 1,
-                              mu = c(offsetz + mutemp_test_z[i] + varthetamat_test[i,1],
-                                     mutemp_test_y[i]+ varthetamat_test[i,2]),
-                              sigma = Sigma_mattemp)
+                                     mu = c(offsetz + mutemp_test_z[i] + varthetamat_test[i,1],
+                                            mutemp_test_y[i]+ varthetamat_test[i,2]),
+                                     sigma = Sigma_mattemp)
       }
 
 
@@ -3046,7 +3154,7 @@ tbart2np <- function(x.train,
 
 
       condexptrain <- mutemp_y + varthetamat[uncens_inds,2] + varthetamat[uncens_inds,4]*IMR_train#*
-        # (dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1]))/(1-probcens_train)
+      # (dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1]))/(1-probcens_train)
 
       # (dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1] ))/(1-probcens_test)
 

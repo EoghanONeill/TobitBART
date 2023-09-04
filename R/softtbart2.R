@@ -390,13 +390,16 @@ softtbart2 <- function(x.train,
       seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
       outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
 
-      heckit.2step <- heckit(selection = as.formula(seleq),
-                             outcome = as.formula(outeq),
-                             data = df,
-                             method = "2step")
+      heckit.ml <- heckit(selection = as.formula(seleq),
+                          outcome = as.formula(outeq),
+                          data = df,
+                          method = "ml")
 
-      correst <- heckit.2step$coefficients["rho"]
-      sigest <- heckit.2step$coefficients["sigma"]
+      correst <- heckit.ml$estimate["rho"]
+      sigest <- heckit.ml$estimate["sigma"]
+
+      # correst <- heckit.2step$coefficients["rho"]
+      # sigest <- heckit.2step$coefficients["sigma"]
 
 
     } else {
@@ -443,8 +446,8 @@ softtbart2 <- function(x.train,
     gamma0 <- 0
 
 
-    sigquant <- 0.9
-    qchi <- qchisq(1.0-sigquant,nu0)
+    # sigquant <- 0.9
+    qchi <- qchisq(1.0-quantsig,nu0)
     cdivnu <- (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
     cding <- cdivnu*nu0
 
@@ -510,7 +513,7 @@ softtbart2 <- function(x.train,
   )
 
 
-  opts_y <- Opts(update_sigma = TRUE, num_print = print.opt)
+  opts_y <- Opts(update_sigma = TRUE, num_print = num_burnin + num_iter + 1)
 
   sampler_forest_y <- MakeForest(hypers_y, opts_y, warn = FALSE)
 
@@ -537,7 +540,7 @@ softtbart2 <- function(x.train,
   )
 
 
-  opts_z <- Opts(update_sigma = TRUE, num_print = print.opt)
+  opts_z <- Opts(update_sigma = TRUE, num_print = num_burnin + num_iter + 1)
 
   sampler_forest_z <- MakeForest(hypers_z, opts_z, warn = FALSE)
 

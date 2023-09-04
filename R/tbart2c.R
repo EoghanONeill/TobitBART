@@ -388,13 +388,16 @@ tbart2c <- function(x.train,
       seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
       outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
 
-      heckit.2step <- heckit(selection = as.formula(seleq),
+      heckit.ml <- heckit(selection = as.formula(seleq),
                           outcome = as.formula(outeq),
                           data = df,
-                          method = "2step")
+                          method = "ml")
 
-      correst <- heckit.2step$coefficients["rho"]
-      sigest <- heckit.2step$coefficients["sigma"]
+      correst <- heckit.ml$estimate["rho"]
+      sigest <- heckit.ml$estimate["sigma"]
+
+      # correst <- heckit.2step$coefficients["rho"]
+      # sigest <- heckit.2step$coefficients["sigma"]
 
       # print("heckit.2step$coefficients = ")
       # print(heckit.2step$coefficients)
@@ -460,8 +463,8 @@ tbart2c <- function(x.train,
     gamma0 <- 0
 
 
-    sigquant <- 0.9
-    qchi <- qchisq(1.0-sigquant,nu0)
+    # sigquant <- 0.9
+    qchi <- qchisq(1.0-quantsig,nu0)
     cdivnu <- (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
     cding <- cdivnu*nu0
 
@@ -706,22 +709,22 @@ tbart2c <- function(x.train,
   # print("length(mutemp_test_y) = ")
   # print(length(mutemp_test_y))
 
-  if(sigest != samplestemp_y$sigma){
-    print("sigest = ")
-    print(sigest)
-    print("dbarts sigma estimate =")
-    print(samplestemp_y$sigma)
-
-    df = data.frame(x.train,y)
-    lmf = lm(y~.,df)
-    sigest2 = summary(lmf)$sigma
-
-    print("sigest2 = ")
-    print(sigest2)
-
-    # stop("sigest != samplestemp_y$sigma")
-
-  }
+  # if(sigest != samplestemp_y$sigma){
+  #   print("sigest = ")
+  #   print(sigest)
+  #   print("dbarts sigma estimate =")
+  #   print(samplestemp_y$sigma)
+  #
+  #   df = data.frame(x.train,y)
+  #   lmf = lm(y~.,df)
+  #   sigest2 = summary(lmf)$sigma
+  #
+  #   print("sigest2 = ")
+  #   print(sigest2)
+  #
+  #   # stop("sigest != samplestemp_y$sigma")
+  #
+  # }
 
   # sigest <-  samplestemp_y$sigma
   # S0 <- 2*(sigest^2 -   (1/(8*(G0^2))) - 4*(gamma0^2)*G0   )
