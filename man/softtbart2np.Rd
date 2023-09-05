@@ -41,7 +41,7 @@ softtbart2np(
   accelerate = FALSE,
   cov_prior = "VH",
   tau = 0.5,
-  M_mat = 2 * matrix(c(1, 0, 0, 1), nrow = 2, ncol = 2, byrow = TRUE),
+  M_mat = 2 * diag(2),
   alpha_prior = "vh",
   c1 = 2,
   c2 = 2,

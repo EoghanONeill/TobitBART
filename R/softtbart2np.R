@@ -190,51 +190,52 @@
 #' @export
 
 softtbart2np <- function(x.train,
-                     x.test,
-                     w.train,
-                     w.test,
-                     y,
-                     n.iter=1000,
-                     n.burnin=100,
-                     censored_value = NA,
-                     gamma0 = 0,
-                     G0=10,
-                     nzero = 6,#0.002,
-                     S0= 12,#0.002,
-                     sigest = NA,
-                     n.trees_outcome = 50L,
-                     n.trees_censoring = 50L,
-                     SB_group = NULL,
-                     SB_alpha = 1,
-                     SB_beta = 2,
-                     SB_gamma = 0.95,
-                     SB_k = 2,
-                     SB_sigma_hat = NULL,
-                     SB_shape = 1,
-                     SB_width = 0.1,
-                     # SB_num_tree = 20,
-                     SB_alpha_scale = NULL,
-                     SB_alpha_shape_1 = 0.5,
-                     SB_alpha_shape_2 = 1,
-                     SB_tau_rate = 10,
-                     SB_num_tree_prob = NULL,
-                     SB_temperature = 1,
-                     SB_weights = NULL,
-                     SB_normalize_Y = TRUE,
-                     print.opt = 100,
-                     eq_by_eq = TRUE,
-                     accelerate = FALSE,
-                     cov_prior = "VH",
-                     tau = 0.5,
-                     M_mat = 2*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
-                     alpha_prior = "vh",
-                     c1 = 2,
-                     c2 = 2,
-                     alpha_gridsize = 100L,
-                     selection_test = 1,
-                     init.many.clust = TRUE,
-                     nu0 = 3,
-                     quantsig = 0.95){
+                         x.test,
+                         w.train,
+                         w.test,
+                         y,
+                         n.iter=1000,
+                         n.burnin=100,
+                         censored_value = NA,
+                         gamma0 = 0,
+                         G0=10,
+                         nzero = 6,#0.002,
+                         S0= 12,#0.002,
+                         sigest = NA,
+                         n.trees_outcome = 50L,
+                         n.trees_censoring = 50L,
+                         SB_group = NULL,
+                         SB_alpha = 1,
+                         SB_beta = 2,
+                         SB_gamma = 0.95,
+                         SB_k = 2,
+                         SB_sigma_hat = NULL,
+                         SB_shape = 1,
+                         SB_width = 0.1,
+                         # SB_num_tree = 20,
+                         SB_alpha_scale = NULL,
+                         SB_alpha_shape_1 = 0.5,
+                         SB_alpha_shape_2 = 1,
+                         SB_tau_rate = 10,
+                         SB_num_tree_prob = NULL,
+                         SB_temperature = 1,
+                         SB_weights = NULL,
+                         SB_normalize_Y = TRUE,
+                         print.opt = 100,
+                         eq_by_eq = TRUE,
+                         accelerate = FALSE,
+                         cov_prior = "VH",
+                         tau = 0.5,
+                         M_mat = 2*diag(2),#matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
+                         alpha_prior = "vh",
+                         c1 = 2,
+                         c2 = 2,
+                         alpha_gridsize = 100L,
+                         selection_test = 1,
+                         init.many.clust = TRUE,
+                         nu0 = 3,
+                         quantsig = 0.95){
+
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -408,9 +409,9 @@ softtbart2np <- function(x.train,
       outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
 
       heckit.ml <- heckit(selection = as.formula(seleq),
-                             outcome = as.formula(outeq),
-                             data = df,
-                             method = "ml")
+                          outcome = as.formula(outeq),
+                          data = df,
+                          method = "ml")
 
 
       # heckit.ml$estimate["rho"]
@@ -443,7 +444,7 @@ softtbart2np <- function(x.train,
   #
   # M_mat = 10*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
 
-  M_mat = ((sigest^2))*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
+  # M_mat = ((sigest^2))*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
 
   M_inv <- solve(M_mat)
 
@@ -466,9 +467,6 @@ softtbart2np <- function(x.train,
   # print(sigest)
   # print("gamma1 = ")
   # print(gamma1)
-
-
-
 
   gamma0 <- correst*sigest
 
@@ -873,8 +871,6 @@ softtbart2np <- function(x.train,
   #                            rngKind = rngKind,
   #                            rngNormalKind = rngNormalKind,
   #                            rngSeed = rngSeed)
-
-
   # print(colnames(Xmat.train))
 
   # print("begin dbarts")
@@ -962,7 +958,6 @@ softtbart2np <- function(x.train,
 
   }
 
-
   preds.train_ystar <- matrix(NA, n, 1)
   preds.train_z <- matrix(NA, n, 1)
 
@@ -977,12 +972,11 @@ softtbart2np <- function(x.train,
   z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
     (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - 0)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
 
-
   sampler_forest_z$set_sigma(1)
 
   mutemp_z <- sampler_forest_z$do_gibbs_weighted(w.train,
                                                  z_resids,
-                                                 weightstemp_z,
+                                                 weightstemp,
                                                  w.train,
                                                  1)
 
@@ -1046,7 +1040,6 @@ softtbart2np <- function(x.train,
   # print("y_resids = ")
   #
   # print(y_resids)
-
 
   sampler_forest_y$set_sigma(1)
 
@@ -1319,12 +1312,11 @@ softtbart2np <- function(x.train,
     # print("length(weightstemp) = ")
     # print(length(weightstemp))
 
-
     sampler_forest_z$set_sigma(1)
 
     mutemp_z <- sampler_forest_z$do_gibbs_weighted(w.train,
                                                    z_resids,
-                                                   weightstemp_z,
+                                                   weightstemp,
                                                    w.train,
                                                    1)
 
@@ -1380,6 +1372,7 @@ softtbart2np <- function(x.train,
     # print("y_resids = ")
     #
     # print(y_resids)
+
 
     sampler_forest_y$set_sigma(1)
 
@@ -1497,11 +1490,17 @@ softtbart2np <- function(x.train,
         # print("temp_aprior = ")
         # print(temp_aprior)
 
-        temp_kgivenalpha <- exp(log_tempvals)
+        # temp_kgivenalpha <- exp(log_tempvals)
+        #
+        # # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
+        # temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
 
-        # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
-        temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
 
+        logtemp_alpha_postprobs <- log_tempvals + log(temp_aprior)
+
+        maxll <- max(logtemp_alpha_postprobs)
+
+        temp_alpha_postprobs <- exp(logtemp_alpha_postprobs- maxll)
 
         # print("temp_kgivenalpha = ")
         # print(temp_kgivenalpha)

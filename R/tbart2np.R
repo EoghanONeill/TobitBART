@@ -225,7 +225,7 @@ tbart2np <- function(x.train,
                     accelerate = FALSE,
                     cov_prior = "VH",
                     tau = 0.5,
-                    M_mat = 2*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
+                    M_mat = 2*diag(2),#matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
                     alpha_prior = "vh",
                     c1 = 2,
                     c2 = 2,
@@ -442,7 +442,7 @@ tbart2np <- function(x.train,
   #
   # M_mat = 10*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
 
-  M_mat = ((sigest^2))*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
+  M_mat = ((sigest^2))*diag(2)#matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
 
   M_inv <- solve(M_mat)
 
@@ -1389,16 +1389,24 @@ tbart2np <- function(x.train,
         # print("temp_aprior = ")
         # print(temp_aprior)
 
-        temp_kgivenalpha <- exp(log_tempvals)
+        # temp_kgivenalpha <- exp(log_tempvals)
+        #
+        # # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
+        # temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
 
-        # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
-        temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
+        logtemp_alpha_postprobs <- log_tempvals + log(temp_aprior)
+
+        maxll <- max(logtemp_alpha_postprobs)
+
+        temp_alpha_postprobs <- exp(logtemp_alpha_postprobs- maxll)
 
 
-        # print("temp_kgivenalpha = ")
-        # print(temp_kgivenalpha)
-
-
+        # print("logtemp_alpha_postprobs = ")
+        # print(logtemp_alpha_postprobs)
+        #
+        # print("log_tempvals = ")
+        # print(log_tempvals)
+        #
         # print("gamma(alpha_values) = ")
         # print(gamma(alpha_values))
         #
@@ -1406,13 +1414,15 @@ tbart2np <- function(x.train,
         # print("gamma(n+alpha_values) = ")
         # print(gamma(n+alpha_values))
         #
+        # print("lgamma(n+alpha_values) = ")
+        # print(lgamma(n+alpha_values))
         #
         # print("alpha_values = ")
         # print(alpha_values)
         #
         # print("temp_kgivenalpha = ")
         # print(temp_kgivenalpha)
-
+        #
         # print("temp_aprior = ")
         # print(temp_aprior)
         #

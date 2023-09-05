@@ -1103,10 +1103,16 @@ softtbart1np <- function(x.train,
         # print("temp_aprior = ")
         # print(temp_aprior)
 
-        temp_kgivenalpha <- exp(log_tempvals)
+        # temp_kgivenalpha <- exp(log_tempvals)
+        #
+        # # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
+        # temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
 
-        # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
-        temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
+        logtemp_alpha_postprobs <- log_tempvals + log(temp_aprior)
+
+        maxll <- max(logtemp_alpha_postprobs)
+
+        temp_alpha_postprobs <- exp(logtemp_alpha_postprobs- maxll)
 
 
         # print("temp_kgivenalpha = ")
