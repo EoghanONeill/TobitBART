@@ -2373,7 +2373,7 @@ tbart2np <- function(x.train,
                                       phitilde+gammatilde^2))
 
           tempsigmainv <- solve(Sigma_mat_temp_j)
-          tempsigmamat <- solve(M_inv+ n_rho_j*tempsigmainv )
+          tempsigmamat <- solve(M_inv + n_rho_j*tempsigmainv )
 
           mutilde <- Rfast::rmvnorm(n = 1,
                              mu = (tempsigmamat%*%tempsigmainv) %*%

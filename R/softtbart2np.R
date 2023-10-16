@@ -809,7 +809,7 @@ softtbart2np <- function(x.train,
   )
 
 
-  opts_y <- Opts(update_sigma = TRUE, num_print = num_burnin + num_iter + 1)
+  opts_y <- Opts(update_sigma = TRUE, num_print = n.burnin + n.iter + 1)
 
   sampler_forest_y <- MakeForest(hypers_y, opts_y, warn = FALSE)
 
@@ -836,7 +836,7 @@ softtbart2np <- function(x.train,
   )
 
 
-  opts_z <- Opts(update_sigma = TRUE, num_print = num_burnin + num_iter + 1)
+  opts_z <- Opts(update_sigma = TRUE, num_print = n.burnin + n.iter + 1)
 
   sampler_forest_z <- MakeForest(hypers_z, opts_z, warn = FALSE)
 
