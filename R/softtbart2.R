@@ -387,8 +387,19 @@ softtbart2 <- function(x.train,
 
       df = data.frame(x = cbind(x.train,w.train)  ,y = y,d = dtemp )
 
-      seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
-      outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
+      # seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
+      # outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
+
+      # colnames(df)[1:ncol(x.train)] <- paste("x",1:ncol(x.train),sep = ".")
+      # colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))] <- paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = ".")
+      #
+      # seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
+      # outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
+
+      seleq <- paste0("d ~ " , paste(colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))],
+                                     collapse = " + "))
+      outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)],
+                                     collapse = " + "))
 
       heckit.ml <- heckit(selection = as.formula(seleq),
                           outcome = as.formula(outeq),

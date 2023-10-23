@@ -405,8 +405,19 @@ softtbart2np <- function(x.train,
 
       df = data.frame(x = cbind(x.train,w.train)  , y = y, d = dtemp )
 
-      seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
-      outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
+      # seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
+      # outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
+
+      # colnames(df)[1:ncol(x.train)] <- paste("x",1:ncol(x.train),sep = ".")
+      # colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))] <- paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = ".")
+      #
+      # seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
+      # outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
+
+      seleq <- paste0("d ~ " , paste(colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))],
+                                     collapse = " + "))
+      outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)],
+                                     collapse = " + "))
 
       heckit.ml <- heckit(selection = as.formula(seleq),
                           outcome = as.formula(outeq),
@@ -1746,7 +1757,8 @@ softtbart2np <- function(x.train,
       #
       # }
 
-      temp_samp_probs <- rep(NA,n)
+      # temp_samp_probs <- rep(NA,n)
+      log_temp_samp_probs <- rep(NA,n)
 
       if(i %in% uncens_inds){
         itemp <- itemp +1
@@ -1782,7 +1794,9 @@ softtbart2np <- function(x.train,
           #       mean = mutemp_z[i] + mu1_vec_train,
           #       sd = 1)
 
-          temp_samp_probs <- exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
+          # temp_samp_probs <- exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
+          log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -
+            0.5*log(2*pi)
 
           # jointdens_tilde <-  dnorm((z - offsetz)[i] ,
           #                           mean = mutemp_z[i] +  mutilde[1],
@@ -1792,16 +1806,21 @@ softtbart2np <- function(x.train,
           temp_zdiff <- (z - offsetz)[i] - mutemp_z[i] - mu1_vec_train
           temp_ydiff <- ystar[i] - mutemp_y[itemp]  - mu2_vec_train
 
-          temp_samp_probs <-  (1/(2*pi*sqrt(phi1_vec_train)))*
-            exp(- (1/(2*phi1_vec_train))*(
-              (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
-                2*(gamma1_vec_train   )*
-                (temp_zdiff )*
-                (temp_ydiff ) +
-                ((temp_ydiff)^2 )
-            ) )
+          # temp_samp_probs <-  (1/(2*pi*sqrt(phi1_vec_train)))*
+          #   exp(- (1/(2*phi1_vec_train))*(
+          #     (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
+          #       2*(gamma1_vec_train   )*
+          #       (temp_zdiff )*
+          #       (temp_ydiff ) +
+          #       ((temp_ydiff)^2 )
+          #   ) )
 
-
+          log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train)- (1/(2*phi1_vec_train))*(
+            (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
+              2*(gamma1_vec_train   )*
+              (temp_zdiff )*
+              (temp_ydiff ) +
+              ((temp_ydiff)^2 ))
 
           # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
           #                               ystar[i]),
@@ -1863,8 +1882,9 @@ softtbart2np <- function(x.train,
           #                           mean = mutemp_z[i] +  mutilde[1],
           #                           sd = 1)
 
-          jointdens_tilde <-exp(-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2)/sqrt(2*pi)
-
+          # jointdens_tilde <- exp(-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2)/sqrt(2*pi)
+          log_jointdens_tilde <- (-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2) -
+            0.5*log(2*pi)
 
         }else{
           # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
@@ -1876,14 +1896,23 @@ softtbart2np <- function(x.train,
           temp_zdiff <- (z - offsetz)[i] - mutemp_z[i] - mutilde[1]
           temp_ydiff <- ystar[i] - mutemp_y[itemp]  - mutilde[2]
 
-          jointdens_tilde <-  (1/(2*pi*sqrt(phitilde)))*
-            exp(- (1/(2*phitilde))*(
+          # jointdens_tilde <-  (1/(2*pi*sqrt(phitilde)))*
+          #   exp(- (1/(2*phitilde))*(
+          #     (phitilde+gammatilde^2)*( temp_zdiff )^2 -
+          #       2*(gammatilde  )*
+          #       (temp_zdiff )*
+          #       (temp_ydiff ) +
+          #       (temp_ydiff^2 )
+          #   ) )
+
+          log_jointdens_tilde <- - log(2*pi) - 0.5*log(phitilde) - # (1/(2*pi*sqrt(phitilde)))*
+            (1/(2*phitilde))*(
               (phitilde+gammatilde^2)*( temp_zdiff )^2 -
                 2*(gammatilde  )*
                 (temp_zdiff )*
                 (temp_ydiff ) +
                 (temp_ydiff^2 )
-            ) )
+            )
 
         }
 
@@ -1897,7 +1926,15 @@ softtbart2np <- function(x.train,
 
         # temp_samp_probs <- jointdens_mat[i , ]
 
-        temp_samp_probs[i] <- alpha*jointdens_tilde
+        # temp_samp_probs[i] <- alpha*jointdens_tilde
+
+        log_temp_samp_probs[i] <- log(alpha)+log_jointdens_tilde
+
+        maxll <- max(log_temp_samp_probs)
+
+        temp_samp_probs <- exp(log_temp_samp_probs- maxll)
+
+        temp_samp_probs <- temp_samp_probs/sum(temp_samp_probs) # this step is probably unnecessary
 
         # print("temp_samp_probs= ")
         # print(temp_samp_probs)
@@ -2046,7 +2083,9 @@ softtbart2np <- function(x.train,
           #                              mean = mutemp_z[i] + mu1_vec_train,
           #                              sd = 1)
 
-          temp_samp_probs <-exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
+          # temp_samp_probs <-exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
+          log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -
+            0.5*log(2*pi)
 
           # jointdens_tilde <-  dnorm((z - offsetz)[i] ,
           #                           mean = mutemp_z[i] +  mutilde[1],
@@ -2056,16 +2095,22 @@ softtbart2np <- function(x.train,
           temp_zdiff <- (z - offsetz)[i] - mutemp_z[i] - mu1_vec_train
           temp_ydiff <- ystar[i] - mutemp_y[itemp]  - mu2_vec_train
 
-          temp_samp_probs <-  (1/(2*pi*sqrt(phi1_vec_train)))*
-            exp(- (1/(2*phi1_vec_train))*(
+          # temp_samp_probs <-  (1/(2*pi*sqrt(phi1_vec_train)))*
+          #   exp(- (1/(2*phi1_vec_train))*(
+          #     (phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
+          #       2*(gamma1_vec_train   )*
+          #       (temp_zdiff )*
+          #       temp_ydiff +
+          #       (temp_ydiff^2 )
+          #   ) )
+
+          log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train) -
+            (1/(2*phi1_vec_train))*(
               (phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
                 2*(gamma1_vec_train   )*
                 (temp_zdiff )*
                 temp_ydiff +
-                (temp_ydiff^2 )
-            ) )
-
-
+                (temp_ydiff^2 ))
 
           # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
           #                               ystar[i]),
@@ -2078,7 +2123,15 @@ softtbart2np <- function(x.train,
 
 
         # temp_samp_probs <- jointdens_mat[i, ]
-        temp_samp_probs[i] <- alpha*temp_samp_probs[i]
+        # temp_samp_probs[i] <- alpha*temp_samp_probs[i]
+
+        log_temp_samp_probs[i] <- log(alpha)+log_temp_samp_probs[i]
+
+        maxll <- max(log_temp_samp_probs)
+
+        temp_samp_probs <- exp(log_temp_samp_probs- maxll)
+
+        temp_samp_probs <- temp_samp_probs/sum(temp_samp_probs) # this step is probably unnecessary
 
         # print("temp_samp_probs= ")
         # print(temp_samp_probs)
