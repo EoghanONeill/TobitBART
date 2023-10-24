@@ -280,6 +280,10 @@ softtbart2 <- function(x.train,
   }
 
 
+  x.train <- as.matrix(x.train)
+  x.test <- as.matrix(x.test)
+  w.train <- as.matrix(w.train)
+  w.test <- as.matrix(w.test)
 
   ecdfs   <- list()
   for(i in 1:ncol(x.train)) {
