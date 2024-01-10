@@ -233,7 +233,8 @@ tbart2np <- function(x.train,
                     selection_test = 1,
                     init.many.clust = TRUE,
                     nu0 = 3,
-                    quantsig = 0.95){
+                    quantsig = 0.95,
+                    mixstep = TRUE){
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -455,6 +456,9 @@ tbart2np <- function(x.train,
 
   M_mat = ((sigest^2))*diag(2)#matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
 
+  print("((sigest^2))*diag(2) = ")
+  print(((sigest^2))*diag(2))
+
   M_inv <- solve(M_mat)
 
   S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
@@ -483,9 +487,9 @@ tbart2np <- function(x.train,
     gamma0 <- 0
 
     # sigquant <- 0.9
-    qchi <- qchisq(1.0-quantsig,nu0)
-    cdivnu <- (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
-    cding <- cdivnu*nu0
+    qchi <- qchisq(1.0-quantsig,nu0-1)
+    cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
+    cding <- cdivnu*(nu0-1)
 
     rhoinit <- 0
     siginit <- sigest
@@ -608,8 +612,8 @@ tbart2np <- function(x.train,
           # print("Sigma_mat_temp_j = ")
           # print(Sigma_mat_temp_j)
 
-          tempsigmainv <- solve(Sigma_mat_temp_j)
-          tempsigmamat <- solve(M_inv + tempsigmainv )
+          tempsigmainv <- solve(Sigma_mat_temp_j, tol = NULL)
+          tempsigmamat <- solve(M_inv + tempsigmainv, tol = NULL )
 
           mutilde <- Rfast::rmvnorm(n = 1,
                              mu = (tempsigmamat%*%tempsigmainv) %*%
@@ -1180,8 +1184,8 @@ tbart2np <- function(x.train,
 
     z_epsilon <- z - offsetz - mutemp_z - mu1_vec_train
 
-    y_epsilon <- rep(0, n)
-    y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
+    # y_epsilon <- rep(0, n)
+    # y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
 
     # print("temp_sd_z = ")
     # print(temp_sd_z)
@@ -1251,6 +1255,32 @@ tbart2np <- function(x.train,
     mutemp_test_z <- samplestemp_z$test[,1]
     # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
+    checkzpred <- sampler_z$predict(x.test = xdf_z)[,1]
+
+    if(any(abs(mutemp_z - checkzpred) >0.0001)){
+      print(" cbind(mutemp_z,  checkzpred)  ")
+      print(cbind(mutemp_z,  checkzpred))
+
+      print("which(abs(mutemp_z - checkzpred) >0.0001)) = ")
+      print(which(abs(mutemp_z - checkzpred) >0.0001))
+      stop("zpredictions not equal")
+    }
+
+
+
+    checkzpred <- sampler_z$predict(x.test = xdf_z_test)[,1]
+
+    if(!all(mutemp_test_z == checkzpred)){
+      print(" cbind(mutemp_test_z,  checkzpred, weightstemp)  ")
+      print(cbind(mutemp_test_z,  checkzpred, weightstemp))
+
+      print("which(mutemp_test_z != checkzpred) = ")
+      print(which(mutemp_test_z != checkzpred))
+      stop("zpredictions not equal")
+    }
+
+
+
     # print("length(mutemp_test_z) = ")
     # print(length(mutemp_test_z))
     #
@@ -1310,9 +1340,31 @@ tbart2np <- function(x.train,
     mutemp_y <- samplestemp_y$train[,1]
     mutemp_test_y <- samplestemp_y$test[,1]
 
+    checkypred <- sampler_y$predict(x.test = xdf_y)[,1]
+
+    if(any(abs(mutemp_y - checkypred) >0.0001)){
+      print(" cbind(mutemp_y,  checkypred)  ")
+      print(cbind(mutemp_y,  checkypred))
+
+      print("which(abs(mutemp_y - checkypred) >0.0001) = ")
+      print(which(abs(mutemp_y - checkypred) >0.0001))
+      stop("zpredictions not equal")
+    }
+
+
+    checkypred <- sampler_y$predict(x.test = xdf_y_test)[,1]
+
+    if(!all(mutemp_test_y == checkypred)){
+      print(" cbind(mutemp_test_y,  checkypred)  ")
+      print(cbind(mutemp_test_y,  checkypred))
+
+      print("which(mutemp_test_y != checkypred) = ")
+      print(which(mutemp_test_y != checkypred))
+      stop("zpredictions not equal")
+    }
 
     #update z_epsilon
-    y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
+    # y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
 
 
 
@@ -1847,7 +1899,7 @@ tbart2np <- function(x.train,
         # new_vartheta <- sample(Ctemp_i*temp_samp_probs, size = 1)
         new_varind <- sample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
 
-        new_vartheta <- NA
+        # new_vartheta <- NA
 
         if(new_varind == i){
           #accept new proposal
@@ -2042,7 +2094,7 @@ tbart2np <- function(x.train,
 
         new_varind <- sample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
 
-        new_vartheta <- NA
+        # new_vartheta <- NA
 
         if(new_varind == i){
 
@@ -2054,6 +2106,10 @@ tbart2np <- function(x.train,
           # phi1_vec_train[i] <- phitilde
           # gamma1_vec_train[i] <- gammatilde
           #
+
+          # this line is unnecessary
+          varthetamat[i,] <- c(mu1_vec_train[i], mu2_vec_train[i], phi1_vec_train[i], gamma1_vec_train[i])
+
         }else{
           mu1_vec_train[i] <- mu1_vec_train[new_varind]
           mu2_vec_train[i] <- mu2_vec_train[new_varind]
@@ -2147,7 +2203,7 @@ tbart2np <- function(x.train,
 
       } # end else statement nrho equal to 1
 
-    } # end loop over uncensored observations observations
+    } # end loop over observations
 
 
 
@@ -2315,163 +2371,300 @@ tbart2np <- function(x.train,
     k_uniq <- nrow(vartheta_unique_mat)
 
 
-    #The values are conditionally independent
+    if(mixstep == TRUE){
+      #The values are conditionally independent
 
-    #loop through the unique values and take draws
+      #loop through the unique values and take draws
 
-    for(j in 1:k_uniq){
+      for(j in 1:k_uniq){
 
-      # there are 3 cases
-      # Only censored observations in cluster j
-      # Only uncensored observations in cluster j
-      # Both censored and uncensored observations in cluster j
+        # there are 3 cases
+        # Only censored observations in cluster j
+        # Only uncensored observations in cluster j
+        # Both censored and uncensored observations in cluster j
 
-      #First find the indices of the observations in cluster j
+        #First find the indices of the observations in cluster j
 
-      temp_params <- vartheta_unique_mat[j,]
-      mutilde <- c(temp_params[1], temp_params[2])
-      phitilde <- temp_params[3]
-      gammatilde <- temp_params[4]
-
-
-      # print("temp_params = ")
-      # print(temp_params)
-
-      # clust_boolvec <- !Rfast::colsums(t(varthetamat) != temp_params)
-      #
-      clust_boolvec <- (varthetamat[,4] == temp_params[4])
-
-      # clust_boolvec_temp <- !Rfast::colsums(t(varthetamat) != temp_params)
-      #
-      # if(any(clust_boolvec != clust_boolvec_temp)){
-      #   stop("any(clust_boolvec != clust_boolvec_temp)")
-      # }
+        temp_params <- vartheta_unique_mat[j,]
+        mutilde <- c(temp_params[1], temp_params[2])
+        phitilde <- temp_params[3]
+        gammatilde <- temp_params[4]
 
 
-      n_rho_j <- sum(clust_boolvec)
+        # print("temp_params = ")
+        # print(temp_params)
+
+        # clust_boolvec <- !Rfast::colsums(t(varthetamat) != temp_params)
+        #
+        clust_boolvec <- (varthetamat[,4] == temp_params[4])
+
+        # clust_boolvec_temp <- !Rfast::colsums(t(varthetamat) != temp_params)
+        #
+        # if(any(clust_boolvec != clust_boolvec_temp)){
+        #   stop("any(clust_boolvec != clust_boolvec_temp)")
+        # }
 
 
-      num_cens_temp <- sum(clust_boolvec[cens_inds])
-      num_uncens_temp <- sum(clust_boolvec[uncens_inds])
+        n_rho_j <- sum(clust_boolvec)
 
 
-      if( (num_cens_temp > 0) & (num_uncens_temp == 0)){
-        #only censored observations
+        num_cens_temp <- sum(clust_boolvec[cens_inds])
+        num_uncens_temp <- sum(clust_boolvec[uncens_inds])
 
-        # mutilde <- mvrnorm(n = 1,
-        #                    mu = c(0, 0),
-        #                    Sigma = M_mat)
 
-        if(cov_prior == "Ding"){
-          tempsigma <- rinvwishart(nu = nu0,
-                                   S = cding*diag(2))
+        if( (num_cens_temp > 0) & (num_uncens_temp == 0)){
+          #only censored observations
 
-          transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-          tempomega <- (transmat %*% tempsigma) %*% transmat
+          # mutilde <- mvrnorm(n = 1,
+          #                    mu = c(0, 0),
+          #                    Sigma = M_mat)
 
-          temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
+          if(cov_prior == "Ding"){
+            tempsigma <- rinvwishart(nu = nu0,
+                                     S = cding*diag(2))
 
-          # gamma1 <- tempomega[1,2]
-          # phi1 <- tempomega[1,1] - (gamma1^2)
+            transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+            tempomega <- (transmat %*% tempsigma) %*% transmat
 
-          gammatilde <- tempomega[1,2]
-          phitilde <- tempomega[1,1] - (gammatilde^2)
+            temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
-        }else{
-          phitilde <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
+            # gamma1 <- tempomega[1,2]
+            # phi1 <- tempomega[1,1] - (gamma1^2)
 
-          gammatilde <- rnorm(1,
-                              mean = gamma0,
-                              sd = sqrt(tau*phitilde))
+            gammatilde <- tempomega[1,2]
+            phitilde <- tempomega[1,1] - (gammatilde^2)
+
+          }else{
+            phitilde <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
+
+            gammatilde <- rnorm(1,
+                                mean = gamma0,
+                                sd = sqrt(tau*phitilde))
+          }
+
+          mutilde[1] <- rnorm(n = 1,
+                             mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
+                             sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
+
+          mutilde[2] <- rnorm(n = 1,
+                             mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
+                             sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
+
+
         }
+        if( (num_cens_temp == 0) & (num_uncens_temp > 0)){
+          #only uncensored observations
 
-        mutilde[1] <- rnorm(n = 1,
-                           mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
-                           sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
-
-        mutilde[2] <- rnorm(n = 1,
-                           mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
-                           sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
+          clust_uncens_for_y <- which(uncens_inds %in% which(clust_boolvec))
 
 
-      }
-      if( (num_cens_temp == 0) & (num_uncens_temp > 0)){
-        #only uncensored observations
-
-        clust_uncens_for_y <- which(uncens_inds %in% which(clust_boolvec))
-
-
-        # print("uncens_inds = ")
-        # print(uncens_inds)
-        # print("which(clust_boolvec) = ")
-        # print(which(clust_boolvec))
-        # print("clust_uncens_for_y = ")
-        # print(clust_uncens_for_y)
-
-        # clust_uncens_for_z <- clust_boolvec[uncens_inds]
-        clust_uncens_boolvec <- uncens_boolvec & clust_boolvec
-
-        # Exact sampling is not feasible, make Gibbs samples
-
-        # not clear if can just take one Gibbs sample, i.e. num_sample <- 1
-        # or if correlation across samples might be an issue
-        num_sample <- 1
-
-
-
-        for(samp_ind in 1:num_sample){
-
-          Sigma_mat_temp_j <- cbind(c(1,
-                                      gammatilde),
-                                    c(gammatilde,
-                                      phitilde+gammatilde^2))
-
-          tempsigmainv <- solve(Sigma_mat_temp_j)
-          tempsigmamat <- solve(M_inv + n_rho_j*tempsigmainv )
-
-          mutilde <- Rfast::rmvnorm(n = 1,
-                             mu = (tempsigmamat%*%tempsigmainv) %*%
-                               c(sum(u_z[clust_uncens_boolvec]),sum(u_y[clust_uncens_for_y])),
-                             sigma = tempsigmamat )
-
-
-
-          # print("clust_uncens_boolvec = ")
-          # print(clust_uncens_boolvec)
-
-          # print("length(u_y) = ")
-          # print(length(u_y))
-          #
+          # print("uncens_inds = ")
+          # print(uncens_inds)
+          # print("which(clust_boolvec) = ")
+          # print(which(clust_boolvec))
           # print("clust_uncens_for_y = ")
           # print(clust_uncens_for_y)
-          #
-          # print("u_y[clust_uncens_for_y] = ")
-          # print(u_y[clust_uncens_for_y])
-          #
-          # print("u_z[clust_uncens_boolvec] = ")
-          # print(u_z[clust_uncens_boolvec])
-          #
-          # print("gammatilde= ")
-          # print(gammatilde)
-          #
-          # print("mutilde= ")
-          # print(mutilde)
-          #
-          # print("dbar_temp= ")
-          # print(dbar_temp)
+
+          # clust_uncens_for_z <- clust_boolvec[uncens_inds]
+          clust_uncens_boolvec <- uncens_boolvec & clust_boolvec
+
+          # Exact sampling is not feasible, make Gibbs samples
+
+          # not clear if can just take one Gibbs sample, i.e. num_sample <- 1
+          # or if correlation across samples might be an issue
+          num_sample <- 1
 
 
-          # print("(nzero/2) +  (n_rho_j + 1)/2 = ")
-          # print((nzero/2) +  (n_rho_j + 1)/2)
 
+          for(samp_ind in 1:num_sample){
+
+            Sigma_mat_temp_j <- cbind(c(1,
+                                        gammatilde),
+                                      c(gammatilde,
+                                        phitilde+gammatilde^2))
+
+            tempsigmainv <- solve(Sigma_mat_temp_j, tol = NULL)
+            tempsigmamat <- solve(M_inv + n_rho_j*tempsigmainv, tol = NULL )
+
+            mutilde <- Rfast::rmvnorm(n = 1,
+                               mu = (tempsigmamat%*%tempsigmainv) %*%
+                                 c(sum(u_z[clust_uncens_boolvec]),sum(u_y[clust_uncens_for_y])),
+                               sigma = tempsigmamat )
+
+
+
+            # print("clust_uncens_boolvec = ")
+            # print(clust_uncens_boolvec)
+
+            # print("length(u_y) = ")
+            # print(length(u_y))
+            #
+            # print("clust_uncens_for_y = ")
+            # print(clust_uncens_for_y)
+            #
+            # print("u_y[clust_uncens_for_y] = ")
+            # print(u_y[clust_uncens_for_y])
+            #
+            # print("u_z[clust_uncens_boolvec] = ")
+            # print(u_z[clust_uncens_boolvec])
+            #
+            # print("gammatilde= ")
+            # print(gammatilde)
+            #
+            # print("mutilde= ")
+            # print(mutilde)
+            #
+            # print("dbar_temp= ")
+            # print(dbar_temp)
+
+
+            # print("(nzero/2) +  (n_rho_j + 1)/2 = ")
+            # print((nzero/2) +  (n_rho_j + 1)/2)
+
+
+
+            if(cov_prior == "Ding"){
+
+              y_epsilon2 <- u_y[clust_uncens_for_y]  - mutilde[2]
+
+              rho1 <- gammatilde/sqrt(Sigma_mat_temp_j[2,2])
+
+              # print( "nu0 = " )
+              # print(nu0)
+              #
+              # print( "cding = " )
+              # print(cding)
+              #
+              # print( "rho1 = " )
+              # print(rho1)
+
+              sigz2 <- 1/rgamma(n = 1,
+                                shape = nu0/2,
+                                rate = cding/(2*(1- (rho1^2))))
+
+
+              z_epsilon2 <- sqrt(sigz2)*(u_z[clust_uncens_boolvec] - mutilde[1])
+
+              zsquares <- crossprod(z_epsilon2, z_epsilon2)[1]
+              ysquares <- crossprod(y_epsilon2, y_epsilon2)[1]
+              zycross <- crossprod(z_epsilon2, y_epsilon2)[1]
+
+              Stemp <- cbind(c(ysquares,zycross),
+                             c(zycross, zsquares))
+
+              # print(" nu0 = ")
+              # print( nu0)
+              # print(" n_rho_j  = ")
+              # print( n_rho_j )
+              #
+              # print(" Stemp = ")
+              # print( Stemp)
+              # print(" cding*diag(2) = ")
+              # print( cding*diag(2))
+              # print(" Stemp+cding*diag(2) = ")
+              # print( Stemp+cding*diag(2))
+
+              tempsigma <- rinvwishart(nu = n_rho_j + nu0,
+                                       S = Stemp+cding*diag(2))
+
+
+              transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+              tempomega <- (transmat %*% tempsigma) %*% transmat
+
+              temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
+
+              gammatilde <- tempomega[1,2]
+              phitilde <- tempomega[1,1] - (gammatilde^2)
+
+
+
+            }else{
+
+              dbar_temp <- (S0/2) + (gammatilde^2/tau) +
+                (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
+
+              phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (n_rho_j + 1)/2 , rate = dbar_temp)
+
+
+              gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
+                ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
+
+              # print("gammabar_temp= ")
+              # print(gammabar_temp)
+              #
+              # print("sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_for_z] - mutilde[1])^2 ) )   ) = ")
+              # print(sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
+
+              gammatilde <- rnorm(1,
+                                  mean = gammabar_temp,
+                                  sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
+
+            }
+
+
+          } # end of Gibbs sampler loop
+
+
+        }
+        if( (num_cens_temp > 0) & (num_uncens_temp > 0)){
+          #Both censored and uncensored observations
+
+
+
+
+          #obtain number censored and uncensored
+
+          clust_cens_boolvec <- cens_boolvec & clust_boolvec
+          clust_uncens_boolvec <- uncens_boolvec & clust_boolvec
+
+          # clust_uncens_for_y <- which(uncens_boolvec %in% clust_boolvec)
+          clust_uncens_for_y <- which(uncens_inds %in% which(clust_boolvec))
+          # print("clust_uncens_for_y = ")
+          # print(clust_uncens_for_y)
+
+          # num_cens_inclust <- sum(clust_cens_boolvec)
+          # num_uncens_inclust <- sum(clust_uncens_boolvec)
+
+
+
+
+          # The mean of the error in the z equation can be sampled directly
+          mutilde[1] <- rnorm(n = 1,
+                              mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
+                              sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
+
+          # The other cluster parameters must be sampled in a Gibbs sampler
+
+          M2bar <- 1/( ( M_mat[1,1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  + (num_uncens_temp/phitilde )  )
+
+          # sum(u_y[clust_cens_inds] -  gammatilde*(u_z[clust_cens_inds]  -mutilde[1] ))
+
+          mu2bar <- M2bar*( ( M_mat[1,1]*mutilde[1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  +
+            (sum(u_y[clust_uncens_for_y] -  gammatilde*(u_z[clust_uncens_boolvec]  -mutilde[1] ))/phitilde ) )
+
+
+          mutilde[2] <- rnorm(n = 1,
+                              mean = mu2bar,
+                              sd = sqrt(M2bar) )
 
 
           if(cov_prior == "Ding"){
+
+            Sigma_mat_temp_j <- cbind(c(1,
+                                        gammatilde),
+                                      c(gammatilde,
+                                        phitilde+gammatilde^2))
 
             y_epsilon2 <- u_y[clust_uncens_for_y]  - mutilde[2]
 
             rho1 <- gammatilde/sqrt(Sigma_mat_temp_j[2,2])
 
+            # print( "gammatilde = " )
+            # print(gammatilde)
+            #
+            # print( "sqrt(Sigma_mat_temp_j[2,2]) = " )
+            # print(sqrt(Sigma_mat_temp_j[2,2]))
+            #
             # print( "nu0 = " )
             # print(nu0)
             #
@@ -2495,10 +2688,11 @@ tbart2np <- function(x.train,
             Stemp <- cbind(c(ysquares,zycross),
                            c(zycross, zsquares))
 
+
             # print(" nu0 = ")
             # print( nu0)
-            # print(" n_rho_j  = ")
-            # print( n_rho_j )
+            # print(" num_uncens_temp  = ")
+            # print( num_uncens_temp )
             #
             # print(" Stemp = ")
             # print( Stemp)
@@ -2507,7 +2701,8 @@ tbart2np <- function(x.train,
             # print(" Stemp+cding*diag(2) = ")
             # print( Stemp+cding*diag(2))
 
-            tempsigma <- rinvwishart(nu = n_rho_j + nu0,
+
+            tempsigma <- rinvwishart(nu = num_uncens_temp + nu0,
                                      S = Stemp+cding*diag(2))
 
 
@@ -2522,181 +2717,46 @@ tbart2np <- function(x.train,
 
 
           }else{
-
-            dbar_temp <- (S0/2) + (gammatilde^2/tau) +
-              (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
-
-            phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (n_rho_j + 1)/2 , rate = dbar_temp)
-
-
             gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
               ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
 
-            # print("gammabar_temp= ")
-            # print(gammabar_temp)
-            #
-            # print("sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_for_z] - mutilde[1])^2 ) )   ) = ")
-            # print(sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
 
             gammatilde <- rnorm(1,
                                 mean = gammabar_temp,
                                 sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
 
+
+            dbar_temp <- (S0/2) + (gammatilde^2/tau) +
+              (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
+
+            phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (num_uncens_temp + 1)/2 , rate = dbar_temp)
           }
 
 
-        } # end of Gibbs sampler loop
 
-
-      }
-      if( (num_cens_temp > 0) & (num_uncens_temp > 0)){
-        #Both censored and uncensored observations
-
-
-
-
-        #obtain number censored and uncensored
-
-        clust_cens_boolvec <- cens_boolvec & clust_boolvec
-        clust_uncens_boolvec <- uncens_boolvec & clust_boolvec
-
-        # clust_uncens_for_y <- which(uncens_boolvec %in% clust_boolvec)
-        clust_uncens_for_y <- which(uncens_inds %in% which(clust_boolvec))
-        # print("clust_uncens_for_y = ")
-        # print(clust_uncens_for_y)
-
-        # num_cens_inclust <- sum(clust_cens_boolvec)
-        # num_uncens_inclust <- sum(clust_uncens_boolvec)
-
-
-
-
-        # The mean of the error in the z equation can be sampled directly
-        mutilde[1] <- rnorm(n = 1,
-                            mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
-                            sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
-
-        # The other cluster parameters must be sampled in a Gibbs sampler
-
-        M2bar <- 1/( ( M_mat[1,1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  + (num_uncens_temp/phitilde )  )
-
-        # sum(u_y[clust_cens_inds] -  gammatilde*(u_z[clust_cens_inds]  -mutilde[1] ))
-
-        mu2bar <- M2bar*( ( M_mat[1,1]*mutilde[1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  +
-          (sum(u_y[clust_uncens_for_y] -  gammatilde*(u_z[clust_uncens_boolvec]  -mutilde[1] ))/phitilde ) )
-
-
-        mutilde[2] <- rnorm(n = 1,
-                            mean = mu2bar,
-                            sd = sqrt(M2bar) )
-
-
-        if(cov_prior == "Ding"){
-
-          Sigma_mat_temp_j <- cbind(c(1,
-                                      gammatilde),
-                                    c(gammatilde,
-                                      phitilde+gammatilde^2))
-
-          y_epsilon2 <- u_y[clust_uncens_for_y]  - mutilde[2]
-
-          rho1 <- gammatilde/sqrt(Sigma_mat_temp_j[2,2])
-
-          # print( "gammatilde = " )
-          # print(gammatilde)
-          #
-          # print( "sqrt(Sigma_mat_temp_j[2,2]) = " )
-          # print(sqrt(Sigma_mat_temp_j[2,2]))
-          #
-          # print( "nu0 = " )
-          # print(nu0)
-          #
-          # print( "cding = " )
-          # print(cding)
-          #
-          # print( "rho1 = " )
-          # print(rho1)
-
-          sigz2 <- 1/rgamma(n = 1,
-                            shape = nu0/2,
-                            rate = cding/(2*(1- (rho1^2))))
-
-
-          z_epsilon2 <- sqrt(sigz2)*(u_z[clust_uncens_boolvec] - mutilde[1])
-
-          zsquares <- crossprod(z_epsilon2, z_epsilon2)[1]
-          ysquares <- crossprod(y_epsilon2, y_epsilon2)[1]
-          zycross <- crossprod(z_epsilon2, y_epsilon2)[1]
-
-          Stemp <- cbind(c(ysquares,zycross),
-                         c(zycross, zsquares))
-
-
-          # print(" nu0 = ")
-          # print( nu0)
-          # print(" num_uncens_temp  = ")
-          # print( num_uncens_temp )
-          #
-          # print(" Stemp = ")
-          # print( Stemp)
-          # print(" cding*diag(2) = ")
-          # print( cding*diag(2))
-          # print(" Stemp+cding*diag(2) = ")
-          # print( Stemp+cding*diag(2))
-
-
-          tempsigma <- rinvwishart(nu = num_uncens_temp + nu0,
-                                   S = Stemp+cding*diag(2))
-
-
-          transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-          tempomega <- (transmat %*% tempsigma) %*% transmat
-
-          temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
-
-          gammatilde <- tempomega[1,2]
-          phitilde <- tempomega[1,1] - (gammatilde^2)
-
-
-
-        }else{
-          gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
-            ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
-
-
-          gammatilde <- rnorm(1,
-                              mean = gammabar_temp,
-                              sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
-
-
-          dbar_temp <- (S0/2) + (gammatilde^2/tau) +
-            (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
-
-          phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (num_uncens_temp + 1)/2 , rate = dbar_temp)
         }
 
+        # now must update vartheta_mat and vartheta_unique_mat
 
 
-      }
+        # tempmat <- matrix( rnorm(4*10), nrow = 4, ncol = 10)
+        #
+        # tempmat[c(1,3),1 ] <- 1
+        #
 
-      # now must update vartheta_mat and vartheta_unique_mat
+        #presumably this is less efficient because creates a new matrix
+        # varthetamat[clust_boolvec,] <- rep(c(mutilde, phitilde, gammatilde), each = length(clust_boolvec))
 
-
-      # tempmat <- matrix( rnorm(4*10), nrow = 4, ncol = 10)
-      #
-      # tempmat[c(1,3),1 ] <- 1
-      #
-
-      #presumably this is less efficient because creates a new matrix
-      # varthetamat[clust_boolvec,] <- rep(c(mutilde, phitilde, gammatilde), each = length(clust_boolvec))
-
-      varthetamat[clust_boolvec,1] <- mutilde[1]
-      varthetamat[clust_boolvec,2] <- mutilde[2]
-      varthetamat[clust_boolvec,3] <- phitilde
-      varthetamat[clust_boolvec,4] <- gammatilde
+        varthetamat[clust_boolvec,1] <- mutilde[1]
+        varthetamat[clust_boolvec,2] <- mutilde[2]
+        varthetamat[clust_boolvec,3] <- phitilde
+        varthetamat[clust_boolvec,4] <- gammatilde
 
 
-    } #end of loop over unique cluster values
+      } #end of loop over unique cluster values
+
+    } # end mixing step
+
 
     # presumably only update this after loop over all unique clusters because conditionally independent
 
@@ -3098,7 +3158,7 @@ tbart2np <- function(x.train,
 
 
       probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
-      probcens_test <- pnorm(- mutemp_test_z - offsetz- varthetamat_test[,1])
+      probcens_test <- pnorm(- mutemp_test_z - offsetz - varthetamat_test[,1])
 
       #calculate conditional expectation
 

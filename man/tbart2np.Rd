@@ -49,7 +49,8 @@ tbart2np(
   selection_test = 1,
   init.many.clust = TRUE,
   nu0 = 3,
-  quantsig = 0.95
+  quantsig = 0.95,
+  mixstep = TRUE
 )
 }
 \arguments{

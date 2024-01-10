@@ -462,9 +462,9 @@ softtbart2 <- function(x.train,
 
 
     # sigquant <- 0.9
-    qchi <- qchisq(1.0-quantsig,nu0)
-    cdivnu <- (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
-    cding <- cdivnu*nu0
+    qchi <- qchisq(1.0-quantsig,nu0-1)
+    cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
+    cding <- cdivnu*(nu0-1)
 
     rhoinit <- 0
     siginit <- sigest
