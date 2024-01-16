@@ -1024,6 +1024,16 @@ tbart2c <- function(x.train,
       phi1 <- tempomega[1,1] - (gamma1^2)
 
 
+      # if(tempomega[2,2] != 1){
+      #   print("tempomega[2,2] = ")
+      #   print(tempomega[2,2])
+      # }
+      #
+      # if(phi1 < 0){
+      #   print("phi1 = ")
+      #   print(phi1)
+      # }
+
 
     }else{
 
@@ -1041,7 +1051,7 @@ tbart2c <- function(x.train,
             ((h_num^2)/(a_temp))
 
           phi1 <- 1/rgamma(n = 1,
-                           shape =  (nzero + n1 + 1)/2,
+                           shape =  (nzero + n1 )/2,
                            rate = k_temp/2)
 
           gamma1 <- rnorm(n = 1, mean = h_temp, sd = sqrt(phi1/a_temp))

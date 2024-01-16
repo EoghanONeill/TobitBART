@@ -47,6 +47,7 @@
 #' @param c1 If alpha_prior == "vh", then c1 is the shape parameter of the Gamma distribution.
 #' @param c2 If alpha_prior == "vh", then c2 is the rate parameter of the Gamma distribution.
 #' @param alpha_gridsize If alpha_prior = "george", this is the size of the grid to use for the discretized samples of alpha
+#' @param mixstep If equal to TRUE, includes mixing step for samplinod Dirichlet Process micture parameters.
 #' @export
 #' @return The following objects are returned:
 #' \item{Z.mat_train}{Matrix of draws of censoring model latent outcomes for training observations. Number of rows equals number of training observations. Number of columns equals n.iter . Rows are ordered in order of observations in the training data.}
@@ -234,7 +235,8 @@ tbart2np <- function(x.train,
                     init.many.clust = TRUE,
                     nu0 = 3,
                     quantsig = 0.95,
-                    mixstep = TRUE){
+                    mixstep = TRUE,
+                    simultaneous_covmat = TRUE){
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -2580,28 +2582,55 @@ tbart2np <- function(x.train,
 
             }else{
 
-              dbar_temp <- (S0/2) + (gammatilde^2/tau) +
-                (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
+              if(simultaneous_covmat == TRUE){
 
-              phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (n_rho_j + 1)/2 , rate = dbar_temp)
+                if(cov_prior == "VH"){
+                  h_num <- (gamma0/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1],
+                                                    u_y[clust_uncens_for_y] - mutilde[2])[1]
+                  a_temp <- (1/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1],
+                                                u_z[clust_uncens_boolvec] - mutilde[1])[1]
+
+                  h_temp <- h_num/a_temp
+                  k_temp <- ((gamma0^2)/tau)+S0 +
+                    crossprod(u_y[clust_uncens_for_y] - mutilde[2],
+                              u_y[clust_uncens_for_y] - mutilde[2])[1] -
+                    ((h_num^2)/(a_temp))
+
+                  phitilde <- 1/rgamma(n = 1,
+                                   shape =  (nzero + n_rho_j )/2,
+                                   rate = k_temp/2)
+
+                  gammatilde <- rnorm(n = 1, mean = h_temp, sd = sqrt(phitilde/a_temp))
 
 
-              gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
-                ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
+                }else{
+                  stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
+                }
+              }else{
+                dbar_temp <- (S0/2) + (gammatilde^2/tau) +
+                  (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
 
-              # print("gammabar_temp= ")
-              # print(gammabar_temp)
-              #
-              # print("sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_for_z] - mutilde[1])^2 ) )   ) = ")
-              # print(sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
-
-              gammatilde <- rnorm(1,
-                                  mean = gammabar_temp,
-                                  sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
-
-            }
+                phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (n_rho_j + 1)/2 , rate = dbar_temp)
 
 
+                gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
+                  ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
+
+                # print("gammabar_temp= ")
+                # print(gammabar_temp)
+                #
+                # print("sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_for_z] - mutilde[1])^2 ) )   ) = ")
+                # print(sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
+
+                gammatilde <- rnorm(1,
+                                    mean = gammabar_temp,
+                                    sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
+
+                # CAN IMPROVE THIS WITH NORMAL-INVERSE GAMMA SAMPLE
+
+              }
+
+            } # end covariance matrix sample if and else statements
           } # end of Gibbs sampler loop
 
 
@@ -2717,19 +2746,46 @@ tbart2np <- function(x.train,
 
 
           }else{
-            gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
-              ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
+            if(simultaneous_covmat == TRUE){
+
+              if(cov_prior == "VH"){
+                h_num <- (gamma0/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1],
+                                                  u_y[clust_uncens_for_y] - mutilde[2])[1]
+                a_temp <- (1/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1],
+                                              u_z[clust_uncens_boolvec] - mutilde[1])[1]
+
+                h_temp <- h_num/a_temp
+                k_temp <- ((gamma0^2)/tau)+S0 +
+                  crossprod(u_y[clust_uncens_for_y] - mutilde[2],
+                            u_y[clust_uncens_for_y] - mutilde[2])[1] -
+                  ((h_num^2)/(a_temp))
+
+                phitilde <- 1/rgamma(n = 1,
+                                     shape =  (nzero + num_uncens_temp )/2,
+                                     rate = k_temp/2)
+
+                gammatilde <- rnorm(n = 1, mean = h_temp, sd = sqrt(phitilde/a_temp))
 
 
-            gammatilde <- rnorm(1,
-                                mean = gammabar_temp,
-                                sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
+              }else{
+                stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
+              }
+            }else{
+              gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
+                ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
 
 
-            dbar_temp <- (S0/2) + (gammatilde^2/tau) +
-              (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
+              gammatilde <- rnorm(1,
+                                  mean = gammabar_temp,
+                                  sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
 
-            phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (num_uncens_temp + 1)/2 , rate = dbar_temp)
+
+              dbar_temp <- (S0/2) + (gammatilde^2/tau) +
+                (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
+
+              phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (num_uncens_temp + 1)/2 , rate = dbar_temp)
+
+            }
           }
 
 

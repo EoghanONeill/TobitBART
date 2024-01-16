@@ -49,7 +49,8 @@ softtbart2np(
   selection_test = 1,
   init.many.clust = TRUE,
   nu0 = 3,
-  quantsig = 0.95
+  quantsig = 0.95,
+  mixstep = TRUE
 )
 }
 \arguments{
@@ -102,6 +103,8 @@ softtbart2np(
 \item{c2}{If alpha_prior == "vh", then c2 is the rate parameter of the Gamma distribution.}
 
 \item{alpha_gridsize}{If alpha_prior = "george", this is the size of the grid to use for the discretized samples of alpha}
+
+\item{mixstep}{If equal to TRUE, includes mixing step for samplinod Dirichlet Process micture parameters.}
 
 \item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
 

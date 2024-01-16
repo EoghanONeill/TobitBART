@@ -50,7 +50,8 @@ tbart2np(
   init.many.clust = TRUE,
   nu0 = 3,
   quantsig = 0.95,
-  mixstep = TRUE
+  mixstep = TRUE,
+  simultaneous_covmat = TRUE
 )
 }
 \arguments{
@@ -129,6 +130,8 @@ tbart2np(
 \item{c2}{If alpha_prior == "vh", then c2 is the rate parameter of the Gamma distribution.}
 
 \item{alpha_gridsize}{If alpha_prior = "george", this is the size of the grid to use for the discretized samples of alpha}
+
+\item{mixstep}{If equal to TRUE, includes mixing step for samplinod Dirichlet Process micture parameters.}
 }
 \value{
 The following objects are returned:
