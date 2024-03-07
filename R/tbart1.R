@@ -107,7 +107,13 @@ tbart1 <- function(x.train,
                    proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
                    sigmadbarts = NA_real_,
                    print.opt = 100,
-                   fast=TRUE){
+                   fast=TRUE,
+                   censsigprior = FALSE,
+                   lambda0 = NA,
+                   sigest = NA,
+                   nu0=3,
+                   sigquant = 0.90,
+                   nolinregforlambda = FALSE){
 
 
 
@@ -139,6 +145,12 @@ tbart1 <- function(x.train,
   z[which(y <= below_cens )] <- below_cens
   z[which(y >= above_cens )] <- above_cens
 
+  if(!is.na(sigest)){
+    if(sigest == "naive"){
+      censsigest <- sd(z)
+      censsigprior <- TRUE
+    }
+  }
 
   n <- length(y)
   n0 <- length(cens_inds)
@@ -147,6 +159,73 @@ tbart1 <- function(x.train,
   n_censabove <- length(which(y >= above_cens))
 
   ntest = nrow(x.test)
+
+  if(censsigprior == TRUE){
+
+    if(is.na(lambda0)) {
+      if(is.na(sigest)) {
+        if( (ncol(x.train) < n) & !nolinregforlambda ) {
+          # df = data.frame(t(x.train),y.train)
+          # lmf = lm(y.train~.,df)
+          # sigest = summary(lmf)$sigma
+
+          df0 <- data.frame(x.train,y)
+
+          # print("df0 = ")
+          # print(df0)
+
+          estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
+          sum_est <- summary( estResult )
+
+          # print("sum_est = ")
+          # print(sum_est)
+
+          if(is.null(coef(estResult))){
+            # estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
+            # sum_est <- summary( estResult )
+
+            templm <- lm(y ~. , data = df0)
+            df0 <- data.frame(y = y,
+                              df0[,names(which(!is.na(templm$coefficients[2:length(templm$coefficients)])))])
+
+            estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
+            sum_est <- summary( estResult )
+
+          }
+          censsigest  <- exp(sum_est$estimate["logSigma", "Estimate"])
+
+
+
+        } else {
+          df0 <- data.frame(y)
+
+
+          estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
+
+
+          sum_est <- summary( estResult )
+
+          # print("sum_est = ")
+          # print(sum_est)
+          censsigest  <- exp(sum_est$estimate["logSigma", "Estimate"])
+
+
+          # sigest = sd(y.train)
+        }
+      }
+      # qchi = qchisq(1.0-sigquant,nu0)
+      # lambda0 = (censsigest *censsigest *qchi)/nu0 #lambda parameter for sigma prior
+    } else {
+      censsigest =sqrt(lambda0)
+    }
+
+  }
+
+
+
+
+
+
 
 
   draw = list(
@@ -210,7 +289,7 @@ tbart1 <- function(x.train,
                       control = control,
                       tree.prior = tree.prior,
                       node.prior = node.prior,
-                      resid.prior = resid.prior,
+                      resid.prior = dbarts:::chisq(df = nu0,quant = sigquant),
                       proposal.probs = proposal.probs,
                       sigma = sigmadbarts
     )
@@ -222,12 +301,69 @@ tbart1 <- function(x.train,
                       control = control,
                       tree.prior = tree.prior,
                       node.prior = node.prior,
-                      resid.prior = resid.prior,
+                      resid.prior = dbarts:::chisq(df = nu0,quant = sigquant),
                       proposal.probs = proposal.probs,
                       sigma = sigmadbarts
     )
 
   }
+
+
+  if(censsigprior == TRUE){
+
+    sigest <- sampler$`.->data`@sigma
+
+    qchi = qchisq(1.0-sigquant,nu0)
+    lambda0 = (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
+
+    # check if this is the lambda0 value for dbarts?
+
+    # now suppose a different sigest is obtained due to censoring
+    # censsigest <- 2
+    # keep same degrees of freedom, obtain new implied lambda
+    qchi = qchisq(1.0-sigquant,nu0)
+    censlambda0 = (censsigest*censsigest*qchi)/nu0 #lambda parameter for sigma prior
+
+    # now find the sigquant value that would give cemslambda0
+    # if used original sigest
+    #i.e. want
+    qchitarget <-  censlambda0*nu0/(sigest*sigest)
+
+    newsigquant <- 1 - pchisq(q = qchitarget, df = nu0)
+
+    # newqchi <- qchisq(1.0-newsigquant,nu0)
+
+    # now edit sampler prior
+
+
+    ### set the sampler again with the adjusted variance
+    if(nrow(x.test )==0){
+      sampler <- dbarts(y ~ .,
+                        data = as.data.frame(x.train),
+                        #test = x.test,
+                        control = control,
+                        tree.prior = tree.prior,
+                        node.prior = node.prior,
+                        resid.prior = dbarts:::chisq(df = nu0,quant = newsigquant),
+                        proposal.probs = proposal.probs,
+                        sigma = sigmadbarts
+      )
+
+    }else{
+      sampler <- dbarts(y ~ .,
+                        data = as.data.frame(x.train),
+                        test = as.data.frame(x.test),
+                        control = control,
+                        tree.prior = tree.prior,
+                        node.prior = node.prior,
+                        resid.prior = dbarts:::chisq(df = nu0,quant = newsigquant),
+                        proposal.probs = proposal.probs,
+                        sigma = sigmadbarts
+      )
+
+    }
+  }
+
 
 
 

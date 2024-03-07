@@ -50,7 +50,8 @@ softtbart2np(
   init.many.clust = TRUE,
   nu0 = 3,
   quantsig = 0.95,
-  mixstep = TRUE
+  mixstep = TRUE,
+  simultaneous_covmat = TRUE
 )
 }
 \arguments{

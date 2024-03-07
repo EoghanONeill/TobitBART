@@ -40,7 +40,9 @@ tbart1np(
   alpha_gridsize = 100L,
   mixstep = TRUE,
   init.many.clust = FALSE,
-  k0_resids = TRUE
+  k0_resids = TRUE,
+  nolinregforlambda = FALSE,
+  censsigprior = TRUE
 )
 }
 \arguments{

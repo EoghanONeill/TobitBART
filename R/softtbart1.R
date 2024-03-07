@@ -88,7 +88,13 @@ softtbart1 <- function(x.train,
                    SB_weights = NULL,
                    SB_normalize_Y = TRUE,
                    print.opt = 100,
-                   fast=TRUE){
+                   fast=TRUE,
+                   censsigprior = FALSE,
+                   lambda0 = NA,
+                   sigest = NA,
+                   # nu0=3,
+                   # sigquant = 0.90,
+                   nolinregforsigest = FALSE){
 
 
 
@@ -156,6 +162,81 @@ softtbart1 <- function(x.train,
   ntest = nrow(x.test)
 
 
+  if(!is.na(sigest)){
+    if(sigest == "naive"){
+      sigest <- sd(z)
+      censsigprior <- TRUE
+    }
+  }
+
+  if(censsigprior == TRUE){
+
+    # if(is.na(lambda0)) {
+      if(is.na(sigest)) {
+        if( (ncol(x.train) < n) & !nolinregforsigest ) {
+          # df = data.frame(t(x.train),y.train)
+          # lmf = lm(y.train~.,df)
+          # sigest = summary(lmf)$sigma
+
+          df0 <- data.frame(x.train,y)
+
+          # print("df0 = ")
+          # print(df0)
+
+          estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
+          sum_est <- summary( estResult )
+
+          # print("sum_est = ")
+          # print(sum_est)
+
+          if(is.null(coef(estResult))){
+            # estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
+            # sum_est <- summary( estResult )
+
+            templm <- lm(y ~. , data = df0)
+            df0 <- data.frame(y = y,
+                              df0[,names(which(!is.na(templm$coefficients[2:length(templm$coefficients)])))])
+
+            estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
+            sum_est <- summary( estResult )
+
+          }
+          sigest  <- exp(sum_est$estimate["logSigma", "Estimate"])
+
+
+
+        } else {
+          df0 <- data.frame(y)
+
+
+          estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
+
+
+          sum_est <- summary( estResult )
+
+          # print("sum_est = ")
+          # print(sum_est)
+          sigest  <- exp(sum_est$estimate["logSigma", "Estimate"])
+
+
+          # sigest = sd(y.train)
+        }
+      }
+      # qchi = qchisq(1.0-sigquant,nu0)
+      # lambda0 = (censsigest *censsigest *qchi)/nu0 #lambda parameter for sigma prior
+    # } else {
+    #   censsigest =sqrt(lambda0)
+    # }
+
+  }
+
+  if(is.na(sigest)){
+    sighat <- NULL
+  }else{
+    sighat <- sigest
+  }
+
+
   draw = list(
     Z.mat = array(NA, dim = c(n, n.iter)),
     Z.matcens = array(NA, dim = c(n0, n.iter)),
@@ -192,7 +273,7 @@ softtbart1 <- function(x.train,
                    beta = SB_beta,
                    gamma = SB_gamma,
                    k = SB_k,
-                   # sigma_hat = NULL,
+                   sigma_hat = sighat,
                    shape = SB_shape,
                    width = SB_width,
                    # num_tree = 20,

@@ -139,8 +139,10 @@ softtbart1np <- function(x.train,
                      alpha_gridsize = 100L,
                      mixstep=TRUE,
                      init.many.clust = FALSE,
-                     k0_resids = TRUE
-){
+                     k0_resids = TRUE,
+                     nolinregforlambda = FALSE,
+                     censsigprior = TRUE
+                     ){
 
 
 
@@ -279,63 +281,91 @@ softtbart1np <- function(x.train,
 
 
   # code below for setting lambda taken from BART package
+  # lambda set as in BART but with a 0.9 quantile instead of 0.95
+  if(!is.na(sigest)){
+    if(sigest == "naive"){
+      sigest <- sd(z)
+      censsigprior <- TRUE
+    }
+  }
 
-  if(is.na(lambda0)) {
-    if(is.na(sigest)) {
-      if(ncol(x.train) < n) {
-        # df = data.frame(t(x.train),y.train)
-        # lmf = lm(y.train~.,df)
-        # sigest = summary(lmf)$sigma
 
-        df0 <- data.frame(x.train,y)
+  # code below for setting lambda taken from BART package
+  if(censsigprior){
+    if(is.na(lambda0)) {
+      if(is.na(sigest)) {
+        if( (ncol(x.train) < n) & ! nolinregforlambda) {
+          # df = data.frame(t(x.train),y.train)
+          # lmf = lm(y.train~.,df)
+          # sigest = summary(lmf)$sigma
 
-        # print("df0 = ")
-        # print(df0)
+          df0 <- data.frame(x.train,y)
 
-        estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
-        sum_est <- summary( estResult )
-
-        # print("sum_est = ")
-        # print(sum_est)
-
-        if(is.null(coef(estResult))){
-          # estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
-          # sum_est <- summary( estResult )
-
-          templm <- lm(y ~. , data = df0)
-          df0 <- data.frame(y = y,
-                            df0[,names(which(!is.na(templm$coefficients[2:length(templm$coefficients)])))])
+          # print("df0 = ")
+          # print(df0)
 
           estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
           sum_est <- summary( estResult )
 
+          # print("sum_est = ")
+          # print(sum_est)
+
+          if(is.null(coef(estResult))){
+            # estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
+            # sum_est <- summary( estResult )
+
+            templm <- lm(y ~. , data = df0)
+            df0 <- data.frame(y = y,
+                              df0[,names(which(!is.na(templm$coefficients[2:length(templm$coefficients)])))])
+
+            estResult <- censReg(y ~ .,left = below_cens, right = above_cens, data = df0)
+            sum_est <- summary( estResult )
+
+          }
+          sigest <- exp(sum_est$estimate["logSigma", "Estimate"])
+
+
+
+        } else {
+          df0 <- data.frame(y)
+
+
+          estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
+
+
+          sum_est <- summary( estResult )
+
+          # print("sum_est = ")
+          # print(sum_est)
+          sigest <- exp(sum_est$estimate["logSigma", "Estimate"])
+
+
+          # sigest = sd(y.train)
         }
-        sigest <- exp(sum_est$estimate["logSigma", "Estimate"])
-
-
-
-      } else {
-        df0 <- data.frame(y)
-
-
-        estResult <- censReg(y ~ 1,left = below_cens, right = above_cens, data = df0)
-
-
-        sum_est <- summary( estResult )
-
-        # print("sum_est = ")
-        # print(sum_est)
-        sigest <- exp(sum_est$estimate["logSigma", "Estimate"])
-
-
-        # sigest = sd(y.train)
       }
+      qchi = qchisq(1.0-sigquant,nu0)
+      lambda0 = (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
+    } else {
+      sigest=sqrt(lambda0)
     }
+  }else{
+    # sigest <- sd(z)
+    if( (ncol(x.train) < n) & ! nolinregforlambda) {
+
+      df0 <- data.frame(x.train,y)
+      templm <- lm(y ~. , data = df0)
+      sum_est <- summary( templm )
+      sigest <- sum_est$sigma
+
+    }else{
+      sigest <- sd(z)
+
+    }
+
     qchi = qchisq(1.0-sigquant,nu0)
     lambda0 = (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
-  } else {
-    sigest=sqrt(lambda0)
   }
+
 
 
 

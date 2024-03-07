@@ -30,7 +30,13 @@ tbart1(
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
   sigmadbarts = NA_real_,
   print.opt = 100,
-  fast = TRUE
+  fast = TRUE,
+  censsigprior = FALSE,
+  lambda0 = NA,
+  sigest = NA,
+  nu0 = 3,
+  sigquant = 0.9,
+  nolinregforlambda = FALSE
 )
 }
 \arguments{

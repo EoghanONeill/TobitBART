@@ -30,7 +30,11 @@ softtbart1(
   SB_weights = NULL,
   SB_normalize_Y = TRUE,
   print.opt = 100,
-  fast = TRUE
+  fast = TRUE,
+  censsigprior = FALSE,
+  lambda0 = NA,
+  sigest = NA,
+  nolinregforsigest = FALSE
 )
 }
 \arguments{

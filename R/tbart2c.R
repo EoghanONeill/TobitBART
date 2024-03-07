@@ -604,7 +604,7 @@ tbart2c <- function(x.train,
                         node.prior = node.prior,
                         resid.prior = resid.prior,
                         proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
+                        sigma = 1
     )
 
   }else{
