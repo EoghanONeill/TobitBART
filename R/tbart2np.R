@@ -32,7 +32,10 @@
 #' @param rngNormalKind (dbarts control option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind
 #' @param rngSeed (dbarts control option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
 #' @param updateState (dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
-#' @param tree.prior (dbarts option) An expression of the form dbarts:::cgm or dbarts:::cgm(power,base) setting the tree prior used in fitting.
+#' @param tree_power_y Tree prior parameter for outcome model.
+#' @param tree_base_y Tree prior parameter for outcome model.
+#' @param tree_power_z Tree prior parameter for selection model.
+#' @param tree_base_z Tree prior parameter for selection model.
 #' @param node.prior (dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.
 #' @param resid.prior (dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance
 #' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
@@ -48,6 +51,12 @@
 #' @param c2 If alpha_prior == "vh", then c2 is the rate parameter of the Gamma distribution.
 #' @param alpha_gridsize If alpha_prior = "george", this is the size of the grid to use for the discretized samples of alpha
 #' @param mixstep If equal to TRUE, includes mixing step for samplinod Dirichlet Process micture parameters.
+#' @param sparse If equal to TRUE, use Linero Dirichlet prior on splitting probabilities
+#' @param alpha_a_y Linero alpha prior parameter for outcome equation splitting probabilities
+#' @param alpha_b_y Linero alpha prior parameter for outcome equation splitting probabilities
+#' @param alpha_a_z Linero alpha prior parameter for selection equation splitting probabilities
+#' @param alpha_b_z Linero alpha prior parameter for selection equation splitting probabilities
+#' @param alpha_split_prior If true, set hyperprior for Linero alpha parameter
 #' @export
 #' @return The following objects are returned:
 #' \item{Z.mat_train}{Matrix of draws of censoring model latent outcomes for training observations. Number of rows equals number of training observations. Number of columns equals n.iter . Rows are ordered in order of observations in the training data.}
@@ -75,6 +84,12 @@
 #' \item{ycond_draws_train}{List of training sample conditional (i.e. zstar >0 for draw) draws of the outcome. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{ycond_draws_test}{List of test sample conditional (i.e. zstar >0 for draw) draws of the outcome . Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{Sigma_draws}{3 dimensional array of MCMC draws of the covariance matrix for the censoring and outcome error terms. The numbers of rows and columns equal are equal to 2. The first row and column correspond to the censoring model. The second row and column correspond to the outcome model. The number of slices equals n.iter . }
+#' \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
+#' \item{alpha_s_z_store}{For Dirichlet prior on splitting probabilities in selection equation, vector of alpha hyperparameter draws for each iteration }
+#' \item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
+#' \item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+#' \item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+#' \item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
 #' @examples
 #'
 #'#example taken from Zhang, J., Li, Z., Song, X., & Ning, H. (2021). Deep Tobit networks: A novel machine learning approach to microeconometrics. Neural Networks, 144, 279-296.
@@ -216,7 +231,10 @@ tbart2np <- function(x.train,
                     rngNormalKind = "default",
                     rngSeed = NA_integer_,
                     updateState = TRUE,
-                    tree.prior = dbarts:::cgm,
+                    tree_power_z = 2,
+                    tree_power_y = 2,
+                    tree_base_z = 0.95,
+                    tree_base_y = 0.95,
                     node.prior = dbarts:::normal,
                     resid.prior = dbarts:::chisq,
                     proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
@@ -236,7 +254,13 @@ tbart2np <- function(x.train,
                     nu0 = 3,
                     quantsig = 0.95,
                     mixstep = TRUE,
-                    simultaneous_covmat = TRUE){
+                    simultaneous_covmat = TRUE,
+                    sparse = FALSE,
+                    alpha_a_y = 0.5,
+                    alpha_b_y = 1,
+                    alpha_a_z = 0.5,
+                    alpha_b_z = 1,
+                    alpha_split_prior = TRUE){
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -332,6 +356,38 @@ tbart2np <- function(x.train,
   n1 <- length(uncens_inds)
 
   ntest = nrow(x.test)
+
+
+  p_y <- ncol(x.train)
+  p_z <- ncol(w.train)
+
+  if(sparse){
+    s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
+    rho_y <- p_y # For DART
+
+    if(alpha_split_prior){
+      alpha_s_y <- p_y
+    }else{
+      alpha_s_y <- 1
+    }
+    alpha_scale_y <- p_y
+
+
+    s_z <- rep(1 / p_z, p_z) # probability vector to be used during the growing process for DART feature weighting
+    rho_z <- p_z # For DART
+
+    if(alpha_split_prior){
+      alpha_s_z <- p_z
+    }else{
+      alpha_s_z <- 1
+    }
+    alpha_scale_z <- p_z
+
+  }
+
+
+
+
 
   offsetz <- 0 #qnorm(n1/n)
 
@@ -458,8 +514,8 @@ tbart2np <- function(x.train,
 
   M_mat = ((sigest^2))*diag(2)#matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
 
-  print("((sigest^2))*diag(2) = ")
-  print(((sigest^2))*diag(2))
+  # print("((sigest^2))*diag(2) = ")
+  # print(((sigest^2))*diag(2))
 
   M_inv <- solve(M_mat)
 
@@ -781,6 +837,20 @@ tbart2np <- function(x.train,
   }
 
 
+  if(sparse){
+    var_count_y <- rep(0, p_y)
+    var_count_z <- rep(0, p_z)
+
+    draw$alpha_s_y_store <- rep(NA, n.iter)
+    draw$alpha_s_z_store <- rep(NA, n.iter)
+    draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
+    draw$var_count_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
+    draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
+    draw$s_prob_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
+
+  }
+
+
   if(selection_test == 1){
 
     #error draws
@@ -854,7 +924,7 @@ tbart2np <- function(x.train,
                         #test = x.test,
                         weights = weightstemp_y,
                         control = control_y,
-                        tree.prior = tree.prior,
+                        tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
                         resid.prior = resid.prior,
                         proposal.probs = proposal.probs,
@@ -868,7 +938,7 @@ tbart2np <- function(x.train,
                         #test = x.test,
                         weights = weightstemp,
                         control = control_z,
-                        tree.prior = tree.prior,
+                        tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
                         node.prior = node.prior,
                         resid.prior = resid.prior,
                         proposal.probs = proposal.probs,
@@ -885,7 +955,7 @@ tbart2np <- function(x.train,
                         test = xdf_y_test,
                         # weights = weightstemp_y,
                         control = control_y,
-                        tree.prior = tree.prior,
+                        tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
                         resid.prior = resid.prior,
                         proposal.probs = proposal.probs,
@@ -907,7 +977,7 @@ tbart2np <- function(x.train,
                         test = xdf_z_test,
                         # weights = weightstemp,
                         control = control_z,
-                        tree.prior = tree.prior,
+                        tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
                         node.prior = node.prior,
                         resid.prior = resid.prior,
                         proposal.probs = proposal.probs,
@@ -944,6 +1014,13 @@ tbart2np <- function(x.train,
   # sampler_z$setSigma(sigma = 1)
   sampler_z$setWeights(weights = weightstemp)
 
+
+  if(sparse){
+    tempmodel <- sampler_z$model
+    tempmodel@tree.prior@splitProbabilities <- s_z
+    sampler_z$setModel(newModel = tempmodel)
+  }
+
   # sampler_z$sampleTreesFromPrior()
 
   # priormean_z <- sampler_z$predict(xdf_z)[1,]
@@ -959,6 +1036,12 @@ tbart2np <- function(x.train,
   mutemp_test_z <- samplestemp_z$test[,1]
 
   # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+  if(sparse){
+    tempcounts <- fcount(sampler_z$getTrees()$var)
+    tempcounts <- tempcounts[tempcounts$x != -1, ]
+    var_count_z <- rep(0, p_z)
+    var_count_z[tempcounts$x] <- tempcounts$N
+  }
 
 
 
@@ -995,6 +1078,13 @@ tbart2np <- function(x.train,
   # sampler_y$setSigma(sigma = sigest)
   sampler_y$setWeights(weights = weightstemp_y)
 
+  if(sparse){
+    tempmodel <- sampler_y$model
+    tempmodel@tree.prior@splitProbabilities <- s_y
+    sampler_y$setModel(newModel = tempmodel)
+  }
+
+
   # sampler_y$sampleTreesFromPrior()
 
   # priormean_y <- sampler_y$predict(xdf_y)[1,]
@@ -1008,6 +1098,13 @@ tbart2np <- function(x.train,
 
   mutemp_y <- samplestemp_y$train[,1]
   mutemp_test_y <- samplestemp_y$test[,1]
+
+  if(sparse){
+    tempcounts <- fcount(sampler_y$getTrees()$var)
+    tempcounts <- tempcounts[tempcounts$x != -1, ]
+    var_count_y <- rep(0, p_y)
+    var_count_y[tempcounts$x] <- tempcounts$N
+  }
 
   # print("length(mutemp_test_y) = ")
   # print(length(mutemp_test_y))
@@ -1251,11 +1348,27 @@ tbart2np <- function(x.train,
 
     sampler_z$setWeights(weights = weightstemp)
 
+    if(sparse){
+      tempmodel <- sampler_z$model
+      tempmodel@tree.prior@splitProbabilities <- s_z
+      sampler_z$setModel(newModel = tempmodel)
+    }
+
     samplestemp_z <- sampler_z$run()
 
     mutemp_z <- samplestemp_z$train[,1]
     mutemp_test_z <- samplestemp_z$test[,1]
     # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+
+
+    if(sparse){
+      tempcounts <- fcount(sampler_z$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_z <- rep(0, p_z)
+      var_count_z[tempcounts$x] <- tempcounts$N
+    }
+
+
 
     checkzpred <- sampler_z$predict(x.test = xdf_z)[,1]
 
@@ -1337,10 +1450,25 @@ tbart2np <- function(x.train,
     weightstemp_y  <- 1/phi1_vec_train[uncens_inds]
     sampler_y$setWeights(weights = weightstemp_y)
 
+    if(sparse){
+      tempmodel <- sampler_y$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler_y$setModel(newModel = tempmodel)
+    }
+
     samplestemp_y <- sampler_y$run()
 
     mutemp_y <- samplestemp_y$train[,1]
     mutemp_test_y <- samplestemp_y$test[,1]
+
+
+    if(sparse){
+      tempcounts <- fcount(sampler_y$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+
 
     checkypred <- sampler_y$predict(x.test = xdf_y)[,1]
 
@@ -3102,6 +3230,22 @@ tbart2np <- function(x.train,
 
 
 
+    ########### splitting probability draws #############################
+
+
+    if (sparse & (iter > floor(n.burnin * 0.5))) {
+      s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
+      s_z <- s_update_z[[1]]
+
+      s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
+      s_y <- s_update_y[[1]]
+
+      if(alpha_split_prior){
+        alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
+        alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
+      }
+    }
+
 
 
 
@@ -3345,6 +3489,16 @@ tbart2np <- function(x.train,
 
       draw$alpha[iter_min_burnin] <- alpha
 
+
+      if(sparse){
+        draw$alpha_s_y_store[iter_min_burnin] <- alpha_s_y
+        draw$alpha_s_z_store[iter_min_burnin] <- alpha_s_z
+        draw$var_count_y_store[iter_min_burnin,] <- var_count_y
+        draw$var_count_z_store[iter_min_burnin,] <- var_count_z
+        draw$s_prob_y_store[iter_min_burnin,] <- s_y
+        draw$s_prob_z_store[iter_min_burnin,] <- s_z
+
+      }
 
     } # end if iter > burnin
 

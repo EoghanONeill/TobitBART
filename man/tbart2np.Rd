@@ -31,7 +31,10 @@ tbart2np(
   rngNormalKind = "default",
   rngSeed = NA_integer_,
   updateState = TRUE,
-  tree.prior = dbarts:::cgm,
+  tree_power_z = 2,
+  tree_power_y = 2,
+  tree_base_z = 0.95,
+  tree_base_y = 0.95,
   node.prior = dbarts:::normal,
   resid.prior = dbarts:::chisq,
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
@@ -51,7 +54,13 @@ tbart2np(
   nu0 = 3,
   quantsig = 0.95,
   mixstep = TRUE,
-  simultaneous_covmat = TRUE
+  simultaneous_covmat = TRUE,
+  sparse = FALSE,
+  alpha_a_y = 0.5,
+  alpha_b_y = 1,
+  alpha_a_z = 0.5,
+  alpha_b_z = 1,
+  alpha_split_prior = FALSE
 )
 }
 \arguments{
@@ -101,7 +110,13 @@ tbart2np(
 
 \item{updateState}{(dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
 
-\item{tree.prior}{(dbarts option) An expression of the form dbarts:::cgm or dbarts:::cgm(power,base) setting the tree prior used in fitting.}
+\item{tree_power_z}{Tree prior parameter for selection model.}
+
+\item{tree_power_y}{Tree prior parameter for outcome model.}
+
+\item{tree_base_z}{Tree prior parameter for selection model.}
+
+\item{tree_base_y}{Tree prior parameter for outcome model.}
 
 \item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
 
@@ -132,6 +147,18 @@ tbart2np(
 \item{alpha_gridsize}{If alpha_prior = "george", this is the size of the grid to use for the discretized samples of alpha}
 
 \item{mixstep}{If equal to TRUE, includes mixing step for samplinod Dirichlet Process micture parameters.}
+
+\item{sparse}{If equal to TRUE, use Linero Dirichlet prior on splitting probabilities}
+
+\item{alpha_a_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
+
+\item{alpha_b_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
+
+\item{alpha_a_z}{Linero alpha prior parameter for selection equation splitting probabilities}
+
+\item{alpha_b_z}{Linero alpha prior parameter for selection equation splitting probabilities}
+
+\item{alpha_split_prior}{If true, set hyperprior for Linero alpha parameter}
 }
 \value{
 The following objects are returned:
@@ -160,6 +187,12 @@ The following objects are returned:
 \item{ycond_draws_train}{List of training sample conditional (i.e. zstar >0 for draw) draws of the outcome. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{ycond_draws_test}{List of test sample conditional (i.e. zstar >0 for draw) draws of the outcome . Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{Sigma_draws}{3 dimensional array of MCMC draws of the covariance matrix for the censoring and outcome error terms. The numbers of rows and columns equal are equal to 2. The first row and column correspond to the censoring model. The second row and column correspond to the outcome model. The number of slices equals n.iter . }
+\item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
+\item{alpha_s_z_store}{For Dirichlet prior on splitting probabilities in selection equation, vector of alpha hyperparameter draws for each iteration }
+\item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
+\item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+\item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+\item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
 }
 \description{
 Nonparametric Type II Tobit Bayesian Additive Regression Trees implemented using MCMC. The errors in the selection and outcome equations are modelled by a Dirichlet Process mixture of bivariate normal distributions.

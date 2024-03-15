@@ -12,6 +12,7 @@ RoxygenNote: 7.2.3
 Imports: 
     accelerometry,
     censReg,
+    collapse,
     data.table,
     dbarts,
     dqrng,
@@ -33,6 +34,7 @@ LazyData: true
 URL: https://github.com/EoghanONeill/TobitBART
 BugReports: https://github.com/EoghanONeill/TobitBART/issues
 LinkingTo: 
+    collapse,
     dbarts,
     truncnorm,
     MASS,

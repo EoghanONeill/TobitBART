@@ -24,7 +24,8 @@ tbart1np(
   rngNormalKind = "default",
   rngSeed = NA_integer_,
   updateState = TRUE,
-  tree.prior = dbarts:::cgm,
+  tree_power = 2,
+  tree_base = 0.95,
   node.prior = dbarts:::normal,
   resid.prior = dbarts:::chisq,
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
@@ -42,7 +43,11 @@ tbart1np(
   init.many.clust = FALSE,
   k0_resids = TRUE,
   nolinregforlambda = FALSE,
-  censsigprior = TRUE
+  censsigprior = TRUE,
+  sparse = FALSE,
+  alpha_a_y = 0.5,
+  alpha_b_y = 1,
+  alpha_split_prior = FALSE
 )
 }
 \arguments{
@@ -78,7 +83,9 @@ tbart1np(
 
 \item{updateState}{(dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
 
-\item{tree.prior}{(dbarts option) An expression of the form dbarts:::cgm or dbarts:::cgm(power,base) setting the tree prior used in fitting.}
+\item{tree_power}{Tree prior parameter for outcome model.}
+
+\item{tree_base}{Tree prior parameter for outcome model.}
 
 \item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
 
@@ -111,6 +118,14 @@ tbart1np(
 \item{init.many.clust}{If TRUE, initialize the Dirichlet Process Mixture with many clusters instead of 1 cluster. Default is FALSE.}
 
 \item{k0_resids}{If FALSE (default) the maximum absolute value of the outcome determines k0 (with lambda0). If TRUE, the maximum residual from a linear regression determines k0.}
+
+\item{sparse}{If equal to TRUE, use Linero Dirichlet prior on splitting probabilities}
+
+\item{alpha_a_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
+
+\item{alpha_b_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
+
+\item{alpha_split_prior}{If true, set hyperprior for Linero alpha parameter}
 }
 \value{
 The following objects are returned:
@@ -133,6 +148,9 @@ The following objects are returned:
 \item{test.probcensbelow}{Matrix of draws of probabilities of test sample observations being censored from below. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{test.probcensabove}{Matrix of draws of probabilities of test sample observations being censored from above. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
+\item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
+\item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
+\item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
 }
 \description{
 Type I Tobit Bayesian Additive Regression Trees implemented using MCMC with a Dirichlet Process Mixture of normal distributions for the error term
