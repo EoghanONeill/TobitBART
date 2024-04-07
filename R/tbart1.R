@@ -318,10 +318,11 @@ tbart1 <- function(x.train,
 
   # print("begin dbarts")
 
+  dftrain <- data.frame(y = z , x = x.train)
 
   if(nrow(x.test )==0){
     sampler <- dbarts(y ~ .,
-                      data = as.data.frame(x.train),
+                      data = dftrain, # as.data.frame(x.train),
                       #test = x.test,
                       control = control,
                       tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
@@ -332,9 +333,11 @@ tbart1 <- function(x.train,
     )
 
   }else{
+    dftest <- data.frame(y = NA , x = x.test)
+
     sampler <- dbarts(y ~ .,
-                      data = as.data.frame(x.train),
-                      test = as.data.frame(x.test),
+                      data = dftrain, # as.data.frame(x.train),
+                      test = dftest, # as.data.frame(x.test),
                       control = control,
                       tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
                       node.prior = node.prior,
@@ -376,7 +379,7 @@ tbart1 <- function(x.train,
     ### set the sampler again with the adjusted variance
     if(nrow(x.test )==0){
       sampler <- dbarts(y ~ .,
-                        data = as.data.frame(x.train),
+                        data = dftrain, # as.data.frame(x.train),
                         #test = x.test,
                         control = control,
                         tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
@@ -387,9 +390,11 @@ tbart1 <- function(x.train,
       )
 
     }else{
+      dftest <- data.frame(y = NA , x = x.test)
+
       sampler <- dbarts(y ~ .,
-                        data = as.data.frame(x.train),
-                        test = as.data.frame(x.test),
+                        data = dftrain, # as.data.frame(x.train),
+                        test = dftest, # as.data.frame(x.test),
                         control = control,
                         tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
@@ -446,7 +451,7 @@ tbart1 <- function(x.train,
   #
   #
   # }else{
-    ystartestcens <-rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
+    ystartestcens <- rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
 
   # }
 

@@ -291,12 +291,12 @@ update_sigma_mu_par <- function(trees, curr_sigmu2) {
 
   mu_vec <- na.omit(mu_vec)
 
-  # note Linero and Yang's sigma_mu corresponds to
-  # num_trees times sigma_mu as defined in this package
+  # note Linero and Yang's sigma_mu_squared corresponds to
+  # num_trees times sigma_mu_squared as defined in this package
   curr_s_mu <- sqrt(curr_sigmu2)
 
   prop_s_mu_minus2 <- rgamma(n = 1,
-                             shape = length(mu_vec)/2,
+                             shape = 1 + length(mu_vec)/2,
                              rate = sum(mu_vec^2)/2)
 
   prop_s_mu <- sqrt(1/prop_s_mu_minus2)

@@ -53,7 +53,7 @@ tbart2c(
   alpha_b_y = 1,
   alpha_a_z = 0.5,
   alpha_b_z = 1,
-  alpha_split_prior = FALSE
+  alpha_split_prior = TRUE
 )
 }
 \arguments{

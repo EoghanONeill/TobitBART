@@ -47,7 +47,7 @@ tbart1np(
   sparse = FALSE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
-  alpha_split_prior = FALSE
+  alpha_split_prior = TRUE
 )
 }
 \arguments{

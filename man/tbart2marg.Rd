@@ -20,21 +20,18 @@ tbart2marg(
   sigest = NA,
   n.trees_outcome = 50L,
   n.trees_censoring = 50L,
-  n.burn = 0L,
-  n.samples = 1L,
-  n.thin = 1L,
-  n.chains = 1L,
-  n.threads = 1L,
-  printEvery = 100L,
-  printCutoffs = 0L,
-  rngKind = "default",
-  rngNormalKind = "default",
-  rngSeed = NA_integer_,
-  updateState = TRUE,
+  trans_prob = c(2.5, 2.5, 4)/9,
+  max_bad_trees = 10,
   tree_power_z = 2,
   tree_power_y = 2,
   tree_base_z = 0.95,
   tree_base_y = 0.95,
+  k_z = 2,
+  k_y = 2,
+  alpha_z = 0.95,
+  beta_z = 2,
+  alpha_y = 0.95,
+  beta_y = 2,
   node.prior = dbarts:::normal,
   resid.prior = dbarts:::chisq,
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
@@ -53,8 +50,12 @@ tbart2marg(
   alpha_b_y = 1,
   alpha_a_z = 0.5,
   alpha_b_z = 1,
-  alpha_split_prior = FALSE,
-  node_min_size = 5
+  alpha_split_prior = TRUE,
+  sigma_mu_prior = FALSE,
+  node_min_size = 5,
+  centre_y = TRUE,
+  splitting_rules = "discrete",
+  marginalize = FALSE
 )
 }
 \arguments{
@@ -88,22 +89,6 @@ tbart2marg(
 
 \item{n.trees_censoring}{(dbarts control option) A positive integer giving the number of trees used in the censoring model sum-of-trees formulation.}
 
-\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
-
-\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
-
-\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
-
-\item{printCutoffs}{(dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
-
-\item{rngKind}{(dbarts control option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.}
-
-\item{rngNormalKind}{(dbarts control option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind}
-
-\item{rngSeed}{(dbarts control option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.}
-
-\item{updateState}{(dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
-
 \item{tree_power_z}{Tree prior parameter for selection model.}
 
 \item{tree_power_y}{Tree prior parameter for outcome model.}
@@ -111,6 +96,10 @@ tbart2marg(
 \item{tree_base_z}{Tree prior parameter for selection model.}
 
 \item{tree_base_y}{Tree prior parameter for outcome model.}
+
+\item{k_z}{Hyperparameter for calibration of sigma2_mu_z.}
+
+\item{k_y}{Hyperparameter for calibration of sigma2_mu_y.}
 
 \item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
 
@@ -170,13 +159,11 @@ The following objects are returned:
 \item{cond_exp_test}{Matrix of draws of the conditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{uncond_exp_train}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all training observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{uncond_exp_test}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
-\item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{ystar_test}{Matrix of test sample draws of the outcome assuming uncensored . Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{zstar_train}{Matrix of training sample draws of the censoring model latent outcome. Number of rows equals number of training observations. Number of columns equals n.iter.}
 \item{zstar_test}{Matrix of test sample draws of the censoring model latent outcome. Number of rows equals number of test observations. Number of columns equals n.iter.}
 \item{ydraws_train}{Only defined if censored_value is a number. Matrix of training sample unconditional (i.e. possibly censored) draws of the outcome. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{ydraws_test}{Only defined if censored_value is a number. Matrix of test sample unconditional (i.e. possibly censored) draws of the outcome . Number of rows equals number of test observations. Number of columns equals n.iter .}
-\item{ycond_draws_train}{List of training sample conditional (i.e. zstar >0 for draw) draws of the outcome. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{ycond_draws_test}{List of test sample conditional (i.e. zstar >0 for draw) draws of the outcome . Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{Sigma_draws}{3 dimensional array of MCMC draws of the covariance matrix for the censoring and outcome error terms. The numbers of rows and columns equal are equal to 2. The first row and column correspond to the censoring model. The second row and column correspond to the outcome model. The number of slices equals n.iter . }
 \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
