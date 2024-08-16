@@ -1,4 +1,5 @@
 
+
 #' @title Type II Tobit Bayesian Additive Regression Trees implemented using MCMC
 #'
 #' @description Type II Tobit Bayesian Additive Regression Trees implemented using MCMC
@@ -25,12 +26,18 @@
 #' @param sigest Estimate of variance of hte error term.
 #' @param n.trees_outcome (dbarts control option) A positive integer giving the number of trees used in the outcome model sum-of-trees formulation.
 #' @param n.trees_censoring (dbarts control option) A positive integer giving the number of trees used in the censoring model sum-of-trees formulation.
+#' @param n.chains (dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
+#' @param n.threads  (dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.
+#' @param printEvery (dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.
+#' @param printCutoffs (dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode
+#' @param rngKind (dbarts control option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.
+#' @param rngNormalKind (dbarts control option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind
+#' @param rngSeed (dbarts control option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
+#' @param updateState (dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
 #' @param tree_power_y Tree prior parameter for outcome model.
 #' @param tree_base_y Tree prior parameter for outcome model.
 #' @param tree_power_z Tree prior parameter for selection model.
 #' @param tree_base_z Tree prior parameter for selection model.
-#' @param k_z Hyperparameter for calibration of sigma2_mu_z.
-#' @param k_y Hyperparameter for calibration of sigma2_mu_y.
 #' @param node.prior (dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.
 #' @param resid.prior (dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance
 #' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
@@ -69,11 +76,13 @@
 #' \item{cond_exp_test}{Matrix of draws of the conditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{uncond_exp_train}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all training observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{uncond_exp_test}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{ystar_test}{Matrix of test sample draws of the outcome assuming uncensored . Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{zstar_train}{Matrix of training sample draws of the censoring model latent outcome. Number of rows equals number of training observations. Number of columns equals n.iter.}
 #' \item{zstar_test}{Matrix of test sample draws of the censoring model latent outcome. Number of rows equals number of test observations. Number of columns equals n.iter.}
 #' \item{ydraws_train}{Only defined if censored_value is a number. Matrix of training sample unconditional (i.e. possibly censored) draws of the outcome. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{ydraws_test}{Only defined if censored_value is a number. Matrix of test sample unconditional (i.e. possibly censored) draws of the outcome . Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{ycond_draws_train}{List of training sample conditional (i.e. zstar >0 for draw) draws of the outcome. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{ycond_draws_test}{List of test sample conditional (i.e. zstar >0 for draw) draws of the outcome . Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{Sigma_draws}{3 dimensional array of MCMC draws of the covariance matrix for the censoring and outcome error terms. The numbers of rows and columns equal are equal to 2. The first row and column correspond to the censoring model. The second row and column correspond to the outcome model. The number of slices equals n.iter . }
 #' \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
@@ -197,7 +206,7 @@
 #'
 #' @export
 
-tbart2marg <- function(x.train,
+tbart2binary <- function(x.train,
                     x.test,
                     w.train,
                     w.test,
@@ -212,18 +221,21 @@ tbart2marg <- function(x.train,
                     sigest = NA,
                     n.trees_outcome = 50L,
                     n.trees_censoring = 50L,
-                    trans_prob = c(2.5, 2.5, 4) / 9, # Probabilities to grow, prune or change, respectively
-                    max_bad_trees = 10,
+                    n.burn = 0L,
+                    n.samples = 1L,
+                    n.thin = 1L,
+                    n.chains = 1L,
+                    n.threads = 1L, #guessNumCores(),
+                    printEvery = 100L,
+                    printCutoffs = 0L,
+                    rngKind = "default",
+                    rngNormalKind = "default",
+                    rngSeed = NA_integer_,
+                    updateState = TRUE,
                     tree_power_z = 2,
                     tree_power_y = 2,
                     tree_base_z = 0.95,
                     tree_base_y = 0.95,
-                    k_z = 2,
-                    k_y = 2,
-                    alpha_z = 0.95,
-                    beta_z = 2,
-                    alpha_y = 0.95,
-                    beta_y = 2,
                     node.prior = dbarts:::normal,
                     resid.prior = dbarts:::chisq,
                     proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
@@ -243,18 +255,8 @@ tbart2marg <- function(x.train,
                     alpha_b_y = 1,
                     alpha_a_z = 0.5,
                     alpha_b_z = 1,
-                    alpha_split_prior = TRUE,
-                    sigma_mu_prior = FALSE,
-                    node_min_size = 5,
-                    centre_y = TRUE,
-                    splitting_rules = "discrete",
-                    marginalize = FALSE){
+                    alpha_split_prior = TRUE){
 
-
-
-  if(!(splitting_rules %in% c("discrete", "continuous"))){
-    stop("splitting_rules must be 'discrete' or 'continuous'.")
-  }
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
     stop("cov_prior must equal VH, Omori, Mixture, or Ding")
@@ -287,43 +289,93 @@ tbart2marg <- function(x.train,
     uncens_inds <- which(y != censored_value)
   }
 
+  # print("line 292")
+
   if(length(cens_inds)==0) stop("No censored observations")
 
+  # print("line 296")
 
+  if(!all(y %in% c(0,1,NA))){
+    stop("All elements of y must be 0,1, or NA")
+  }
 
-
-  ######### set up things for myBART implementation ####################
-
-  # Extract control parameters
-  # we only have to allow for empty nodes when updating Z (and therefore Zlag is updated and splits on Zlag are affected)
-  # Therefore there is still a minimum node size criterion for the purpose of proposing new splits
-  node_min_size = node_min_size
-
-  # Storage containers
-  store_size = n.iter # npost # code currently written to save all output, so no nburnin or npost
-  tree_store = vector('list', store_size)
-  sigma2_store = rep(NA, store_size)
-  # y_hat_store = matrix(NA, ncol = length(y), nrow = store_size)
-  # var_count = rep(0, ncol(x))
-  # var_count_store = matrix(0, ncol = ncol(x), nrow = store_size)
-  # s_prob_store = matrix(0, ncol = ncol(x), nrow = store_size)
-  # tree_fits_store = matrix(0, ncol = n.trees, nrow = length(y))
-
-
-
-
-
-
+  # print("line 302")
 
   # normalize the outcome
-  tempmean <- mean(y[uncens_inds])
-  tempsd <- sd(y[uncens_inds])
-  originaly <- y
-  y <- (y-tempmean)/tempsd
+  # tempmean <- mean(y[uncens_inds])
+  # tempsd <- sd(y[uncens_inds])
+  # originaly <- y
+  # y <- (y-tempmean)/tempsd
+  #
+  # if(is.numeric(censored_value)){
+  #   censored_value <- (censored_value- tempmean)/tempsd
+  # }
 
-  if(is.numeric(censored_value)){
-    censored_value <- (censored_value- tempmean)/tempsd
-  }
+
+  tempsd <- 1
+  tempmean <- 0
+
+
+
+
+
+  n <- length(y)
+  n0 <- length(cens_inds)
+  n1 <- length(uncens_inds)
+
+
+  uncens0_inds <- which(y==0)
+  uncens1_inds <- which(y==1)
+
+  n_zeros <- sum(y==0,na.rm = TRUE)
+  n_ones <- sum(y==1,na.rm = TRUE)
+
+  # offsety <- 0 # qnorm(n_ones/n1)
+  offsety <- qnorm(n_ones/n1)
+
+  ystar <- rep(offsety, length(y))
+
+  # print("line 331")
+
+
+
+  sub_uncens0_inds <-  which(y[uncens_inds]==0)
+  sub_uncens1_inds <-  which(y[uncens_inds]==1)
+
+  # print("line 339")
+
+
+
+  # print("line 344")
+
+  # z[cens_inds] <- qnorm(0.001) #rtruncnorm(n0, a= -Inf, b = 0, mean = offsety, sd = 1)
+  #
+  # z[uncens_inds] <- qnorm(0.999) #rtruncnorm(n1, a= 0, b = Inf, mean = offsety, sd = 1)
+
+  # print("uncens0_inds = ")
+  # print(uncens0_inds)
+  #
+  # print("uncens1_inds = ")
+  # print(uncens1_inds)
+  #
+  # print("n_zeros = ")
+  # print(n_zeros)
+  #
+  # print("n_ones = ")
+  # print(n_ones)
+
+  ystar[uncens0_inds] <- rtruncnorm(n_zeros, a= -Inf, b = 0, mean = offsety, sd = 1)
+  ystar[uncens1_inds] <- rtruncnorm(n_ones, a= 0, b = Inf, mean = offsety, sd = 1)
+
+
+  # print("line 349")
+
+
+  #create ystar vector
+  # ystar <- rep(mean(y[uncens_inds]), length(y))
+  # ystar[uncens_inds] <- y[uncens_inds]
+
+
 
 
 
@@ -357,47 +409,11 @@ tbart2marg <- function(x.train,
 
 
 
-
-  # y_min <- min(y_scale)
-  # y_max <- max(y_scale)
-
-  if(centre_y){
-    y_max <- max(y[uncens_inds])
-    y_min <- min(y[uncens_inds])
-  }else{
-    y_max <- 0
-    y_min <- 0
-  }
-
-  # Other variables
-  sigma2 <- 1                          # !!!!!!!!!!!!!!
-  mu_mu <- 0 # (y_min + y_max) / (2 * m)
-
-  y_scale <- y - (y_max + y_min)/2
-  # tau=(max(y.train)-min(y.train))/(2*k*sqrt(ntree))
-  if(is.numeric(censored_value)){
-    censored_value <- censored_value - (y_max + y_min)/2
-  }
-  # sigma2_mu <- (max(y_scale)-min(y_scale))/((2 * k * sqrt(m))^2)
-  # sigma2_mu <- ((max(y_scale)-min(y_scale))/(2 * k* sqrt(m)))^2
-
-
-  # sigma2_mu <- ((y_max - y_min) / (2 * k * sqrt(m)))^2
-
-
-
   #create z vector
 
-  #create ystar vector
-  ystar <- rep(mean(y_scale[uncens_inds]), length(y_scale)) # this line is unimportant because only uncensored values are used
-  ystar[uncens_inds] <- y_scale[uncens_inds]
+  # print("line 392")
 
 
-
-
-  n <- length(y)
-  n0 <- length(cens_inds)
-  n1 <- length(uncens_inds)
 
   ntest = nrow(x.test)
 
@@ -429,13 +445,11 @@ tbart2marg <- function(x.train,
   }
 
 
-  tree_fits_store_z = matrix(0, ncol = n.trees_censoring, nrow = n)
-  tree_fits_store_y = matrix(0, ncol = n.trees_outcome, nrow = n1)
-
 
 
 
   offsetz <- 0 # qnorm(n1/n)
+  # offsetz <- qnorm(n1/n)
 
   z <- rep(offsetz, length(y))
 
@@ -447,12 +461,13 @@ tbart2marg <- function(x.train,
   z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = offsetz, sd = 1)
 
 
+
   # z <- rnorm(n = length(y), mean = offsetz, sd =1)
 
 
 
-  #set prior parameter values
 
+  # print("line 448")
 
   # if(is.null(S0)){
   #
@@ -487,7 +502,7 @@ tbart2marg <- function(x.train,
         dtemp <-  1*(y != censored_value)
       }
 
-      df = data.frame(x = cbind(x.train,w.train), y = y, d = dtemp )
+      df = data.frame(x = cbind(x.train,w.train), ystar = ystar, d = dtemp )
 
       # print("x.train = ")
       # print(x.train)
@@ -502,7 +517,7 @@ tbart2marg <- function(x.train,
 
       seleq <- paste0("d ~ " , paste(colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))],
                                      collapse = " + "))
-      outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)],
+      outeq <- paste0("ystar ~ " , paste(colnames(df)[1:ncol(x.train)],
                                      collapse = " + "))
 
       heckit.ml <- heckit(selection = as.formula(seleq),
@@ -527,7 +542,7 @@ tbart2marg <- function(x.train,
       # print("correst = ")
       # print(correst)
     } else {
-      sigest = sd(y[uncens_inds])
+      sigest = sd(ystar[uncens_inds])
       correst <- 0
     }
   }
@@ -548,6 +563,7 @@ tbart2marg <- function(x.train,
 
   #set initial phi
   phi1 <- sigest^2 - gamma1^2
+
 
   # print("phi1 = ")
   # print(phi1)
@@ -578,6 +594,7 @@ tbart2marg <- function(x.train,
   if(cov_prior == "Ding"){
     gamma0 <- 0
 
+
     # sigquant <- 0.9
     qchi <- qchisq(1.0-quantsig,nu0-1)
     cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
@@ -607,13 +624,15 @@ tbart2marg <- function(x.train,
     mu_z_test = array(NA, dim = c(ntest, n.iter)),
     train.probcens =  array(NA, dim = c(n1, n.iter)),#array(NA, dim = c(n, n.iter)),#,
     test.probcens =  array(NA, dim = c(ntest, n.iter)),#,
+    train.prob.y =  array(NA, dim = c(n1, n.iter)),#array(NA, dim = c(n, n.iter)),#,
+    test.prob.y =  array(NA, dim = c(ntest, n.iter)),#,
     cond_exp_train = array(NA, dim = c(n1, n.iter)),#cond_exp_train = array(NA, dim = c(n, n.iter)),
     cond_exp_test = array(NA, dim = c(ntest, n.iter)),
-    # ystar_train = array(NA, dim = c(n, n.iter)),
+    ystar_train = array(NA, dim = c(n, n.iter)),
     ystar_test = array(NA, dim = c(ntest, n.iter)),
     zstar_train = array(NA, dim = c(n, n.iter)),
     zstar_test = array(NA, dim = c(ntest, n.iter)),
-    # ycond_draws_train = list(),
+    ycond_draws_train = list(),
     ycond_draws_test = list(),
     Sigma_draws = array(NA, dim = c(2, 2, n.iter))
   )
@@ -641,33 +660,33 @@ tbart2marg <- function(x.train,
 
   ########## Initialize dbarts #####################
 
-  # control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-  #                            keepTrees = TRUE,
-  #                            n.trees = n.trees_censoring,
-  #                            n.burn = n.burn,
-  #                            n.samples = n.samples,
-  #                            n.thin = n.thin,
-  #                            n.chains = n.chains,
-  #                            n.threads = n.threads,
-  #                            printEvery = printEvery,
-  #                            printCutoffs = printCutoffs,
-  #                            rngKind = rngKind,
-  #                            rngNormalKind = rngNormalKind,
-  #                            rngSeed = rngSeed)
-  #
-  # control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-  #                            keepTrees = TRUE,
-  #                            n.trees = n.trees_outcome,
-  #                            n.burn = n.burn,
-  #                            n.samples = n.samples,
-  #                            n.thin = n.thin,
-  #                            n.chains = n.chains,
-  #                            n.threads = n.threads,
-  #                            printEvery = printEvery,
-  #                            printCutoffs = printCutoffs,
-  #                            rngKind = rngKind,
-  #                            rngNormalKind = rngNormalKind,
-  #                            rngSeed = rngSeed)
+  control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+                             keepTrees = TRUE,
+                             n.trees = n.trees_censoring,
+                             n.burn = n.burn,
+                             n.samples = n.samples,
+                             n.thin = n.thin,
+                             n.chains = n.chains,
+                             n.threads = n.threads,
+                             printEvery = printEvery,
+                             printCutoffs = printCutoffs,
+                             rngKind = rngKind,
+                             rngNormalKind = rngNormalKind,
+                             rngSeed = rngSeed)
+
+  control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+                             keepTrees = TRUE,
+                             n.trees = n.trees_outcome,
+                             n.burn = n.burn,
+                             n.samples = n.samples,
+                             n.thin = n.thin,
+                             n.chains = n.chains,
+                             n.threads = n.threads,
+                             printEvery = printEvery,
+                             printCutoffs = printCutoffs,
+                             rngKind = rngKind,
+                             rngNormalKind = rngNormalKind,
+                             rngSeed = rngSeed)
   # print(colnames(Xmat.train))
 
   # print("begin dbarts")
@@ -686,73 +705,76 @@ tbart2marg <- function(x.train,
   # print("length(uncens_inds) = ")
   # print(length(uncens_inds))
 
-  # if(nrow(x.test ) == 0){
-  #
-  #
-  #   xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
-  #   sampler_y <- dbarts(y ~ .,
-  #                       data = xdf_y,
-  #                       #test = x.test,
-  #                       control = control_y,
-  #                       tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
-  #                       node.prior = node.prior,
-  #                       resid.prior = resid.prior,
-  #                       proposal.probs = proposal.probs,
-  #                       sigma = sigmadbarts
-  #   )
-  #
-  #   # print("Line 425")
-  #
-  #   xdf_z <- data.frame(y = z - offsetz, x = w.train)
-  #
-  #   sampler_z <- dbarts(y ~ .,
-  #                       data = xdf_z,
-  #                       #test = x.test,
-  #                       weights = weightstemp,
-  #                       control = control_z,
-  #                       tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-  #                       node.prior = node.prior,
-  #                       resid.prior = resid.prior,
-  #                       proposal.probs = proposal.probs,
-  #                       sigma = 1
-  #   )
-  #
-  # }else{
-  #
-  #   xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
-  #   xdf_y_test <- data.frame(x = x.test)
-  #
-  #   sampler_y <- dbarts(y ~ .,
-  #                       data = xdf_y,
-  #                       test = xdf_y_test,
-  #                       control = control_y,
-  #                       tree.prior = dbarts:::cgm(power = tree_power_y, base = tree_base_y,  split.probs = rep(1 / p_y, p_y)),
-  #                       node.prior = node.prior,
-  #                       resid.prior = resid.prior,
-  #                       proposal.probs = proposal.probs,
-  #                       sigma = sigmadbarts
-  #   )
-  #
-  #   # print("Line 425")
-  #
-  #
-  #   xdf_z <- data.frame(y = z - offsetz, x = w.train)
-  #   xdf_z_test <- data.frame(x = w.test)
-  #
-  #
-  #   sampler_z <- dbarts(y ~ .,
-  #                       data = xdf_z,
-  #                       test = xdf_z_test,
-  #                       # weights = weightstemp,
-  #                       control = control_z,
-  #                       tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-  #                       node.prior = node.prior,
-  #                       resid.prior = resid.prior,
-  #                       proposal.probs = proposal.probs,
-  #                       sigma = 1#sigmadbarts
-  #   )
-  #
-  # }
+  # print("line 681")
+  if(nrow(x.test ) == 0){
+
+
+    xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
+    sampler_y <- dbarts(y ~ .,
+                        data = xdf_y,
+                        #test = x.test,
+                        control = control_y,
+                        tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
+                        node.prior = node.prior,
+                        resid.prior = resid.prior,
+                        proposal.probs = proposal.probs,
+                        sigma = sigmadbarts
+    )
+
+    # print("line 697")
+
+    # print("Line 425")
+
+    xdf_z <- data.frame(y = z - offsetz, x = w.train)
+
+    sampler_z <- dbarts(y ~ .,
+                        data = xdf_z,
+                        #test = x.test,
+                        weights = weightstemp,
+                        control = control_z,
+                        tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
+                        node.prior = node.prior,
+                        resid.prior = resid.prior,
+                        proposal.probs = proposal.probs,
+                        sigma = 1
+    )
+
+  }else{
+
+    xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
+    xdf_y_test <- data.frame(x = x.test)
+
+    sampler_y <- dbarts(y ~ .,
+                        data = xdf_y,
+                        test = xdf_y_test,
+                        control = control_y,
+                        tree.prior = dbarts:::cgm(power = tree_power_y, base = tree_base_y,  split.probs = rep(1 / p_y, p_y)),
+                        node.prior = node.prior,
+                        resid.prior = resid.prior,
+                        proposal.probs = proposal.probs,
+                        sigma = sigmadbarts
+    )
+
+    # print("Line 425")
+
+
+    xdf_z <- data.frame(y = z - offsetz, x = w.train)
+    xdf_z_test <- data.frame(x = w.test)
+
+
+    sampler_z <- dbarts(y ~ .,
+                        data = xdf_z,
+                        test = xdf_z_test,
+                        # weights = weightstemp,
+                        control = control_z,
+                        tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
+                        node.prior = node.prior,
+                        resid.prior = resid.prior,
+                        proposal.probs = proposal.probs,
+                        sigma = 1#sigmadbarts
+    )
+
+  }
 
 
 
@@ -775,108 +797,53 @@ tbart2marg <- function(x.train,
   z_resids <- z - offsetz #z_epsilon
   z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - 0)*gamma1/(phi1 + gamma1^2)
 
-  # sampler_z$setResponse(y = z_resids)
-  #
-  # sampler_z$setSigma(sigma = 1)
-  # sampler_z$setWeights(weights = weightstemp)
+  sampler_z$setResponse(y = z_resids)
 
-  # if(sparse){
-  #   tempmodel <- sampler_z$model
-  #   tempmodel@tree.prior@splitProbabilities <- s_z
-  #   sampler_z$setModel(newModel = tempmodel)
-  # }
+  sampler_z$setSigma(sigma = 1)
+  sampler_z$setWeights(weights = weightstemp)
+
+  if(sparse){
+    tempmodel <- sampler_z$model
+    tempmodel@tree.prior@splitProbabilities <- s_z
+    sampler_z$setModel(newModel = tempmodel)
+    # print("check z probs")
+    # print("sampler_z@tree.prior@splitProbabilities = ")
+    # print(sampler_z@tree.prior@splitProbabilities)
+  }
 
   # print("Line 509")
 
 
   # sampler_z$sampleTreesFromPrior()
-  #
-  # # priormean_z <- sampler_z$predict(xdf_z)[1,]
-  #
+
+  # priormean_z <- sampler_z$predict(xdf_z)[1,]
+
   # sampler_z$sampleNodeParametersFromPrior()
-  #
-  # samplestemp_z <- sampler_z$run()
-  #
-  #
-  # # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
-  # # mutemp_test_z <- rep(0,ntest) #samplestemp_z$test[,1]
-  #
-  # mutemp_z <- samplestemp_z$train[,1]
-  # mutemp_test_z <- samplestemp_z$test[,1]
 
-  ###### new myBART initialization for z model ######################
-
-  # maybe (max(as.vector(Z.mat))-min(as.vector(Z.mat)))
-  # can be replaced by something else
-  # sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees_censoring))^2)
-  sigma2_mu_z <- ((max(z_resids)-min(z_resids))/(2 * k_z * sqrt(n.trees_censoring)))^2
-
-  if(is.na(sigma2_mu_z )){
-
-    print("z = ")
-    print(z)
-
-    print("ystar[uncens_inds] = ")
-    print(ystar[uncens_inds])
-
-    print("gamma1 = ")
-    print(gamma1)
+  samplestemp_z <- sampler_z$run()
 
 
-    print("gamma1 = ")
-    print(gamma1)
+  # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
+  # mutemp_test_z <- rep(0,ntest) #samplestemp_z$test[,1]
 
-
-
-    print("z_resids[uncens_inds] = ")
-    print(z_resids[uncens_inds])
-
-    print("z_resids = ")
-    print(z_resids)
-
-    print("k_z = ")
-    print(k_z)
-
-    print("n.trees_censoring = ")
-    print(n.trees_censoring)
-
-
-    stop("Line 814. sigma2_mu_z  NA")
-  }
-
-  # sigma2_mu <- 1/n.trees_censoring
-
-
-
-  # EDIT THIS TO ACCOUNT FOR WEIGHTS
-
-  # Create a list of trees for the initial stump
-  curr_trees_z = create_stump(num_trees = n.trees_censoring,
-                            y = as.vector(z_resids),
-                            X = w.train)
-  # Initialise the new trees as current one
-  new_trees_z = curr_trees_z
-
-  # Initialise the predicted values to zero
-  mutemp_z = get_predictions(curr_trees_z, w.train, single_tree = n.trees_censoring == 1)
-  # z_hat <- mutemp_z
-
-  mu_z <- mutemp_z
+  mutemp_z <- samplestemp_z$train[,1]
+  mutemp_test_z <- samplestemp_z$test[,1]
 
   # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
 
   if(sparse){
+    tempcounts <- fcount(sampler_z$getTrees()$var)
+    # print("line 766. tempcounts = ")
+    # print(tempcounts)
+    tempcounts <- tempcounts[tempcounts$x != -1, ]
+    # print("line 769. tempcounts = ")
+    # print(tempcounts)
     var_count_z <- rep(0, p_z)
+    var_count_z[tempcounts$x] <- tempcounts$N
+    # print("line 773. var_count_z = ")
+    # print(var_count_z)
   }
-  # if(sparse){
-  #   tempcounts <- fcount(sampler_z$getTrees()$var)
-  #   tempcounts <- tempcounts[tempcounts$x != -1, ]
-  #   var_count_z[tempcounts$x] <- tempcounts$N
-  # }
-
-
-
 
 
   # print("length(mutemp_test_z) = ")
@@ -892,67 +859,49 @@ tbart2marg <- function(x.train,
   # print(nrow(xdf_z_test))
 
   y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
-  # sampler_y$setResponse(y = y_resids)
-  # sampler_y$setSigma(sigma = sqrt(phi1) )
+  sampler_y$setResponse(y = y_resids)
+  sampler_y$setSigma(sigma = sqrt(phi1) )
 
   # sampler_y$setSigma(sigma = sigest)
 
 
-  # if(sparse){
-  #   tempmodel <- sampler_y$model
-  #   tempmodel@tree.prior@splitProbabilities <- s_y
-  #   sampler_y$setModel(newModel = tempmodel)
-  # }
+  if(sparse){
+    tempmodel <- sampler_y$model
+    tempmodel@tree.prior@splitProbabilities <- s_y
+    sampler_y$setModel(newModel = tempmodel)
+    # print("check y probs")
+    # print("sampler_y@tree.prior@splitProbabilities = ")
+    # print(sampler_y@tree.prior@splitProbabilities)
+  }
 
 
   # sampler_y$sampleTreesFromPrior()
-  #
-  # # priormean_y <- sampler_y$predict(xdf_y)[1,]
-  #
+
+  # priormean_y <- sampler_y$predict(xdf_y)[1,]
+
   # sampler_y$sampleNodeParametersFromPrior()
-  #
-  # samplestemp_y <- sampler_y$run()
-  #
-  # # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
-  # # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
-  #
-  # mutemp_y <- samplestemp_y$train[,1]
-  # mutemp_test_y <- samplestemp_y$test
 
-  ###### new myBART initialization for y model ######################
+  samplestemp_y <- sampler_y$run()
 
-  # maybe (max(as.vector(Z.mat))-min(as.vector(Z.mat)))
-  # can be replaced by something else
-  # sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees_outcome))^2)
-  sigma2_mu_y <- ((max(y_resids)-min(y_resids))/(2 * k_y * sqrt(n.trees_outcome)))^2
+  # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
+  # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
 
-  if(is.na(sigma2_mu_y )){
-    stop("Line 1733 sigma2_mu_y  NA")
-  }
+  mutemp_y <- samplestemp_y$train[,1]
+  mutemp_test_y <- samplestemp_y$test[,1]
 
-  # sigma2_mu <- 1/n.trees_outcome
-
-  # Create a list of trees for the initial stump
-  curr_trees_y = create_stump(num_trees = n.trees_outcome,
-                              y = as.vector(y_resids),
-                              X = x.train[uncens_inds,])
-  # Initialise the new trees as current one
-  new_trees_y = curr_trees_y
-
-  # Initialise the predicted values to zero
-  mutemp_y = get_predictions(curr_trees_y, x.train[uncens_inds,], single_tree = n.trees_outcome == 1)
-  # y_hat <- mutemp_y
-
-  mu_y <- mutemp_y
 
   if(sparse){
+    tempcounts <- fcount(sampler_y$getTrees()$var)
+    # print("line 815. tempcounts = ")
+    # print(tempcounts)
+    tempcounts <- tempcounts[tempcounts$x != -1, ]
+    # print("line 824. tempcounts = ")
+    # print(tempcounts)
     var_count_y <- rep(0, p_y)
+    var_count_y[tempcounts$x] <- tempcounts$N
+    # print("line 824. var_count_y = ")
+    # print(var_count_y)
   }
-  # if(sparse){
-  #   tempcounts <- fcount(sampler_y$getTrees()$var)
-  #   tempcounts <- tempcounts[tempcounts$x != -1, ]
-  #   var_count_y[tempcounts$x] <- tempcounts$N
-  # }
 
 
 
@@ -1039,6 +988,8 @@ tbart2marg <- function(x.train,
   #   draw$sigma[1] <- sigma
   # }
 
+  # print("line 964")
+
 
   #########  Begin Gibbs sampler ######################################################
 
@@ -1047,49 +998,8 @@ tbart2marg <- function(x.train,
   #   format = " [:bar] :percent eta: :eta",
   #   total = n.iter+n.burnin, clear = FALSE, width= 60)
 
-
-  # create matrices of indicator variables for terminal nodes
-
-  # if all initialized as stumps then all just constant vectors
-
-  # will store as list, but can be stored as matrices instead
-  # because matrices will be binded anyway
-
-  binmat_list_y <- list()
-  binmat_list_z <- list()
-
-  for (j in 1:n.trees_outcome) {
-    binmat_list_y[[j]] <- rep(1, n1) # just for uncensored outcomes?
-  }
-  for (j in 1:n.trees_censoring) {
-    binmat_list_z[[j]] <- rep(1, n)
-  }
-
-  # or
-
-  binmat_all_y <- matrix(1, n1, n.trees_outcome)
-  binmat_all_z <- matrix(1, n, n.trees_censoring)
-  # then must save indices of column in matrix
-  firstcolindtrees_y <- 1:n.trees_outcome
-  firstcolindtrees_z <- 1:n.trees_censoring
-
-
-
   #loop through the Gibbs sampler iterations
   for(iter in 1:(n.iter+n.burnin)){
-
-    if(mutemp_y != rowSums(tree_fits_store_y)){
-
-      stop(" print mutemp_y != rowSums(tree_fits_store_y)")
-
-    }
-
-
-    if(mutemp_z != rowSums(tree_fits_store_z)){
-
-      stop(" print mutemp_z != rowSums(tree_fits_store_z)")
-
-    }
 
 
     # if(eq_by_eq){
@@ -1101,6 +1011,25 @@ tbart2marg <- function(x.train,
     #   # sig_ydraw <- phi1
     #
     # }
+
+    # print("line 988")
+
+    ####### samples of ystar conditional on everything else ######################
+
+
+
+
+    ystar[uncens0_inds] <-  rtruncnorm(n_zeros, a= -Inf, b = 0,
+                                       mean =  offsety + mutemp_y[sub_uncens0_inds] +  gamma1*(z[uncens0_inds] - offsetz - mutemp_z[uncens0_inds]),
+                                       sd = sqrt(phi1) )
+
+    ystar[uncens1_inds] <-  rtruncnorm(n_ones, a= 0, b = Inf,
+                                       mean =  offsety + mutemp_y[sub_uncens1_inds] +  gamma1*(z[uncens1_inds] - offsetz - mutemp_z[uncens1_inds]),
+                                       sd = sqrt(phi1) )
+
+
+    #//////////////////////////////////////////////////////////////////
+
 
     temp_sd_z <- sqrt( phi1/(phi1+gamma1^2)   )
 
@@ -1171,374 +1100,12 @@ tbart2marg <- function(x.train,
     z_resids <- z - offsetz #z_epsilon
     z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
 
-    # #set the response for draws of z trees
-    # sampler_z$setResponse(y = z_resids)
-    # #set the standard deivation
-    # sampler_z$setSigma(sigma = 1)
+    #set the response for draws of z trees
+    sampler_z$setResponse(y = z_resids)
+    #set the standard deivation
+    sampler_z$setSigma(sigma = 1)
 
     weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
-    weightz <- (gamma1^2 + phi1)/phi1
-
-    if(marginalize){
-
-
-
-
-      for (j in 1:n.trees_censoring) {
-        current_partial_residuals = z_resids #- mutemp_z + tree_fits_store_z[,j]
-
-
-        # We need the new and old trees for the likelihoods
-        new_trees_z <- curr_trees_z
-
-        type_z = sample_move(curr_trees_z[[j]], i, 0, #n_burn
-                             trans_prob)
-
-        # Generate a new tree based on the current
-        new_trees_z[[j]] <- update_tree(
-          y = z_resids,
-          X = w.train,
-          type = type_z,
-          curr_tree = curr_trees_z[[j]],
-          node_min_size = node_min_size,
-          s = s_z,
-          max_bad_trees = max_bad_trees,
-          splitting_rules = splitting_rules
-        )
-
-
-
-        # (c) Obtain the Metropolis-Hastings probability
-        curr_tree_z <- curr_trees_z[[j]]
-        new_tree_z <- new_trees_z[[j]]
-
-
-        # must create tree matrices
-
-        # very efficient code would just update relevant elements of indicator variable matrix
-        # and elements of cross product matrix
-
-        # For now, just convert node indices to binary variables
-
-
-        # firstcolindtrees_z[j]
-
-        # propsed model binary matrix
-        # binmat_all_z
-
-        # require the node, not just the variable
-
-        if (type_z == "grow") {
-          # var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] + 1
-
-          # split node is just parent of last rows
-          new_tree_z$tree_matrix[nrow(new_tree_z$tree_matrix)-1,'parent']
-
-          terminal_nodes_old = which(as.numeric(old_tree$tree_matrix[,'terminal']) == 1)
-          terminal_nodes_new = which(as.numeric(new_tree$tree_matrix[,'terminal']) == 1)
-          removednode <- which(!( terminal_nodes_old %in% terminal_nodes_new ) )
-          addednodes <- which(!( terminal_nodes_new %in% terminal_nodes_old ) )
-
-          # create binary variables for new nodes
-          # can either do this within a new grow_tree function or here
-          # can just use node indices
-
-          newnodesbin <- matrix(0, nrow(binmat_all_z),2)
-          newnodesbin[new_tree_z$node_indices == addednodes[1],1] <- rep(1, sum(new_tree_z$node_indices == addednodes[1]))
-          newnodesbin[new_tree_z$node_indices == addednodes[2],2] <- rep(1, sum(new_tree_z$node_indices == addednodes[2]))
-
-          binmat_all_z_new <- binmat_all_z[, -(firstcolindtrees_z[j]-1+ removednode) ]
-
-          if(firstcolindtrees_z[j]-1 + addednodes[1]-1 == 0 ){
-            binmat_all_z_new <- cbind(#binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednodes-1 ) ],
-              newnodesbin,
-              binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(binmat_all_z_new) ])
-
-          }else{
-            if(firstcolindtrees_z[j]-1 + addednodes[2]-1 == ncol(binmat_all_z_new) +1 ){
-              binmat_all_z_new <- cbind(binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) ],
-                                        newnodesbin#,
-                                        #binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes ):ncol(binmat_all_z_new) ]
-              )
-
-            }else{
-              binmat_all_z_new <- cbind(binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) ],
-                                        newnodesbin,
-                                        binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(binmat_all_z_new) ])
-
-            }
-          }
-
-        } else if (type_z == "prune") {
-          # var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
-          terminal_nodes_old = which(as.numeric(old_tree$tree_matrix[,'terminal']) == 1)
-          terminal_nodes_new = which(as.numeric(new_tree$tree_matrix[,'terminal']) == 1)
-
-          # if(   new_tree_z$pruned_parent ==-1   ){
-          if(   all(terminal_nodes_old == terminal_nodes_new)   ){
-            binmat_all_z_new <- binmat_all_z
-          }else{
-            # delete column corresponding to pruned nodes and create column corresponding to parent node (does ordering matter?)
-            # yes, ordering matters because otherwise would not be able to find columns to delete or grow in future steps
-            new_tree_z$pruned_parent
-
-            # perhaps more efficient to just consider the difference
-            removednodes <- which(!( terminal_nodes_old %in% terminal_nodes_new ) )
-            addednode <- which(!( terminal_nodes_new %in% terminal_nodes_old ) )
-
-            newparentbin <- binmat_all_z[,firstcolindtrees_z[j]-1+ removednodes[1]] +
-              binmat_all_z[,firstcolindtrees_z[j]-1+ removednodes[2]]
-
-
-            binmat_all_z_new <- binmat_all_z[, -(firstcolindtrees_z[j]-1+ removednodes) ]
-
-            if(firstcolindtrees_z[j]-1 + addednode-1 == 0 ){
-              binmat_all_z_new <- cbind(#binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
-                                        newparentbin,
-                                        binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new) ])
-
-            }else{
-              if(firstcolindtrees_z[j]-1 + addednode-1 == ncol(binmat_all_z_new) +1 ){
-                binmat_all_z_new <- cbind(binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
-                                          newparentbin#,
-                                          #binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new) ]
-                                          )
-
-              }else{
-                binmat_all_z_new <- cbind(binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
-                                          newparentbin,
-                                          binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new) ])
-
-              }
-            }
-            # child_left = as.numeric(old_tree_z$tree_matrix[new_tree_z$pruned_parent, 'child_left'])
-            # child_right = as.numeric(old_tree_z$tree_matrix[new_tree_z$pruned_parent, 'child_right'])
-          }
-        } else { # change step
-          if(curr_trees_z[[j]]$var[1] != 0){ # What if change step returned $var equal to c(0,0) ????
-            # var_count_z[curr_trees_z[[j]]$var[1]] <- var_count_z[curr_trees_z[[j]]$var[1]] - 1
-            # var_count_z[curr_trees_z[[j]]$var[2]] <- var_count_z[curr_trees_z[[j]]$var[2]] + 1
-
-
-            # find column of changed node
-            # there is probably a more efficient way of doing this
-            # changednodes <- sort(unique(new_tree_z$node_indices[which(new_tree_z$node_indices !=  old_tree_z$node_indices)]))
-            changednodes <- get_children(new_tree_z$tree_matrix, new_tree_z$node_to_change)
-
-            # just replace the two columns for the relevant terminal nodes
-            newnodesbin <- matrix(0, nrow(binmat_all_z),2)
-            newnodesbin[new_tree_z$node_indices == addednodes[1],1] <- rep(1, sum(new_tree_z$node_indices == addednodes[1]))
-            newnodesbin[new_tree_z$node_indices == addednodes[2],2] <- rep(1, sum(new_tree_z$node_indices == addednodes[2]))
-
-            binmat_all_z_new <- binmat_all_z
-
-          }else{
-            binmat_all_z_new[firstcolindtrees_z[j]-1 + changednodes,] <- newnodesbin
-          }
-        }
-
-
-
-        if((nrow(new_tree_z$tree_matrix) == nrow(curr_tree_z$tree_matrix) ) & (type_z != "change" )){
-          alpha_MH <- 0
-          # print("no good trees")
-        }else{
-          # CURRENT TREE: compute the log of the marginalized likelihood + log of the tree prior
-
-          z_uncens <- z_resids[uncens_inds]
-          z_cens <- z_resids[cens_inds]
-
-
-          # most efficient code would update cross-product subsetted by censored and uncensored observations here
-          # (it is probably possible to calculate more quickly than in a matrix calculation)
-          # also can apply kernel trick
-
-
-          # it should be possible to avoid duplication of this calculation
-          l_old = tree_full_conditional_z_marg(curr_trees_z, #[[j]],
-                                               current_partial_residuals,# sigma2,
-                                               sigma2_mu_z,
-                                               weightz,
-                                               binmat_all_z, cens_inds, uncens_inds) +
-            get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
-
-          # NEW TREE: compute the log of the marginalized likelihood + log of the tree prior
-          l_new = tree_full_conditional_z_marg(new_trees_z, #[[j]],
-                                               current_partial_residuals,# sigma2,
-                                               sigma2_mu_z,
-                                               weightz,
-                                               binmat_all_z_new, cens_inds, uncens_inds) +
-            get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
-
-          alpha_MH = alpha_mh(l_new,l_old, curr_trees_z[[j]],new_trees_z[[j]], type_z)
-
-        }
-
-
-        if(is.na(alpha_MH)){
-          print("l_old = ")
-          print(l_old)
-          print("l_new = ")
-          print(l_new)
-
-          print("curr_tree_z = ")
-          print(curr_tree_z)
-
-          print("new_tree_z = ")
-          print(new_tree_z)
-
-          print("get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) = ")
-          print(get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z))
-
-          print(" get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) = ")
-          print( get_tree_prior(new_trees_z[[j]], alpha_z, beta_z))
-
-          stop(";ome 12-0. alpha_MH NA")
-
-        }
-
-        if(alpha_MH > runif(1)) {
-          curr_trees_z[[j]] = new_trees_z[[j]]
-
-          if (type_z == "grow") {
-            var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] + 1
-          } else if (type_z == "prune") {
-            var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
-          } else {
-            if(curr_trees_z[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
-              var_count_z[curr_trees_z[[j]]$var[1]] <- var_count_z[curr_trees_z[[j]]$var[1]] - 1
-              var_count_z[curr_trees_z[[j]]$var[2]] <- var_count_z[curr_trees_z[[j]]$var[2]] + 1
-            }
-          }
-
-        }
-
-
-
-      } # end loop over z trees
-
-
-      curr_trees_z[[j]] = simulate_mu_weighted_all(curr_trees_z,
-                                               current_partial_residuals,
-                                               # sigma2,
-                                               sigma2_mu_z,
-                                               weightstemp)
-
-      # # Updating BART predictions
-      # current_fit = get_predictions(curr_trees_z[j], w.train, single_tree = TRUE)
-      # mutemp_z = mutemp_z - tree_fits_store_z[,j] # subtract the old fit
-      # mutemp_z = mutemp_z + current_fit # add the new fit
-      # tree_fits_store_z[,j] = current_fit # update the new fit
-      #
-
-    }else{
-
-      for (j in 1:n.trees_censoring) {
-        current_partial_residuals = z_resids - mutemp_z + tree_fits_store_z[,j]
-
-
-        # We need the new and old trees for the likelihoods
-        new_trees_z <- curr_trees_z
-
-        type_z = sample_move(curr_trees_z[[j]], i, 0, #n_burn
-                           trans_prob)
-
-        # Generate a new tree based on the current
-        new_trees_z[[j]] <- update_tree(
-          y = z_resids,
-          X = w.train,
-          type = type_z,
-          curr_tree = curr_trees_z[[j]],
-          node_min_size = node_min_size,
-          s = s_z,
-          max_bad_trees = max_bad_trees,
-          splitting_rules = splitting_rules
-        )
-
-
-
-        # (c) Obtain the Metropolis-Hastings probability
-        curr_tree_z <- curr_trees_z[[j]]
-        new_tree_z <- new_trees_z[[j]]
-
-
-        if((nrow(new_tree_z$tree_matrix) == nrow(curr_tree_z$tree_matrix) ) & (type_z != "change" )){
-          alpha_MH <- 0
-          # print("no good trees")
-        }else{
-          # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_old = tree_full_conditional_weighted(curr_trees_z[[j]],
-                                        current_partial_residuals,# sigma2,
-                                        sigma2_mu_z,
-                                        weightstemp) +
-            get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z)
-
-          # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_new = tree_full_conditional_weighted(new_trees_z[[j]],
-                                        current_partial_residuals,# sigma2,
-                                        sigma2_mu_z,
-                                        weightstemp) +
-            get_tree_prior(new_trees_z[[j]], alpha_z, beta_z)
-
-          alpha_MH = alpha_mh(l_new,l_old, curr_trees_z[[j]],new_trees_z[[j]], type_z)
-
-        }
-
-
-        if(is.na(alpha_MH)){
-          print("l_old = ")
-          print(l_old)
-          print("l_new = ")
-          print(l_new)
-
-          print("curr_tree_z = ")
-          print(curr_tree_z)
-
-          print("new_tree_z = ")
-          print(new_tree_z)
-
-          print("get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) = ")
-          print(get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z))
-
-          print(" get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) = ")
-          print( get_tree_prior(new_trees_z[[j]], alpha_z, beta_z))
-
-          stop(";ome 12-0. alpha_MH NA")
-
-        }
-
-        if(alpha_MH > runif(1)) {
-          curr_trees_z[[j]] = new_trees_z[[j]]
-
-          if (type_z == "grow") {
-            var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] + 1
-          } else if (type_z == "prune") {
-            var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
-          } else {
-            if(curr_trees_z[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
-              var_count_z[curr_trees_z[[j]]$var[1]] <- var_count_z[curr_trees_z[[j]]$var[1]] - 1
-              var_count_z[curr_trees_z[[j]]$var[2]] <- var_count_z[curr_trees_z[[j]]$var[2]] + 1
-            }
-          }
-
-        }
-
-        curr_trees_z[[j]] = simulate_mu_weighted(curr_trees_z[[j]],
-                                                 current_partial_residuals,
-                                                 # sigma2,
-                                                 sigma2_mu_z,
-                                                 weightstemp)
-
-        # Updating BART predictions
-        current_fit = get_predictions(curr_trees_z[j], w.train, single_tree = TRUE)
-        mutemp_z = mutemp_z - tree_fits_store_z[,j] # subtract the old fit
-        mutemp_z = mutemp_z + current_fit # add the new fit
-        tree_fits_store_z[,j] = current_fit # update the new fit
-
-      } # end loop over z trees
-
-    } # end else (not marginalizing)
-
 
 
     # print("weightstemp = ")
@@ -1554,30 +1121,35 @@ tbart2marg <- function(x.train,
     # print("phi1 = ")
     # print(phi1)
 
-    # sampler_z$setWeights(weights = weightstemp)
-    #
-    # if(sparse){
-    #   tempmodel <- sampler_z$model
-    #   tempmodel@tree.prior@splitProbabilities <- s_z
-    #   sampler_z$setModel(newModel = tempmodel)
-    # }
-    #
-    # # print("Line 741")
-    #
-    # samplestemp_z <- sampler_z$run()
-    #
-    # mutemp_z <- samplestemp_z$train[,1]
-    # mutemp_test_z <- samplestemp_z$test[,1]
-    # # mutemp_test_z <- sampler_z$test[,1]#samplestemp_z$test[,1]
-    # # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+    sampler_z$setWeights(weights = weightstemp)
+
+    if(sparse){
+      tempmodel <- sampler_z$model
+      tempmodel@tree.prior@splitProbabilities <- s_z
+      sampler_z$setModel(newModel = tempmodel)
+      # print("check z probs")
+      # print("sampler_z@tree.prior@splitProbabilities = ")
+      # print(sampler_z@tree.prior@splitProbabilities)
+    }
+
+    # print("Line 741")
+
+    samplestemp_z <- sampler_z$run()
+
+    mutemp_z <- samplestemp_z$train[,1]
+    mutemp_test_z <- samplestemp_z$test[,1]
+    # mutemp_test_z <- sampler_z$test[,1]#samplestemp_z$test[,1]
+    # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
 
-    # if(sparse){
-    #   tempcounts <- fcount(sampler_z$getTrees()$var)
-    #   tempcounts <- tempcounts[tempcounts$x != -1, ]
-    #   var_count_z <- rep(0, p_z)
-    #   var_count_z[tempcounts$x] <- tempcounts$N
-    # }
+    if(sparse){
+      tempcounts <- fcount(sampler_z$getTrees()$var)
+      # print("line 1041. tempcounts = ")
+      # print(tempcounts)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_z <- rep(0, p_z)
+      var_count_z[tempcounts$x] <- tempcounts$N
+    }
 
     # print("length(mutemp_test_z) = ")
     # print(length(mutemp_test_z))
@@ -1588,9 +1160,6 @@ tbart2marg <- function(x.train,
     #update z_epsilon
     z_epsilon <- z - offsetz - mutemp_z
 
-    mutemp_test_z <- get_predictions(curr_trees_z,
-                                     w.test,
-                                     single_tree = length(curr_trees_z) == 1)
 
     ####### draw sums of trees for y #######################################################
 
@@ -1621,242 +1190,42 @@ tbart2marg <- function(x.train,
     y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
     sd_ydraw <- sqrt(phi1)
 
+
     # print("y_resids = ")
     #
     # print(y_resids)
 
     #set the response for draws of z trees
-    # sampler_y$setResponse(y = y_resids)
-    # #set the standard deviation
-    # sampler_y$setSigma(sigma = sd_ydraw)
-    #
-    # if(sparse){
-    #   tempmodel <- sampler_y$model
-    #   tempmodel@tree.prior@splitProbabilities <- s_y
-    #   sampler_y$setModel(newModel = tempmodel)
-    # }
-    #
-    # samplestemp_y <- sampler_y$run()
-    #
-    # mutemp_y <- samplestemp_y$train[,1]
-    # mutemp_test_y <- samplestemp_y$test[,1]
+    sampler_y$setResponse(y = y_resids)
+    #set the standard deviation
+    sampler_y$setSigma(sigma = sd_ydraw)
 
-
-    if(marginalize){
-      for (j in 1:n.trees_outcome) {
-        current_partial_residuals = y_resids - mutemp_y + tree_fits_store_y[,j]
-
-        # We need the new and old trees for the likelihoods
-        new_trees_y <- curr_trees_y
-
-        type_y = sample_move(curr_trees_y[[j]], i, 0, #n_burn
-                             trans_prob)
-
-        # Generate a new tree based on the current
-        new_trees_y[[j]] <- update_tree(
-          y = y_resids,
-          X = x.train[uncens_inds,],
-          type = type_y,
-          curr_tree = curr_trees_y[[j]],
-          node_min_size = node_min_size,
-          s = s_y,
-          max_bad_trees = max_bad_trees,
-          splitting_rules = splitting_rules
-        )
-
-        # (c) Obtain the Metropolis-Hastings probability
-        curr_tree_y <- curr_trees_y[[j]]
-        new_tree_y <- new_trees_y[[j]]
-
-        if((nrow(new_tree_y$tree_matrix) == nrow(curr_tree_y$tree_matrix) ) & (type_y != "change" )){
-          alpha_MH <- 0
-          # print("no good trees")
-        }else{
-          # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_old = tree_full_conditional(curr_trees_y[[j]],
-                                        current_partial_residuals,
-                                        phi1,
-                                        sigma2_mu_y) +
-            get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
-
-          # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_new = tree_full_conditional(new_trees_y[[j]],
-                                        current_partial_residuals,
-                                        phi1,
-                                        sigma2_mu_y) +
-            get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
-
-          alpha_MH = alpha_mh(l_new,l_old, curr_trees_y[[j]],new_trees_y[[j]], type_y)
-
-        }
-
-        if(is.na(alpha_MH)){
-          print("l_old = ")
-          print(l_old)
-          print("l_new = ")
-          print(l_new)
-
-          print("curr_tree_y = ")
-          print(curr_tree_y)
-
-          print("new_tree_y = ")
-          print(new_tree_y)
-
-          print("get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y) = ")
-          print(get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y))
-
-          print(" get_tree_prior(new_trees_y[[j]], alpha_y, beta_y) = ")
-          print( get_tree_prior(new_trees_y[[j]], alpha_y, beta_y))
-
-        }
-
-
-        if(alpha_MH > runif(1)) {
-          curr_trees_y[[j]] = new_trees_y[[j]]
-
-          if (type_y == "grow") {
-            var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] + 1
-          } else if (type_y == "prune") {
-            var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] - 1
-          } else {
-            if(curr_trees_y[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
-              var_count_y[curr_trees_y[[j]]$var[1]] <- var_count_y[curr_trees_y[[j]]$var[1]] - 1
-              var_count_y[curr_trees_y[[j]]$var[2]] <- var_count_y[curr_trees_y[[j]]$var[2]] + 1
-            }
-          }
-
-        }
-
-
-      } # end loop over y trees
-
-      curr_trees_y[[j]] = simulate_mu_all(curr_trees_y[[j]],
-                                      current_partial_residuals,
-                                      phi1,
-                                      sigma2_mu_y)
-
-      # # Updating BART predictions
-      # current_fit = get_predictions(curr_trees_y[j], x.train[uncens_inds,], single_tree = TRUE)
-      # mutemp_y = mutemp_y - tree_fits_store_y[,j] # subtract the old fit
-      # mutemp_y = mutemp_y + current_fit # add the new fit
-      # tree_fits_store_y[,j] = current_fit # update the new fit
-
-
-    }else{
-
-
-      for (j in 1:n.trees_outcome) {
-        current_partial_residuals = y_resids - mutemp_y + tree_fits_store_y[,j]
-
-        # We need the new and old trees for the likelihoods
-        new_trees_y <- curr_trees_y
-
-        type_y = sample_move(curr_trees_y[[j]], i, 0, #n_burn
-                             trans_prob)
-
-        # Generate a new tree based on the current
-        new_trees_y[[j]] <- update_tree(
-          y = y_resids,
-          X = x.train[uncens_inds,],
-          type = type_y,
-          curr_tree = curr_trees_y[[j]],
-          node_min_size = node_min_size,
-          s = s_y,
-          max_bad_trees = max_bad_trees,
-          splitting_rules = splitting_rules
-        )
-
-        # (c) Obtain the Metropolis-Hastings probability
-        curr_tree_y <- curr_trees_y[[j]]
-        new_tree_y <- new_trees_y[[j]]
-
-        if((nrow(new_tree_y$tree_matrix) == nrow(curr_tree_y$tree_matrix) ) & (type_y != "change" )){
-          alpha_MH <- 0
-          # print("no good trees")
-        }else{
-          # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_old = tree_full_conditional(curr_trees_y[[j]],
-                                        current_partial_residuals,
-                                        phi1,
-                                        sigma2_mu_y) +
-            get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
-
-          # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_new = tree_full_conditional(new_trees_y[[j]],
-                                        current_partial_residuals,
-                                        phi1,
-                                        sigma2_mu_y) +
-            get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
-
-          alpha_MH = alpha_mh(l_new,l_old, curr_trees_y[[j]],new_trees_y[[j]], type_y)
-
-        }
-
-        if(is.na(alpha_MH)){
-          print("l_old = ")
-          print(l_old)
-          print("l_new = ")
-          print(l_new)
-
-          print("curr_tree_y = ")
-          print(curr_tree_y)
-
-          print("new_tree_y = ")
-          print(new_tree_y)
-
-          print("get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y) = ")
-          print(get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y))
-
-          print(" get_tree_prior(new_trees_y[[j]], alpha_y, beta_y) = ")
-          print( get_tree_prior(new_trees_y[[j]], alpha_y, beta_y))
-
-        }
-
-
-        if(alpha_MH > runif(1)) {
-          curr_trees_y[[j]] = new_trees_y[[j]]
-
-          if (type_y == "grow") {
-            var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] + 1
-          } else if (type_y == "prune") {
-            var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] - 1
-          } else {
-            if(curr_trees_y[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
-              var_count_y[curr_trees_y[[j]]$var[1]] <- var_count_y[curr_trees_y[[j]]$var[1]] - 1
-              var_count_y[curr_trees_y[[j]]$var[2]] <- var_count_y[curr_trees_y[[j]]$var[2]] + 1
-            }
-          }
-
-        }
-
-        curr_trees_y[[j]] = simulate_mu(curr_trees_y[[j]],
-                                                 current_partial_residuals,
-                                                 phi1,
-                                                 sigma2_mu_y)
-
-        # Updating BART predictions
-        current_fit = get_predictions(curr_trees_y[j], x.train[uncens_inds,], single_tree = TRUE)
-        mutemp_y = mutemp_y - tree_fits_store_y[,j] # subtract the old fit
-        mutemp_y = mutemp_y + current_fit # add the new fit
-        tree_fits_store_y[,j] = current_fit # update the new fit
-
-      } # end loop over y trees
-
+    if(sparse){
+      tempmodel <- sampler_y$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler_y$setModel(newModel = tempmodel)
+      # print("check y probs")
+      # print("sampler_y@tree.prior@splitProbabilities = ")
+      # print(sampler_y@tree.prior@splitProbabilities)
     }
 
-    # if(sparse){
-    #   tempcounts <- fcount(sampler_y$getTrees()$var)
-    #   tempcounts <- tempcounts[tempcounts$x != -1, ]
-    #   var_count_y <- rep(0, p_y)
-    #   var_count_y[tempcounts$x] <- tempcounts$N
-    # }
+    samplestemp_y <- sampler_y$run()
+
+    mutemp_y <- samplestemp_y$train[,1]
+    mutemp_test_y <- samplestemp_y$test[,1]
+
+    if(sparse){
+      tempcounts <- fcount(sampler_y$getTrees()$var)
+      # print("line 1107. tempcounts = ")
+      # print(tempcounts)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
 
     #update z_epsilon
     y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
 
-    mutemp_test_y <- get_predictions(curr_trees_y,
-                                     x.test,
-                                     single_tree = length(curr_trees_y) == 1)
 
     ############# Covariance matrix samples ##########################
 
@@ -2070,6 +1439,8 @@ tbart2marg <- function(x.train,
     #
     #   # the variance should be zero?
     #   sigmu_z <- (max(z- offsetz) - min(z- offsetz))/(2*2*sqrt(n.trees_censoring))
+    #   #set prior parameter values
+    #
     #
     #   #if prior mean for mu parameters is zero (does this make sense? require an offset for y?)
     #
@@ -2134,9 +1505,6 @@ tbart2marg <- function(x.train,
     #
     #   }
     #
-    #
-    #
-    #
     # }
 
 
@@ -2144,37 +1512,59 @@ tbart2marg <- function(x.train,
 
 
     if (sparse & (iter > floor(n.burnin * 0.5))) {
+
+      # if( iter == floor(n.burnin * 0.5) +1 ){
+      # print("var_count_z = ")
+      # print(var_count_z)
+      # print("p_z = ")
+      # print(p_z)
+      # print("alpha_s_z = ")
+      # print(alpha_s_z)
+      # }
       s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
       s_z <- s_update_z[[1]]
+      # if( iter == floor(n.burnin * 0.5) +1 ){
+      # print("s_update_z = ")
+      # print(s_update_z)
+      # }
+
+      # if( iter == floor(n.burnin * 0.5) +1 ){
+      # print("var_count_y = ")
+      # print(var_count_y)
+      # print("p_y = ")
+      # print(p_y)
+      # print("alpha_s_y = ")
+      # print(alpha_s_y)
+      # }
 
       s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
       s_y <- s_update_y[[1]]
-
+      # if( iter == floor(n.burnin * 0.5) +1 ){
+      # print("s_update_y = ")
+      # print(s_update_y)
+      # }
       if(alpha_split_prior){
         alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
         alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
       }
+      # if( iter == floor(n.burnin * 0.5) +1 ){
+      # print("alpha_s_z = ")
+      # print(alpha_s_z)
+      # print("alpha_s_y = ")
+      # print(alpha_s_y)
+      # }
     }
 
 
-    ####### update sigma_mu #########################
-    if(sigma_mu_prior){
-      sigma2_mu_z <-  update_sigma_mu_par(curr_trees_z, sigma2_mu_z)
-      if(is.na(sigma2_mu_z )){
-        stop("Line 1728 sigma2_mu_z  NA")
-      }
-      sigma2_mu_y <-  update_sigma_mu_par(curr_trees_y, sigma2_mu_y)
-      if(is.na(sigma2_mu_y )){
-        stop("Line 1733 sigma2_mu_y  NA")
-      }
-    }
+
 
 
     ###### Store results   ###############################
 
 
 
-
+    # print("iter = ")
+    # print(iter)
 
 
     if(iter > n.burnin){
@@ -2225,9 +1615,16 @@ tbart2marg <- function(x.train,
       if(fast == TRUE){
         probcens_train <- fastpnorm(- mutemp_z[uncens_inds] - offsetz )
         probcens_test <- fastpnorm(- mutemp_test_z - offsetz)
+
+        prob_y_train <- 1 - fastpnorm(- mutemp_y - offsety )
+        prob_y_test <- 1 - fastpnorm(- mutemp_test_y - offsety )
+
       }else{
         probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz )
         probcens_test <- pnorm(- mutemp_test_z - offsetz)
+
+        prob_y_train <- 1 - pnorm(- mutemp_y - offsety )
+        prob_y_test <- 1 - pnorm(- mutemp_test_y - offsety )
       }
 
       #calculate conditional expectation
@@ -2258,12 +1655,12 @@ tbart2marg <- function(x.train,
       # draw$Z.mat_test[,iter_min_burnin] <-  zytest[,1]
       # draw$Y.mat_train = array(NA, dim = c(n, n.iter)),
       # draw$Y.mat_test = array(NA, dim = c(ntest, n.iter)),
-      draw$mu_y_train[, iter_min_burnin] <- (mutemp_y + (y_max + y_min)/2 )*tempsd+tempmean
-      draw$mu_y_test[, iter_min_burnin] <- (mutemp_test_y + (y_max + y_min)/2 )*tempsd+tempmean
+      draw$mu_y_train[, iter_min_burnin] <- mutemp_y*tempsd+tempmean
+      draw$mu_y_test[, iter_min_burnin] <- mutemp_test_y*tempsd+tempmean
 
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
-      draw$muuncens_y_train[, iter_min_burnin] <- (mutemp_y + (y_max + y_min)/2 )*tempsd+tempmean
+      draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y*tempsd+tempmean
 
       draw$mu_z_train[, iter_min_burnin] <- mutemp_z
       draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z
@@ -2271,16 +1668,20 @@ tbart2marg <- function(x.train,
       draw$train.probcens[, iter_min_burnin] <-  probcens_train
       draw$test.probcens[, iter_min_burnin] <-  probcens_test
 
-      draw$cond_exp_train[, iter_min_burnin] <- (condexptrain + (y_max + y_min)/2 )*tempsd+tempmean
-      draw$cond_exp_test[, iter_min_burnin] <- (condexptest + (y_max + y_min)/2 )*tempsd+tempmean
+      draw$train.prob.y[, iter_min_burnin] <-  prob_y_train
+      draw$test.prob.y[, iter_min_burnin] <-  prob_y_test
 
-      # draw$ystar_train[, iter_min_burnin] <- ystar*tempsd+tempmean
-      draw$ystar_test[, iter_min_burnin] <- (zytest[,2] + (y_max + y_min)/2 )*tempsd+tempmean
+
+      draw$cond_exp_train[, iter_min_burnin] <- condexptrain*tempsd+tempmean
+      draw$cond_exp_test[, iter_min_burnin] <- condexptest*tempsd+tempmean
+
+      draw$ystar_train[, ] <- ystar*tempsd+tempmean
+      draw$ystar_test[, iter_min_burnin] <- zytest[,2]*tempsd+tempmean
       draw$zstar_train[,iter_min_burnin] <- z
       draw$zstar_test[,iter_min_burnin] <-  zytest[,1]
 
-      # draw$ycond_draws_train[[iter_min_burnin]] <-  ystar[z >=0]*tempsd+tempmean
-      draw$ycond_draws_test[[iter_min_burnin]] <-  (zytest[,2][zytest[,1] >= 0] + (y_max + y_min)/2 )*tempsd+tempmean
+      draw$ycond_draws_train[[iter_min_burnin]] <-  ystar[z >=0]*tempsd+tempmean
+      draw$ycond_draws_test[[iter_min_burnin]] <-  zytest[,2][zytest[,1] >= 0]*tempsd+tempmean
 
       draw$Sigma_draws[,, iter_min_burnin] <- Sigma_orig_scale#Sigma_mat
 
@@ -2291,12 +1692,12 @@ tbart2marg <- function(x.train,
         uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z[uncens_inds] - offsetz )
         uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + gamma1*dnorm(- mutemp_test_z - offsetz)
 
-        draw$uncond_exp_train[, iter_min_burnin] <- (uncondexptrain + (y_max + y_min)/2 )*tempsd+tempmean
-        draw$uncond_exp_test[, iter_min_burnin] <- (uncondexptest + (y_max + y_min)/2 )*tempsd+tempmean
+        draw$uncond_exp_train[, iter_min_burnin] <- uncondexptrain*tempsd+tempmean
+        draw$uncond_exp_test[, iter_min_burnin] <- uncondexptest*tempsd+tempmean
 
 
         # draw$ydraws_train[, iter_min_burnin] <- ifelse(z < 0, censored_value, ystar )
-        draw$ydraws_test[, iter_min_burnin] <- (ifelse(zytest[,1] < 0, censored_value, zytest[,2] ) + (y_max + y_min)/2 )*tempsd+tempmean
+        draw$ydraws_test[, iter_min_burnin] <- ifelse(zytest[,1] < 0, censored_value, zytest[,2] )*tempsd+tempmean
       }
 
 
@@ -2324,9 +1725,6 @@ tbart2marg <- function(x.train,
 
   }#end iterations of Giibs sampler
 
-
-  draw$y_max <- y_max
-  draw$y_min <- y_min
 
 
   return(draw)

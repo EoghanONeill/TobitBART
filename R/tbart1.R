@@ -318,6 +318,9 @@ tbart1 <- function(x.train,
 
   # print("begin dbarts")
 
+  # colnames(x.train) <- NULL
+  # colnames(x.test) <- NULL
+
   dftrain <- data.frame(y = z , x = x.train)
 
   if(nrow(x.test )==0){

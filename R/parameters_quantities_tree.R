@@ -148,6 +148,102 @@ tree_full_conditional_weighted = function(tree, R, #sigma2,
 
 
 
+tree_full_conditional_z_marg = function(tree, R, sigma2, sigma2_mu,
+                                        weightz,
+                                        binmat_all_z, cens_inds, uncens_inds) {
+
+  # Function to compute log full conditional distirbution for an individual tree
+  # R is a vector of partial residuals
+
+  # Need to calculate log complete conditional, involves a sum over terminal nodes
+
+  # First find which rows are terminal nodes
+  which_terminal = which(tree$tree_matrix[,'terminal'] == 1)
+
+  # Get node sizes for each terminal node
+  nj = tree$tree_matrix[which_terminal,'node_size']
+  # nj = tree$tree_matrix[tree$tree_matrix[,'terminal'] == 1,'node_size']
+
+  # nj <- nj[nj!=0]
+  # Get sum of residuals and sum of residuals squared within each terminal node
+  # sumRsq_j = aggregate(R, by = list(tree$node_indices), function(x) sum(x^2))[,2]
+  # S_j = aggregate(R, by = list(tree$node_indices), sum)[,2]
+
+  # sumRsq_j = fsum(R^2, tree$node_indices)
+  # S_j = fsum(R, tree$node_indices)
+  S_j = fsum(R,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
+
+  if(length(S_j) != length(nj)){
+    print("S_j = ")
+    print(S_j)
+
+    print("nj = ")
+    print(nj)
+
+    print("tree$node_indices = ")
+    print(tree$node_indices)
+
+    print("tree$tree_matrix = ")
+    print(tree$tree_matrix)
+
+    # print("n_j = ")
+    # print(n_j)
+  }
+
+  # Now calculate the log posterior
+  log_post = 0.5 * ( sum(log( sigma2 / (nj*sigma2_mu + sigma2))) +
+                       sum( (sigma2_mu* S_j^2) / (sigma2 * (nj*sigma2_mu + sigma2))))
+  return(log_post)
+}
+
+
+
+tree_full_conditional_y_marg = function(tree, R, sigma2, sigma2_mu) {
+
+  # Function to compute log full conditional distirbution for an individual tree
+  # R is a vector of partial residuals
+
+  # Need to calculate log complete conditional, involves a sum over terminal nodes
+
+  # First find which rows are terminal nodes
+  which_terminal = which(tree$tree_matrix[,'terminal'] == 1)
+
+  # Get node sizes for each terminal node
+  nj = tree$tree_matrix[which_terminal,'node_size']
+  # nj = tree$tree_matrix[tree$tree_matrix[,'terminal'] == 1,'node_size']
+
+  # nj <- nj[nj!=0]
+  # Get sum of residuals and sum of residuals squared within each terminal node
+  # sumRsq_j = aggregate(R, by = list(tree$node_indices), function(x) sum(x^2))[,2]
+  # S_j = aggregate(R, by = list(tree$node_indices), sum)[,2]
+
+  # sumRsq_j = fsum(R^2, tree$node_indices)
+  # S_j = fsum(R, tree$node_indices)
+  S_j = fsum(R,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
+
+  if(length(S_j) != length(nj)){
+    print("S_j = ")
+    print(S_j)
+
+    print("nj = ")
+    print(nj)
+
+    print("tree$node_indices = ")
+    print(tree$node_indices)
+
+    print("tree$tree_matrix = ")
+    print(tree$tree_matrix)
+
+    # print("n_j = ")
+    # print(n_j)
+  }
+
+  # Now calculate the log posterior
+  log_post = 0.5 * ( sum(log( sigma2 / (nj*sigma2_mu + sigma2))) +
+                       sum( (sigma2_mu* S_j^2) / (sigma2 * (nj*sigma2_mu + sigma2))))
+  return(log_post)
+}
+
 
 
 # Simulate_par -------------------------------------------------------------
@@ -217,9 +313,7 @@ simulate_mu_weighted = function(tree, R, # sigma2,
   sumRw = fsum(R*weight_vec,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
   sumw = fsum(weight_vec,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
 
-
   sigtilde_j <- 1/( (1/sigma2_mu)  +  sumw  )
-
 
   # # Now calculate mu values
   # mu = rnorm(length(nj) ,
