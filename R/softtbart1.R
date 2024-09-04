@@ -359,9 +359,11 @@ softtbart1 <- function(x.train,
   #suppose there are a number of samples
 
 
-  mu <- sampler_forest$do_gibbs(x.train, z, x.train, 1)
+  mu <- t(sampler_forest$do_gibbs(x.train, z, x.train, 1))
   mutest <- sampler_forest$do_predict(x.test)
 
+  # print("mu = ")
+  # print(mu)
 
   # print("sigma = ")
   sigma <- sampler_forest$get_sigma()

@@ -993,11 +993,11 @@ softtbart2np <- function(x.train,
 
   sampler_forest_z$set_sigma(1)
 
-  mutemp_z <- sampler_forest_z$do_gibbs_weighted(w.train,
+  mutemp_z <- t(sampler_forest_z$do_gibbs_weighted(w.train,
                                                  z_resids,
                                                  weightstemp,
                                                  w.train,
-                                                 1)
+                                                 1))
 
   mutemp_test_z <- sampler_forest_z$do_predict(w.test)
 
@@ -1062,11 +1062,11 @@ softtbart2np <- function(x.train,
 
   sampler_forest_y$set_sigma(1)
 
-  mutemp_y <- sampler_forest_y$do_gibbs_weighted(x.train[uncens_inds,],
+  mutemp_y <- t(sampler_forest_y$do_gibbs_weighted(x.train[uncens_inds,],
                                                  y_resids,
                                                  weightstemp_y,
                                                  x.train[uncens_inds,],
-                                                 1)
+                                                 1))
 
   mutemp_test_y <- sampler_forest_y$do_predict(x.test)
 
@@ -1333,11 +1333,11 @@ softtbart2np <- function(x.train,
 
     sampler_forest_z$set_sigma(1)
 
-    mutemp_z <- sampler_forest_z$do_gibbs_weighted(w.train,
+    mutemp_z <- t(sampler_forest_z$do_gibbs_weighted(w.train,
                                                    z_resids,
                                                    weightstemp,
                                                    w.train,
-                                                   1)
+                                                   1))
 
     mutemp_test_z <- sampler_forest_z$do_predict(w.test)
 
@@ -1395,11 +1395,11 @@ softtbart2np <- function(x.train,
 
     sampler_forest_y$set_sigma(1)
 
-    mutemp_y <- sampler_forest_y$do_gibbs_weighted(x.train[uncens_inds,],
+    mutemp_y <- t(sampler_forest_y$do_gibbs_weighted(x.train[uncens_inds,],
                                                    y_resids,
                                                    weightstemp_y,
                                                    x.train[uncens_inds,],
-                                                   1)
+                                                   1))
 
     mutemp_test_y <- sampler_forest_y$do_predict(x.test)
 
