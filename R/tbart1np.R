@@ -773,6 +773,7 @@ tbart1np <- function(x.train,
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
     }
 

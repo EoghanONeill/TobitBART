@@ -37,14 +37,16 @@ softtbart2(
   SB_weights = NULL,
   SB_normalize_Y = TRUE,
   print.opt = 1000,
-  eq_by_eq = TRUE,
   accelerate = FALSE,
   cov_prior = "Ding",
-  tau = 1/3,
+  tau = 5,
   mixprob = 0.5,
   simultaneous_covmat = TRUE,
   nu0 = 3,
-  quantsig = 0.9
+  quantsig = 0.9,
+  tau_hyperprior = TRUE,
+  alpha_tau = 1,
+  beta_tau = 10
 )
 }
 \arguments{
@@ -79,8 +81,6 @@ softtbart2(
 \item{n.trees_censoring}{(dbarts control option) A positive integer giving the number of trees used in the censoring model sum-of-trees formulation.}
 
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
-
-\item{eq_by_eq}{If TRUE, implements sampler equation by equation (as in BAVART by Huber and Rossini (2021)). If FALSE, implements sampler in similar approach to SUR-BART (Chakraborty 2016) or MPBART (Kindo 2016).}
 
 \item{accelerate}{If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).}
 
@@ -242,8 +242,7 @@ tbartII_example <- tbart2c(Xmat_train,
                            y2obs_train,
                            n.iter=5000,
                            n.burnin=1000,
-                           censored_value = 0,
-                           eq_by_eq = TRUE)
+                           censored_value = 0)
 
 
 pred_probs_tbart2_test <- rowMeans(tbartII_example$test.probcens)

@@ -8,7 +8,7 @@ Description: Attempt to implement Tobit Bayesian Additive Regression Trees by ad
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.2
 Imports: 
     accelerometry,
     censReg,

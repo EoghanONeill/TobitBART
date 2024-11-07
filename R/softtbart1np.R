@@ -549,7 +549,7 @@ softtbart1np <- function(x.train,
 
   sampler_forest$set_sigma(1)
 
-  mu <- sampler_forest$do_gibbs_weighted(x.train, z, weightstemp_y, x.train, 1)
+  mu <- t(sampler_forest$do_gibbs_weighted(x.train, z, weightstemp_y, x.train, 1))
   mutest <- sampler_forest$do_predict(x.test)
 
 
@@ -749,7 +749,7 @@ softtbart1np <- function(x.train,
 
     sampler_forest$set_sigma(1)
 
-    mu <- sampler_forest$do_gibbs_weighted(x.train, z- mu1_vec_train, weightstemp_y, x.train, 1)
+    mu <- t(sampler_forest$do_gibbs_weighted(x.train, z- mu1_vec_train, weightstemp_y, x.train, 1))
     mutest <- sampler_forest$do_predict(x.test)
 
 

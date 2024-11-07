@@ -48,7 +48,6 @@ make_01_norm <- function(x) {
 #' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
 #' @param sigmadbarts (dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.
 #' @param print.opt Print every print.opt number of Gibbs samples.
-#' @param eq_by_eq If TRUE, implements sampler equation by equation (as in BAVART by Huber and Rossini (2021)). If FALSE, implements sampler in similar approach to SUR-BART (Chakraborty 2016) or MPBART (Kindo 2016).
 #' @param accelerate If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).
 #' @param cov_prior Prior for the covariance of the error terms. If VH, apply the prior of van Hasselt (2011), N(gamma0, tau*phi), imposing dependence between gamma and phi. If Omori, apply the prior N(gamma0,G0). If mixture, then a mixture of the VH and Omori priors with probability mixprob applied to the VH prior.
 #' @param mixprob If cov_prior equals Mixture, then mixprob is the probability applied to the Van Hasselt covariance prior, and one minus mixprob is the probability applied to the Omori prior.
@@ -185,8 +184,7 @@ make_01_norm <- function(x) {
 #'                            y2obs_train,
 #'                            n.iter=5000,
 #'                            n.burnin=1000,
-#'                            censored_value = 0,
-#'                            eq_by_eq = TRUE)
+#'                            censored_value = 0)
 #'
 #'
 #' pred_probs_tbart2_test <- rowMeans(tbartII_example$test.probcens)
@@ -224,8 +222,8 @@ tbart2c <- function(x.train,
                     nzero = 6,#0.002,
                     S0= 12,#0.002,
                     sigest = NA,
-                    n.trees_outcome = 50L,
-                    n.trees_censoring = 50L,
+                    n.trees_outcome = 200L,
+                    n.trees_censoring = 200L,
                     n.burn = 0L,
                     n.samples = 1L,
                     n.thin = 1L,
@@ -243,24 +241,24 @@ tbart2c <- function(x.train,
                     tree_base_y = 0.95,
                     node.prior = dbarts:::normal,
                     resid.prior = dbarts:::chisq,
-                    proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
+                    proposal.probs = c(birth_death = 0.5, swap = 0, change = 0.5, birth = 0.5),
                     sigmadbarts = NA_real_,
                     print.opt = 100,
-                    eq_by_eq = TRUE,
                     # accelerate = FALSE,
                     cov_prior = "Ding",
-                    tau = 1/3,
+                    tau = 5,
                     mixprob = 0.5,
                     simultaneous_covmat = TRUE,
                     fast = TRUE,
-                    nu0 = 3,
+                    nu0 = 3, offsetz = FALSE,
                     quantsig = 0.9,
                     sparse = FALSE,
                     alpha_a_y = 0.5,
                     alpha_b_y = 1,
                     alpha_a_z = 0.5,
                     alpha_b_z = 1,
-                    alpha_split_prior = TRUE){
+                    alpha_split_prior = TRUE,
+                    tau_hyperprior = FALSE, alpha_tau = 1, beta_tau = 10){
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -310,41 +308,36 @@ tbart2c <- function(x.train,
 
 
 
-  ecdfs   <- list()
+  ecdfsx   <- list()
   for(i in 1:ncol(x.train)) {
-    ecdfs[[i]] <- ecdf(x.train[,i])
-    if(length(unique(x.train[,i])) == 1) ecdfs[[i]] <- identity
-    if(length(unique(x.train[,i])) == 2) ecdfs[[i]] <- make_01_norm(x.train[,i])
+    ecdfsx[[i]] <- ecdf(x.train[,i])
+    if(length(unique(x.train[,i])) == 1) ecdfsx[[i]] <- identity
+    if(length(unique(x.train[,i])) == 2) ecdfsx[[i]] <- make_01_norm(x.train[,i])
   }
   for(i in 1:ncol(x.train)) {
-    x.train[,i] <- ecdfs[[i]](x.train[,i])
-    x.test[,i] <- ecdfs[[i]](x.test[,i])
+    x.train[,i] <- ecdfsx[[i]](x.train[,i])
+    x.test[,i] <- ecdfsx[[i]](x.test[,i])
   }
 
-  rm(ecdfs)
+  rm(ecdfsx)
 
-  ecdfs   <- list()
+  ecdfsw   <- list()
   for(i in 1:ncol(w.train)) {
-    ecdfs[[i]] <- ecdf(w.train[,i])
-    if(length(unique(w.train[,i])) == 1) ecdfs[[i]] <- identity
-    if(length(unique(w.train[,i])) == 2) ecdfs[[i]] <- make_01_norm(w.train[,i])
+    ecdfsw[[i]] <- ecdf(w.train[,i])
+    if(length(unique(w.train[,i])) == 1) ecdfsw[[i]] <- identity
+    if(length(unique(w.train[,i])) == 2) ecdfsw[[i]] <- make_01_norm(w.train[,i])
   }
   for(i in 1:ncol(w.train)) {
-    w.train[,i] <- ecdfs[[i]](w.train[,i])
-    w.test[,i] <- ecdfs[[i]](w.test[,i])
+    w.train[,i] <- ecdfsw[[i]](w.train[,i])
+    w.test[,i] <- ecdfsw[[i]](w.test[,i])
   }
 
-  rm(ecdfs)
-
-
-
-
+  rm(ecdfsw)
 
   #create z vector
 
-
   #create ystar vector
-  ystar <- rep(mean(y[uncens_inds]), length(y))
+  ystar <- rep(NA, length(y))
   ystar[uncens_inds] <- y[uncens_inds]
 
 
@@ -382,27 +375,22 @@ tbart2c <- function(x.train,
   }
 
 
+  if(offsetz){
+    offsetz <- qnorm(n1/n)
+  }else{
+    offsetz <- 0 # qnorm(n1/n)
+  }
 
-
-
-  offsetz <- 0 # qnorm(n1/n)
 
   z <- rep(offsetz, length(y))
 
   # z[cens_inds] <- qnorm(0.001) #rtruncnorm(n0, a= -Inf, b = 0, mean = offsetz, sd = 1)
-  #
   # z[uncens_inds] <- qnorm(0.999) #rtruncnorm(n1, a= 0, b = Inf, mean = offsetz, sd = 1)
 
   z[cens_inds] <- rtruncnorm(n0, a= -Inf, b = 0, mean = offsetz, sd = 1)
   z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = offsetz, sd = 1)
 
-
-
   # z <- rnorm(n = length(y), mean = offsetz, sd =1)
-
-
-
-
 
   # if(is.null(S0)){
   #
@@ -478,10 +466,16 @@ tbart2c <- function(x.train,
       # print(correst)
       # print("correst = ")
       # print(correst)
+      gamma0 <- correst*sigest
+
     } else {
       sigest = sd(y[uncens_inds])
       correst <- 0
+      gamma0 <- 0
     }
+  }else{
+    correst <- 0
+    gamma0 <- 0
   }
 
   # if(is.null(nzero)){
@@ -496,7 +490,7 @@ tbart2c <- function(x.train,
   Sigma_mat <- cbind(c(1,0),c(0,sigest^2))
 
   #set initial gamma
-  gamma1 <- correst*sigest  #0#cov(ystar,z)
+  gamma1 <- 0 # correst*sigest  #0#cov(ystar,z)
 
   #set initial phi
   phi1 <- sigest^2 - gamma1^2
@@ -520,29 +514,85 @@ tbart2c <- function(x.train,
     # S0 <- 2*(sigest*sigest*qchi)/(nzero/2)
   # }
 
+
   # S0 <- (sigest^2)*(nzero-2)/(1+tau)
 
   S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+  # S0 <- 0.5*(sigest^2 - gamma0^2)*(nzero-2)/(2+tau)
 
-  gamma0 <- correst*sigest
+  print("S0 = ")
+  print(S0)
+
+  # # alternative: calibrate prior on phi as if gamma equals zero
+  # qchi = qchisq(1.0-quantsig,nzero)
+  # lambda = (sigest*sigest*qchi)/nzero #lambda parameter for sigma prior
+  # S0 <- nzero*lambda
+  # S0 <- 2*(sigest^2) * (nzero/2 - 1)
+
+  print("2* sigest*(n0/2 - 1) = ")
+  print(2* sigest*(n0/2 - 1))
+  print("(sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau) = ")
+  print((sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau))
+
+  print("sigest = ")
+  print(sigest)
+  print("sigest^2 = ")
+  print(sigest^2)
+
+  print("correst = ")
+  print(correst)
+
+  print("S0 = ")
+  print(S0)
+
+  print("(tempsd^2)*sigest^2 = ")
+  print((tempsd^2)*sigest^2)
+
+  print("(tempsd^2)*prior mean outcome variance = ")
+  print((tempsd^2)*S0*(1+tau)/(nzero-2) + gamma0^2)
 
 
+  print("prior mean outcome variance = ")
+  print(S0*(1+tau)/(nzero-2) + gamma0^2)
+
+  # S0 <- 2
+  # nzero <- 2
 
   if(cov_prior == "Ding"){
     gamma0 <- 0
-
-
-    # sigquant <- 0.9
+    sigquant <- 0.9
     qchi <- qchisq(1.0-quantsig,nu0-1)
     cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
     cding <- cdivnu*(nu0-1)
 
-    rhoinit <- 0
-    siginit <- sigest
+    print("cding old = ")
+    print(cding)
+
+
+    qig_noscale <- qgamma(p =  1- quantsig, shape = (nu0-1)/2, rate = 1/2)
+    cding <- sigest*sigest*qig_noscale
+    print("cding = ")
+    print(cding)
+
+    print("1/qgamma(p = 1- quantsig, shape = (nu0-1)/2, rate = cding/2) = ")
+    print(1/qgamma(p = 1- quantsig, shape = (nu0-1)/2, rate = cding/2))
+
+    print("sigest^2 = ")
+    print(sigest^2)
+    # rhoinit <- 0
+    # siginit <- sigest
+    Sigma_mat <- cbind(c(1,gamma1),c(gamma1,sigest^2))
 
   }
 
-
+  if(cov_prior == "Omori"){
+    # S0 <- (sigest^2 - G0*(1 + gamma0^2))*(nzero-2)
+    # can be negative if G0 not chosen appropriately
+    S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+    G0 <- tau*S0/(nzero-2) # tau*E[phi]
+    print("S0 = ")
+    print(S0)
+  }
 
 
 
@@ -579,19 +629,21 @@ tbart2c <- function(x.train,
     draw$ydraws_test <- array(NA, dim = c(ntest, n.iter))
   }
 
+  draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
+  draw$var_count_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
+  var_count_y <- rep(0, p_y)
+  var_count_z <- rep(0, p_z)
   if(sparse){
-    var_count_y <- rep(0, p_y)
-    var_count_z <- rep(0, p_z)
-
     draw$alpha_s_y_store <- rep(NA, n.iter)
     draw$alpha_s_z_store <- rep(NA, n.iter)
-    draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
-    draw$var_count_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
     draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
     draw$s_prob_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
-
   }
 
+
+  if(tau_hyperprior){
+    draw$tau_par <- rep(NA, n.iter)
+  }
 
   ########## Initialize dbarts #####################
 
@@ -626,7 +678,6 @@ tbart2c <- function(x.train,
 
   # print("begin dbarts")
 
-
   weightstemp <- rep(1,n)
 
   weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
@@ -641,8 +692,6 @@ tbart2c <- function(x.train,
   # print(length(uncens_inds))
 
   if(nrow(x.test ) == 0){
-
-
     xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
     sampler_y <- dbarts(y ~ .,
                         data = xdf_y,
@@ -650,13 +699,10 @@ tbart2c <- function(x.train,
                         control = control_y,
                         tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
-    )
-
+                        sigma = 1)
     # print("Line 425")
-
     xdf_z <- data.frame(y = z - offsetz, x = w.train)
 
     sampler_z <- dbarts(y ~ .,
@@ -666,13 +712,10 @@ tbart2c <- function(x.train,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = 1
-    )
-
+                        sigma = 1)
   }else{
-
     xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
     xdf_y_test <- data.frame(x = x.test)
 
@@ -682,10 +725,9 @@ tbart2c <- function(x.train,
                         control = control_y,
                         tree.prior = dbarts:::cgm(power = tree_power_y, base = tree_base_y,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
-    )
+                        sigma = 1)
 
     # print("Line 425")
 
@@ -701,7 +743,7 @@ tbart2c <- function(x.train,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1#sigmadbarts
     )
@@ -712,6 +754,7 @@ tbart2c <- function(x.train,
 
 
   # print("Line 473")
+  mutemp_y <- rep(mean(ystar[uncens_inds]), length(uncens_inds))
 
 
 
@@ -727,12 +770,15 @@ tbart2c <- function(x.train,
 
   #initialize sum-of-tree sampler
   z_resids <- z - offsetz #z_epsilon
-  z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - 0)*gamma1/(phi1 + gamma1^2)
+  z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
+  # z_resids[uncens_inds] <- z[uncens_inds] - offsetz - 0*gamma1/(phi1 + gamma1^2)
 
   sampler_z$setResponse(y = z_resids)
 
   sampler_z$setSigma(sigma = 1)
   sampler_z$setWeights(weights = weightstemp)
+
+  # sampler_z$model@node.scale <- 3
 
   if(sparse){
     tempmodel <- sampler_z$model
@@ -764,7 +810,7 @@ tbart2c <- function(x.train,
   # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
 
-  if(sparse){
+  # if(sparse){
     tempcounts <- fcount(sampler_z$getTrees()$var)
     # print("line 766. tempcounts = ")
     # print(tempcounts)
@@ -775,7 +821,7 @@ tbart2c <- function(x.train,
     var_count_z[tempcounts$x] <- tempcounts$N
     # print("line 773. var_count_z = ")
     # print(var_count_z)
-  }
+  # }
 
 
   # print("length(mutemp_test_z) = ")
@@ -790,9 +836,19 @@ tbart2c <- function(x.train,
   # print("nrow(xdf_z_test) = ")
   # print(nrow(xdf_z_test))
 
+  # adjust scale to reflect wider true variance of y
+  # sampler_y$model@node.scale <- 0.5*4*sigest/(max(ystar[uncens_inds]) - min(ystar[uncens_inds]))
+
+
   y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
   sampler_y$setResponse(y = y_resids)
-  sampler_y$setSigma(sigma = sqrt(phi1) )
+  # sampler_y$setSigma(sigma = sqrt(phi1) )
+
+  sampler_y$setSigma(sigma = 1)
+  sampler_y$setWeights(weights = rep(1/phi1, n1))
+
+
+
 
   # sampler_y$setSigma(sigma = sigest)
 
@@ -822,7 +878,7 @@ tbart2c <- function(x.train,
   mutemp_test_y <- samplestemp_y$test[,1]
 
 
-  if(sparse){
+  # if(sparse){
     tempcounts <- fcount(sampler_y$getTrees()$var)
     # print("line 815. tempcounts = ")
     # print(tempcounts)
@@ -833,7 +889,7 @@ tbart2c <- function(x.train,
     var_count_y[tempcounts$x] <- tempcounts$N
     # print("line 824. var_count_y = ")
     # print(var_count_y)
-  }
+  # }
 
 
 
@@ -921,6 +977,11 @@ tbart2c <- function(x.train,
   # }
 
 
+  y_epsilon <- rep(0, n)
+  y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
+
+  z_epsilon <- z - offsetz - mutemp_z
+
   #########  Begin Gibbs sampler ######################################################
 
   # pb <- progress_bar$new(total = n.iter+n.burnin)
@@ -930,17 +991,6 @@ tbart2c <- function(x.train,
 
   #loop through the Gibbs sampler iterations
   for(iter in 1:(n.iter+n.burnin)){
-
-
-    # if(eq_by_eq){
-    #   var_zdraw <- 1
-    #   # sig_ydraw <- phi1
-    #
-    # }else{
-    #   var_zdraw <- phi1/(gamma1^2+phi1)
-    #   # sig_ydraw <- phi1
-    #
-    # }
 
     temp_sd_z <- sqrt( phi1/(phi1+gamma1^2)   )
 
@@ -994,19 +1044,9 @@ tbart2c <- function(x.train,
     # print("z = ")
     # print(z)
 
-
     ####### draw sums of trees for z #######################################################
 
     #create residuals for z and set variance
-
-    # if(eq_by_eq){
-    #   z_resids <- z - offsetz #z_epsilon
-    #   sd_zdraw <- 1
-    # }else{
-    #   #not sure about this step for tobit2b
-    #   z_resids <- z - offsetz - y_epsilon*(gamma1/(phi1+gamma1^2))
-    #   sd_zdraw <- sqrt(phi1 / (phi1 + gamma1^2)  )
-    # }
 
     z_resids <- z - offsetz #z_epsilon
     z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
@@ -1017,7 +1057,6 @@ tbart2c <- function(x.train,
     sampler_z$setSigma(sigma = 1)
 
     weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
-
 
     # print("weightstemp = ")
     # print(weightstemp)
@@ -1048,19 +1087,21 @@ tbart2c <- function(x.train,
     samplestemp_z <- sampler_z$run()
 
     mutemp_z <- samplestemp_z$train[,1]
+    # mutemp_z <- sampler_z$predict(xdf_z)[,1]
+
     mutemp_test_z <- samplestemp_z$test[,1]
     # mutemp_test_z <- sampler_z$test[,1]#samplestemp_z$test[,1]
     # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
 
-    if(sparse){
-      tempcounts <- fcount(sampler_z$getTrees()$var)
-      # print("line 1041. tempcounts = ")
-      # print(tempcounts)
-      tempcounts <- tempcounts[tempcounts$x != -1, ]
-      var_count_z <- rep(0, p_z)
-      var_count_z[tempcounts$x] <- tempcounts$N
-    }
+    # if(sparse){
+    tempcounts <- fcount(sampler_z$getTrees()$var)
+    # print("line 1041. tempcounts = ")
+    # print(tempcounts)
+    tempcounts <- tempcounts[tempcounts$x != -1, ]
+    var_count_z <- rep(0, p_z)
+    var_count_z[tempcounts$x] <- tempcounts$N
+    # }
 
     # print("length(mutemp_test_z) = ")
     # print(length(mutemp_test_z))
@@ -1070,7 +1111,6 @@ tbart2c <- function(x.train,
 
     #update z_epsilon
     z_epsilon <- z - offsetz - mutemp_z
-
 
     ####### draw sums of trees for y #######################################################
 
@@ -1089,18 +1129,8 @@ tbart2c <- function(x.train,
     #
     # print(gamma1)
 
-
-    # if(eq_by_eq){
-    #   y_resids <- ystar[uncens_inds] - gamma1*z_epsilon[uncens_inds]
-    #   sd_ydraw <- sqrt(phi1)
-    # }else{
-    #   y_resids <- ystar[uncens_inds] - gamma1*z_epsilon[uncens_inds]
-    #   sd_ydraw <- sqrt(phi1)
-    # }
-
     y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
-    sd_ydraw <- sqrt(phi1)
-
+    # sd_ydraw <- sqrt(phi1)
 
     # print("y_resids = ")
     #
@@ -1109,7 +1139,9 @@ tbart2c <- function(x.train,
     #set the response for draws of z trees
     sampler_y$setResponse(y = y_resids)
     #set the standard deviation
-    sampler_y$setSigma(sigma = sd_ydraw)
+    # sampler_y$setSigma(sigma = sd_ydraw)
+    sampler_y$setSigma(sigma = 1)
+    sampler_y$setWeights(weights = rep(1/phi1, n1))
 
     if(sparse){
       tempmodel <- sampler_y$model
@@ -1123,54 +1155,80 @@ tbart2c <- function(x.train,
     samplestemp_y <- sampler_y$run()
 
     mutemp_y <- samplestemp_y$train[,1]
+    # mutemp_y <- sampler_y$predict(xdf_y)[,1]
+
     mutemp_test_y <- samplestemp_y$test[,1]
 
-    if(sparse){
-      tempcounts <- fcount(sampler_y$getTrees()$var)
-      # print("line 1107. tempcounts = ")
-      # print(tempcounts)
-      tempcounts <- tempcounts[tempcounts$x != -1, ]
-      var_count_y <- rep(0, p_y)
-      var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # if(sparse){
+    tempcounts <- fcount(sampler_y$getTrees()$var)
+    # print("line 1107. tempcounts = ")
+    # print(tempcounts)
+    tempcounts <- tempcounts[tempcounts$x != -1, ]
+    var_count_y <- rep(0, p_y)
+    var_count_y[tempcounts$x] <- tempcounts$N
+    # }
 
     #update z_epsilon
     y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
+
+
+
 
 
     ############# Covariance matrix samples ##########################
 
 
     if(cov_prior == "Ding"){
-      rho1 <- gamma1/sqrt(Sigma_mat[2,2])
+      rho1 <- gamma1/sqrt(phi1 + (gamma1^2) )  #sqrt(Sigma_mat[2,2])
 
       sigz2 <- 1/rgamma(n = 1,
                         shape = nu0/2,
-                        rate = cding/(2*(1- (rho1^2))))
-
+                        rate = cding/(2*(1- (rho1^2))) )
 
       z_epsilon2 <- sqrt(sigz2)*(z - offsetz - mutemp_z)
 
-      zsquares <- crossprod(z_epsilon2[uncens_inds], z_epsilon2[uncens_inds])[1]
-      ysquares <- crossprod(y_epsilon[uncens_inds], y_epsilon[uncens_inds])[1]
+      zsquares <- crossprod(z_epsilon2[uncens_inds])[1] # crossprod(z_epsilon2[uncens_inds], z_epsilon2[uncens_inds])[1]
+      ysquares <- crossprod(y_epsilon[uncens_inds])[1] # crossprod(y_epsilon[uncens_inds], y_epsilon[uncens_inds])[1]
       zycross <- crossprod(z_epsilon2[uncens_inds], y_epsilon[uncens_inds])[1]
 
-      Stemp <- cbind(c(ysquares,zycross),
+      Stemp <- cbind(c(ysquares, zycross),
                      c(zycross, zsquares))
 
 
+      # Cmat <- cbind(c(cding,0),c(0,1))
+
       tempsigma <- rinvwishart(nu = n1 + nu0,
                                S = Stemp+cding*diag(2))
-
+      # tempsigma <- rinvwishart(nu = n1 + nu0,
+      #                          S = Stemp+Cmat)
 
       transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
       tempomega <- (transmat %*% tempsigma) %*% transmat
 
       temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
-      gamma1 <- tempomega[1,2]
-      phi1 <- tempomega[1,1] - (gamma1^2)
-
+      # if(tempomega[1,1] != tempsigma[1,1]){
+      #     print("tempomega[1,1] = ")
+      #     print(tempomega[1,1])
+      #     print("tempsigma[1,1] = ")
+      #     print(tempsigma[1,1])
+      # }
+      # if(temprho < -0.3){
+      #   print("n1 + nu0 = ")
+      #   print(n1 + nu0)
+      #   print("cding = ")
+      #   print(cding)
+      #   print("temprho = ")
+      #   print(temprho)
+      #   print("sigz2 = ")
+      #   print(sigz2)
+      #   print("Stemp = ")
+      #   print(Stemp)
+      # }
+      # if(iter > n.burnin/2){
+        gamma1 <- tempomega[1,2]
+        phi1 <- tempomega[1,1] - (gamma1^2)
+      # }
 
       # if(tempomega[2,2] != 1){
       #   print("tempomega[2,2] = ")
@@ -1236,8 +1294,32 @@ tbart2c <- function(x.train,
         G1 <- (1/G1inv)#[1,1]
 
         # gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
-        gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1]   ))
+        gamma_one <- (G1*( (1/G0draw)*gamma0 +
+                             (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1]   ))
+
+        if(cov_prior == "VH"){
+          gamma_one <- ((gamma0/tau) + crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1] )/
+            ((1/tau) + crossprod(z_epsilon[uncens_inds])[1])
+          G1 <- phi1/((1/tau) + crossprod(z_epsilon[uncens_inds])[1])
+        }
         # gamma_one <- (G1*( (1/tau)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
+
+        # if(gamma_one < -0.3){
+        #   print("gamma_one < -0.3")
+        #   print("gamma_one = ")
+        #   print(gamma_one)
+        #
+        #   print("gamma0/tau = ")
+        #   print(gamma0/tau)
+        #   print("crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1] = ")
+        #   print(crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1])
+        # }
+
+        # if(sqrt(G1)<0.05){
+        #   print("G1 = ")
+        #   print(G1)
+        #   print("small G1")
+        # }
 
         # print("phi1 = ")
         # print(phi1)
@@ -1262,11 +1344,11 @@ tbart2c <- function(x.train,
         # print("G1 = ")
         # print(G1)
 
-        gamma1 <- rnorm(n = 1, mean = gamma_one, sd =  sqrt(G1) )
-
+        if(iter > n.burnin/2){
+          gamma1 <- rnorm(n = 1, mean = gamma_one, sd =  sqrt(G1) )
+        }
         # print("gamma1 = ")
         # print(gamma1)
-
 
         #########  set parameters for phi draw  ######################################################
 
@@ -1289,7 +1371,7 @@ tbart2c <- function(x.train,
 
         if(cov_prior == "VH"){
           # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
-          S1 <- S0 + (gamma1^2)/tau +
+          S1 <- S0 + ((gamma1- gamma0)^2)/tau +
             crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] # + crossprod(y_epsilon)
         }else{
           if(cov_prior == "Omori"){
@@ -1299,7 +1381,7 @@ tbart2c <- function(x.train,
             mixind <- rbinom(n = 1,size = 1,prob = mixprob)
             if(mixind == 1){
               # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
-              S1 <- S0 + (gamma1^2)/tau +
+              S1 <- S0 + ((gamma1- gamma0)^2)/tau +
                 crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] # + crossprod(y_epsilon)
             }else{
               S1 <- S0 + #+ (gamma1^2)/G0 +
@@ -1316,8 +1398,22 @@ tbart2c <- function(x.train,
         # print("Line 883 phi1 = ")
         # print(phi1)
 
+        if(is.na(S1)){
+          print("S1 = ")
+          print(S1)
+          print("S0 = ")
+          print(S0)
+          print("gamma1 = ")
+          print(gamma1)
+          print("crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] = ")
+          print(crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1])
+
+          stop("is.na(S1)")
+        }
+
         # draw from inverse gamma
-        phi1 <- 1/rgamma(n = 1, shape =  n_one/2, rate = S1/2)
+        # phi1 <- 1/rgamma(n = 1, shape =  n_one/2, rate = S1/2)
+        phi1 <- 1/rgamma(n = 1, n_one/2, S1/2)
 
 
         # print("Line 890 phi1 = ")
@@ -1340,6 +1436,12 @@ tbart2c <- function(x.train,
     Sigma_mat <- cbind(c(1,gamma1),c(gamma1,phi1+gamma1^2))
     Sigma_orig_scale <- cbind(c(1,tempsd*gamma1),c(tempsd*gamma1,  (tempsd^2)*(phi1+gamma1^2)) )
 
+
+    ########## tau draws ############
+
+    if(tau_hyperprior){
+      tau <- 1/rgamma(n = 1,shape = alpha_tau + 1/2, rate = beta_tau + (1/(2*phi1))*(gamma1 - gamma0)^2)
+    }
 
     ###### Accelerated sampler  ###############################
 
@@ -1494,12 +1596,10 @@ tbart2c <- function(x.train,
         zytest <- Rfast::rmvnorm(n = ntest,
                                  mu = c(0, 0),
                                  sigma = Sigma_mat)
-
       }else{
         zytest <- mvrnorm(n = ntest,
                           mu = c(0, 0),
                           Sigma = Sigma_mat)
-
       }
 
 
@@ -1550,6 +1650,9 @@ tbart2c <- function(x.train,
         IMR_test <- exp( dnorm(temp_ztest,log=T) - pnorm(temp_ztest,log.p = T) )
       # }
 
+      if(cor(IMR_train,mutemp_y)> 0.9){
+        stop("Highly correlated f_y and IMR")
+      }
 
       condexptrain <- mutemp_y + gamma1*IMR_train
       condexptest <- mutemp_test_y + gamma1*IMR_test
@@ -1599,17 +1702,18 @@ tbart2c <- function(x.train,
         draw$ydraws_test[, iter_min_burnin] <- ifelse(zytest[,1] < 0, censored_value, zytest[,2] )*tempsd+tempmean
       }
 
-
+      draw$var_count_y_store[iter_min_burnin,] <- var_count_y
+      draw$var_count_z_store[iter_min_burnin,] <- var_count_z
       if(sparse){
         draw$alpha_s_y_store[iter_min_burnin] <- alpha_s_y
         draw$alpha_s_z_store[iter_min_burnin] <- alpha_s_z
-        draw$var_count_y_store[iter_min_burnin,] <- var_count_y
-        draw$var_count_z_store[iter_min_burnin,] <- var_count_z
         draw$s_prob_y_store[iter_min_burnin,] <- s_y
         draw$s_prob_z_store[iter_min_burnin,] <- s_z
-
       }
 
+      if(tau_hyperprior){
+        draw$tau_par[iter_min_burnin] <- tau
+      }
 
 
     } # end if iter > burnin

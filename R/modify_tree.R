@@ -516,7 +516,7 @@ prune_tree = function(X, y, curr_tree) {
 
   if(nrow(new_tree$tree_matrix) == 1) { # No point in pruning a stump!
     new_tree$var = 0
-    # new_tree$pruned_parent <-  -1
+    new_tree$pruned_parent <-  -1
 
     return(new_tree)
   }
@@ -598,7 +598,7 @@ prune_tree = function(X, y, curr_tree) {
   if(nrow(new_tree$tree_matrix) == 1) {
     new_tree$var = var_pruned_nodes
     new_tree$node_indices = rep(1, length(y))
-    # new_tree$pruned_parent <-  parent_pick
+    new_tree$pruned_parent <-  parent_pick
   } else {
     # If we've removed some nodes from the middle we need to re-number all the child_left and child_right values - the parent values will still be correct
     if(node_to_prune <= nrow(new_tree$tree_matrix)) { # Only need do this if we've removed some observations from the middle of the tree matrix
@@ -634,7 +634,7 @@ prune_tree = function(X, y, curr_tree) {
 
     # Store the covariate name that was used in the splitting rule of the terminal nodes that were just pruned
     new_tree$var = var_pruned_nodes
-    # new_tree$pruned_parent <-  parent_pick
+    new_tree$pruned_parent <-  parent_pick
 
   }
 

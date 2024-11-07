@@ -49,6 +49,22 @@ fill_tree_details = function(curr_tree, X) {
     } # End of loop through table
   }
 
+
+
+  # node_indices2 = rep(1, nrow(X))
+  # leaf_found <- rep(FALSE,nrow(X))
+  # for(i in 1:nrow(tree_matrix)) {
+  #   split_var = as.numeric(tree_matrix[i,'split_variable'])
+  #   split_val = as.numeric(tree_matrix[i, 'split_value'])
+  #
+  #   leaf_found <- (leaf_found | rep(tree_matrix[i, 'terminal'], nrow(X)))
+  #
+  #   child_indices <- 2*node_indices2 + 1*(X[,split_var] > split_val)
+  #   node_indices2 <- ifelse(leaf_found, node_indices2, child_indices)
+  # }
+  #
+
+
   return(list(tree_matrix = new_tree_matrix,
               node_indices = node_indices))
 
@@ -194,7 +210,8 @@ get_number_distinct_cov <- function(tree){
 
 sample_move = function(curr_tree, i, nburn, trans_prob){
 
-  if (nrow(curr_tree$tree_matrix) == 1 || i < max(floor(0.1*nburn), 10)) {
+  if (nrow(curr_tree$tree_matrix) == 1 ||
+      i < max(floor(0.1*nburn), 10)) {
     type = 'grow'
   } else {
     type = sample(c('grow', 'prune', 'change'),  1, prob = trans_prob)

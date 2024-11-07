@@ -94,33 +94,33 @@
 #'
 #' #consider increasing the number of covariates
 #'
-#' Xmat_train <- matrix(NA,nrow = num_train,
+#' xmat_train <- matrix(NA,nrow = num_train,
 #'                      ncol = 8)
 #'
-#' Xmat_train[,1] <- runif(num_train, min = -1, max = 1)
-#' Xmat_train[,2] <- rf(num_train,20,20)
-#' Xmat_train[,3] <- rbinom(num_train, size = 1, prob = 0.75)
-#' Xmat_train[,4] <- rnorm(num_train, mean = 1, sd = 1)
-#' Xmat_train[,5] <- rnorm(num_train)
-#' Xmat_train[,6] <- rbinom(num_train, size = 1, prob = 0.5)
-#' Xmat_train[,7] <- rf(num_train,20,200)
-#' Xmat_train[,8] <- runif(num_train, min = 0, max = 2)
+#' xmat_train[,1] <- runif(num_train, min = -1, max = 1)
+#' xmat_train[,2] <- rf(num_train,20,20)
+#' xmat_train[,3] <- rbinom(num_train, size = 1, prob = 0.75)
+#' xmat_train[,4] <- rnorm(num_train, mean = 1, sd = 1)
+#' xmat_train[,5] <- rnorm(num_train)
+#' xmat_train[,6] <- rbinom(num_train, size = 1, prob = 0.5)
+#' xmat_train[,7] <- rf(num_train,20,200)
+#' xmat_train[,8] <- runif(num_train, min = 0, max = 2)
 #'
 #' #it would be better to test performance of the models when there is correlation in the error terms.
 #' varepsilon1_train <- rnorm(num_train, mean = 0, sd = sqrt(0.00025))
 #' varepsilon2_train <- rnorm(num_train, mean = 0, sd = sqrt(0.00025))
 #'
-#' y1star_train <- 1 - 0.75*Xmat_train[,1] + 0.75*Xmat_train[,2] -
-#'   0.5*Xmat_train[,4] -  0.5*Xmat_train[,6] - 0.25*Xmat_train[,1]^2 -
-#'   0.75*Xmat_train[,1]*Xmat_train[,4] - 0.25*Xmat_train[,1]*Xmat_train[,2] -
-#'   1*Xmat_train[,1]*Xmat_train[,6] + 0.5*Xmat_train[,2]*Xmat_train[,6] +
+#' y1star_train <- 1 - 0.75*xmat_train[,1] + 0.75*xmat_train[,2] -
+#'   0.5*xmat_train[,4] -  0.5*xmat_train[,6] - 0.25*xmat_train[,1]^2 -
+#'   0.75*xmat_train[,1]*xmat_train[,4] - 0.25*xmat_train[,1]*xmat_train[,2] -
+#'   1*xmat_train[,1]*xmat_train[,6] + 0.5*xmat_train[,2]*xmat_train[,6] +
 #'   varepsilon1_train
 #'
-#' y2star_train <- 1 + 0.25*Xmat_train[,4] - 0.75*Xmat_train[,6] +
-#'   0.5*Xmat_train[,7] + 0.25*Xmat_train[,8] +
-#'   0.25*Xmat_train[,4]^2 + 0.75*Xmat_train[,7]^2 + 0.5*Xmat_train[,8]^2 -
-#'   1*Xmat_train[,4]*Xmat_train[,6] + 0.5*Xmat_train[,4]*Xmat_train[,8] +
-#'   1*Xmat_train[,6]*Xmat_train[,7] - 0.25*Xmat_train[,7]*Xmat_train[,8] +
+#' y2star_train <- 1 + 0.25*xmat_train[,4] - 0.75*xmat_train[,6] +
+#'   0.5*xmat_train[,7] + 0.25*xmat_train[,8] +
+#'   0.25*xmat_train[,4]^2 + 0.75*xmat_train[,7]^2 + 0.5*xmat_train[,8]^2 -
+#'   1*xmat_train[,4]*xmat_train[,6] + 0.5*xmat_train[,4]*xmat_train[,8] +
+#'   1*xmat_train[,6]*xmat_train[,7] - 0.25*xmat_train[,7]*xmat_train[,8] +
 #'   varepsilon2_train
 #'
 #' y2obs_train <- ifelse(y1star_train>0, y2star_train,0)
@@ -164,9 +164,9 @@
 #'
 #' y2response_test <- ifelse(y1star_test>0, 1,0)
 #'
-#' tbartII_example <- tbart2c(Xmat_train,
+#' tbartII_example <- tbart2c(xmat_train,
 #'                            Xmat_test,
-#'                            Xmat_train,
+#'                            xmat_train,
 #'                            Xmat_test,
 #'                            y2obs_train,
 #'                            n.iter=5000,
@@ -226,7 +226,7 @@ tbart2marg <- function(x.train,
                     beta_y = 2,
                     node.prior = dbarts:::normal,
                     resid.prior = dbarts:::chisq,
-                    proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
+                    proposal.probs = c(birth_death = 0.5, swap = 0, change = 0.5, birth = 0.5),
                     sigmadbarts = NA_real_,
                     print.opt = 100,
                     eq_by_eq = TRUE,
@@ -236,7 +236,7 @@ tbart2marg <- function(x.train,
                     mixprob = 0.5,
                     simultaneous_covmat = TRUE,
                     fast = TRUE,
-                    nu0 = 3,
+                    nu0 = 3, offsetz = FALSE,
                     quantsig = 0.9,
                     sparse = FALSE,
                     alpha_a_y = 0.5,
@@ -248,9 +248,22 @@ tbart2marg <- function(x.train,
                     node_min_size = 5,
                     centre_y = TRUE,
                     splitting_rules = "discrete",
-                    marginalize = FALSE){
+                    marginalize = FALSE,
+                    one_chol = FALSE,
+                    tau_hyperprior = TRUE, alpha_tau = 1, beta_tau = 10, jointgammanodes = FALSE, linearterms = FALSE, jointbetagamma = FALSE){
 
 
+  # if(jointbetagamma & jointbetagamma){
+  #   stop("Can't have both jointbetagamma & jointbetagamma ")
+  # }
+
+  if((marginalize == FALSE) & (jointgammanodes == TRUE)){
+    stop("Currently cannot jointly sample gamma with terminal node parameters without marginalizing out these parameter in outcome tree draws")
+  }
+
+  # if((marginalize == FALSE) & (linearterms == TRUE)){
+  #   stop("Currently code only written for marginalized model with linear terms. Use tbart2pluslinear for non-marginalized linear function plus trees.")
+  # }
 
   if(!(splitting_rules %in% c("discrete", "continuous"))){
     stop("splitting_rules must be 'discrete' or 'continuous'.")
@@ -327,31 +340,31 @@ tbart2marg <- function(x.train,
 
 
 
-  ecdfs   <- list()
+  ecdfsx   <- list()
   for(i in 1:ncol(x.train)) {
-    ecdfs[[i]] <- ecdf(x.train[,i])
-    if(length(unique(x.train[,i])) == 1) ecdfs[[i]] <- identity
-    if(length(unique(x.train[,i])) == 2) ecdfs[[i]] <- make_01_norm(x.train[,i])
+    ecdfsx[[i]] <- ecdf(x.train[,i])
+    if(length(unique(x.train[,i])) == 1) ecdfsx[[i]] <- identity
+    if(length(unique(x.train[,i])) == 2) ecdfsx[[i]] <- make_01_norm(x.train[,i])
   }
   for(i in 1:ncol(x.train)) {
-    x.train[,i] <- ecdfs[[i]](x.train[,i])
-    x.test[,i] <- ecdfs[[i]](x.test[,i])
+    x.train[,i] <- ecdfsx[[i]](x.train[,i])
+    x.test[,i] <- ecdfsx[[i]](x.test[,i])
   }
 
-  rm(ecdfs)
+  rm(ecdfsx)
 
-  ecdfs   <- list()
+  ecdfsw   <- list()
   for(i in 1:ncol(w.train)) {
-    ecdfs[[i]] <- ecdf(w.train[,i])
-    if(length(unique(w.train[,i])) == 1) ecdfs[[i]] <- identity
-    if(length(unique(w.train[,i])) == 2) ecdfs[[i]] <- make_01_norm(w.train[,i])
+    ecdfsw[[i]] <- ecdf(w.train[,i])
+    if(length(unique(w.train[,i])) == 1) ecdfsw[[i]] <- identity
+    if(length(unique(w.train[,i])) == 2) ecdfsw[[i]] <- make_01_norm(w.train[,i])
   }
   for(i in 1:ncol(w.train)) {
-    w.train[,i] <- ecdfs[[i]](w.train[,i])
-    w.test[,i] <- ecdfs[[i]](w.test[,i])
+    w.train[,i] <- ecdfsw[[i]](w.train[,i])
+    w.test[,i] <- ecdfsw[[i]](w.test[,i])
   }
 
-  rm(ecdfs)
+  rm(ecdfsw)
 
 
 
@@ -370,8 +383,8 @@ tbart2marg <- function(x.train,
   }
 
   # Other variables
-  sigma2 <- 1                          # !!!!!!!!!!!!!!
-  mu_mu <- 0 # (y_min + y_max) / (2 * m)
+  # sigma2 <- 1                          # !!!!!!!!!!!!!!
+  # mu_mu <- 0 # (y_min + y_max) / (2 * m)
 
   y_scale <- y - (y_max + y_min)/2
   # tau=(max(y.train)-min(y.train))/(2*k*sqrt(ntree))
@@ -403,9 +416,29 @@ tbart2marg <- function(x.train,
 
   p_y <- ncol(x.train)
   p_z <- ncol(w.train)
+  s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
+  s_z <- rep(1 / p_z, p_z) # probability vector to be used during the growing process for DART feature weighting
+
+
+  if(linearterms){
+    xmat_train <- cbind(1, x.train[uncens_inds, ,drop = FALSE])
+    wmat_train <- cbind(1, w.train)
+    xmat_test <- cbind(1, x.test)
+    wmat_test <- cbind(1, w.test)
+    Amean_p <- rep(0, p_z + 1)
+    Bmean_p <- rep(0, p_y + 1)
+
+    Avar_p <- 10*diag(p_z + 1)
+    Bvar_p <- 10*diag(p_y + 1)
+    invAvar_p <- diag(p_z + 1)/10
+    invBvar_p <- diag(p_y + 1)/10
+
+    alpha_vec <- rep(0, p_z+1)
+    beta_vec <- rep(0, p_y+1)
+  }
+
 
   if(sparse){
-    s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
     rho_y <- p_y # For DART
 
     if(alpha_split_prior){
@@ -416,7 +449,6 @@ tbart2marg <- function(x.train,
     alpha_scale_y <- p_y
 
 
-    s_z <- rep(1 / p_z, p_z) # probability vector to be used during the growing process for DART feature weighting
     rho_z <- p_z # For DART
 
     if(alpha_split_prior){
@@ -429,14 +461,18 @@ tbart2marg <- function(x.train,
   }
 
 
-  tree_fits_store_z = matrix(0, ncol = n.trees_censoring, nrow = n)
-  tree_fits_store_y = matrix(0, ncol = n.trees_outcome, nrow = n1)
+  if(!marginalize){
+    tree_fits_store_z = matrix(0, ncol = n.trees_censoring, nrow = n)
+    tree_fits_store_y = matrix(0, ncol = n.trees_outcome, nrow = n1)
+  }
 
 
 
-
-  offsetz <- 0 # qnorm(n1/n)
-
+  if(offsetz){
+    offsetz <- qnorm(n1/n)
+  }else{
+    offsetz <- 0 # qnorm(n1/n)
+  }
   z <- rep(offsetz, length(y))
 
   # z[cens_inds] <- qnorm(0.001) #rtruncnorm(n0, a= -Inf, b = 0, mean = offsetz, sd = 1)
@@ -482,12 +518,12 @@ tbart2marg <- function(x.train,
       # lmf = lm(y~.,df)
       # sigest = summary(lmf)$sigma
       if(is.na(censored_value)){
-        dtemp <-  1*(!(is.na(y)))
+        dtemp <-  1*(!(is.na(y_scale)))
       }else{
-        dtemp <-  1*(y != censored_value)
+        dtemp <-  1*(y_scale != censored_value)
       }
 
-      df = data.frame(x = cbind(x.train,w.train), y = y, d = dtemp )
+      df = data.frame(x = cbind(x.train,w.train), y = y_scale, d = dtemp )
 
       # print("x.train = ")
       # print(x.train)
@@ -526,10 +562,16 @@ tbart2marg <- function(x.train,
       # print(correst)
       # print("correst = ")
       # print(correst)
+      gamma0 <- correst*sigest
+
     } else {
-      sigest = sd(y[uncens_inds])
+      sigest = sd(y_scale[uncens_inds])
       correst <- 0
+      gamma0 <- 0
     }
+  }else{
+    correst <- 0
+    gamma0 <- 0
   }
 
   # if(is.null(nzero)){
@@ -544,10 +586,11 @@ tbart2marg <- function(x.train,
   Sigma_mat <- cbind(c(1,0),c(0,sigest^2))
 
   #set initial gamma
-  gamma1 <- correst*sigest  #0#cov(ystar,z)
-
+  gamma1 <- 0 # correst*sigest  #0#cov(ystar,z)
+  # gamma1 <- 0
   #set initial phi
   phi1 <- sigest^2 - gamma1^2
+
 
   # print("phi1 = ")
   # print(phi1)
@@ -567,31 +610,92 @@ tbart2marg <- function(x.train,
   # S0 <- 2*(sigest*sigest*qchi)/(nzero/2)
   # }
 
+
   # S0 <- (sigest^2)*(nzero-2)/(1+tau)
 
   S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+  # S0 <- 0.5*(sigest^2 - gamma0^2)*(nzero-2)/(2+tau)
 
-  gamma0 <- correst*sigest
+  print("S0 = ")
+  print(S0)
+
+  # # alternative: calibrate prior on phi as if gamma equals zero
+  # qchi = qchisq(1.0-quantsig,nzero)
+  # lambda = (sigest*sigest*qchi)/nzero #lambda parameter for sigma prior
+  # S0 <- nzero*lambda
+  # S0 <- 2*(sigest^2) * (nzero/2 - 1)
+
+  print("2* sigest*(n0/2 - 1) = ")
+  print(2* sigest*(n0/2 - 1))
+  print("(sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau) = ")
+  print((sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau))
+
+  print("sigest = ")
+  print(sigest)
+  print("sigest^2 = ")
+  print(sigest^2)
+
+  print("correst = ")
+  print(correst)
+
+  print("S0 = ")
+  print(S0)
+
+  print("(tempsd^2)*sigest^2 = ")
+  print((tempsd^2)*sigest^2)
+
+  print("(tempsd^2)*prior mean outcome variance = ")
+  print((tempsd^2)*S0*(1+tau)/(nzero-2) + gamma0^2)
 
 
+  print("prior mean outcome variance = ")
+  print(S0*(1+tau)/(nzero-2) + gamma0^2)
+
+  # S0 <- 2
+  # nzero <- 2
 
   if(cov_prior == "Ding"){
     gamma0 <- 0
-
-    # sigquant <- 0.9
+    sigquant <- 0.9
     qchi <- qchisq(1.0-quantsig,nu0-1)
     cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
     cding <- cdivnu*(nu0-1)
 
-    rhoinit <- 0
-    siginit <- sigest
+    print("cding old = ")
+    print(cding)
+
+
+    qig_noscale <- qgamma(p =  1- quantsig, shape = (nu0-1)/2, rate = 1/2)
+    cding <- sigest*sigest*qig_noscale
+    print("cding = ")
+    print(cding)
+
+    print("1/qgamma(p = 1- quantsig, shape = (nu0-1)/2, rate = cding/2) = ")
+    print(1/qgamma(p = 1- quantsig, shape = (nu0-1)/2, rate = cding/2))
+
+    print("sigest^2 = ")
+    print(sigest^2)
+    # rhoinit <- 0
+    # siginit <- sigest
+    Sigma_mat <- cbind(c(1,gamma1),c(gamma1,sigest^2))
 
   }
 
+  if(cov_prior == "Omori"){
+    # S0 <- (sigest^2 - G0*(1 + gamma0^2))*(nzero-2)
+    # can be negative if G0 not chosen appropriately
+    S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+    G0 <- tau*S0/(nzero-2) # tau*E[phi]
+    print("S0 = ")
+    print(S0)
+  }
+  print("gamma0 = ")
+  print(gamma0)
 
+  print("tempsd*gamma0 = ")
+  print(tempsd*gamma0)
 
-
-
+  # gamma0 <- 0
 
 
   draw = list(
@@ -625,14 +729,14 @@ tbart2marg <- function(x.train,
     draw$ydraws_test <- array(NA, dim = c(ntest, n.iter))
   }
 
+  draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
+  draw$var_count_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
+  var_count_y <- rep(0, p_y)
+  var_count_z <- rep(0, p_z)
   if(sparse){
-    var_count_y <- rep(0, p_y)
-    var_count_z <- rep(0, p_z)
 
     draw$alpha_s_y_store <- rep(NA, n.iter)
     draw$alpha_s_z_store <- rep(NA, n.iter)
-    draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
-    draw$var_count_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
     draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
     draw$s_prob_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
 
@@ -754,14 +858,7 @@ tbart2marg <- function(x.train,
   #
   # }
 
-
-
-
   # print("Line 473")
-
-
-
-
 
   preds.train_ystar <- matrix(NA, n, 1)
   preds.train_z <- matrix(NA, n, 1)
@@ -769,11 +866,101 @@ tbart2marg <- function(x.train,
   preds.test_ystar <- matrix(NA, ntest, 1)
   preds.test_z <- matrix(NA, ntest, 1)
 
+  mutemp_y <- rep(mean(ystar[uncens_inds]), length(uncens_inds))
 
+  mutemp_y_trees <- rep(0, length(uncens_inds))
+  mutemp_z_trees <- rep(0, n)
+  mutemp_y_lin <- rep(0, length(uncens_inds))
+  mutemp_z_lin <- rep(0, n)
+  mutemp_test_y_trees <- rep(0, ntest)
+  mutemp_test_z_trees <- rep(0, ntest)
+
+  if(linearterms){
+    alpha_var <- solve(solve(Avar_p) +
+                         crossprod(wmat_train[cens_inds,, drop = FALSE]) +
+                         ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]))
+
+    # print("line 795 = ")
+
+    alpha0hat <- solve(crossprod(wmat_train[cens_inds,, drop = FALSE])) %*% crossprod(wmat_train[cens_inds,, drop = FALSE], z[cens_inds] - offsetz)
+    # print("line 798 = ")
+    alpha1hat <- solve(crossprod(wmat_train[uncens_inds,, drop = FALSE])) %*% crossprod(wmat_train[uncens_inds,, drop = FALSE],
+                                                                                        z[uncens_inds] - offsetz -
+                                                                                          (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2))
+    # print("line 800 = ")
+
+    alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
+                                   crossprod(wmat_train[cens_inds,]) %*%  alpha0hat+
+                                   ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]) %*% alpha1hat  )
+
+
+    alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
+    # print("line 808 = ")
+
+    mutemp_z_lin <- wmat_train %*% alpha_vec
+    mutemp_test_z_lin <- wmat_test %*% alpha_vec
+    z_epsilon <- z - offsetz - mutemp_z_lin
+
+
+    mutemp_z <- mutemp_z_lin
+    if(any(is.na(z_epsilon))){
+      stop("801 any(is.na(z_epsilon))")
+    }
+    if(any(is.na(mutemp_z_lin))){
+      stop("804 any(is.na(mutemp_z_lin))")
+    }
+
+    if(jointbetagamma){
+      # print("line 815 = ")
+      y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z_lin[uncens_inds])
+      Xresmat <- cbind(xmat_train ,z[uncens_inds] - offsetz - mutemp_z_lin[uncens_inds] )
+
+      gamma0res <- c(Bmean_p,gamma0)
+      G0res <- rbind(cbind(Bvar_p, rep(0, nrow(Bvar_p))),
+                     t(c(rep(0,ncol(Bvar_p)),  tau*phi1)))
+
+      Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
+      ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds])
+      g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+
+      # sample beta vector and gamma simulataneously
+      betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
+
+      gamma1 <- betagamma_vec[length(betagamma_vec)]
+      beta_vec <- betagamma_vec[- length(betagamma_vec)]
+      mutemp_y_lin <- xmat_train %*% beta_vec
+      mutemp_test_y_lin <- xmat_test %*% beta_vec
+
+    }else{
+
+      # # sample as SUR as outlined by VH? requires data augmentation of y.
+      # D0_mat <- rbind(cbind(Avar_p, matrix(0,nrow = nrow(Avar_p), ncol = ncol(Bvar_p))),
+      #                 cbind( matrix(0,nrow = nrow(Bvar_p), ncol = ncol(Avar_p)), Bvar_p))
+
+      # instead sample alpha and beta separately
+
+      y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z_lin[uncens_inds])
+
+      # print("line 849 = ")
+
+      Xuncensmat <- xmat_train
+
+      Bvar <- solve(solve(Bvar_p) + (1/phi1)*crossprod(Xuncensmat)  )
+      Bhat <- solve((1/phi1)*crossprod(Xuncensmat))%*% ((1/phi1)*crossprod(Xuncensmat,  y_resids) )
+      B_bar <- Bvar %*% (solve(Bvar_p)%*%Bmean_p + (1/phi1)*crossprod(Xuncensmat)%*% Bhat)
+
+      # sample beta vector and gamma simulataneously
+      beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
+
+      mutemp_y_lin <- xmat_train %*% beta_vec
+      mutemp_test_y_lin <- xmat_test %*% beta_vec
+    }
+    mutemp_y <- mutemp_y_lin
+  }
 
   #initialize sum-of-tree sampler
   z_resids <- z - offsetz #z_epsilon
-  z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - 0)*gamma1/(phi1 + gamma1^2)
+  z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
 
   # sampler_z$setResponse(y = z_resids)
   #
@@ -787,7 +974,6 @@ tbart2marg <- function(x.train,
   # }
 
   # print("Line 509")
-
 
   # sampler_z$sampleTreesFromPrior()
   #
@@ -809,7 +995,8 @@ tbart2marg <- function(x.train,
   # maybe (max(as.vector(Z.mat))-min(as.vector(Z.mat)))
   # can be replaced by something else
   # sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees_censoring))^2)
-  sigma2_mu_z <- ((max(z_resids)-min(z_resids))/(2 * k_z * sqrt(n.trees_censoring)))^2
+  # sigma2_mu_z <- ((max(z_resids)-min(z_resids))/(2 * k_z * sqrt(n.trees_censoring)))^2
+  sigma2_mu_z <- 9/( k_z * sqrt(n.trees_censoring))^2
 
   if(is.na(sigma2_mu_z )){
 
@@ -822,11 +1009,8 @@ tbart2marg <- function(x.train,
     print("gamma1 = ")
     print(gamma1)
 
-
     print("gamma1 = ")
     print(gamma1)
-
-
 
     print("z_resids[uncens_inds] = ")
     print(z_resids[uncens_inds])
@@ -839,7 +1023,6 @@ tbart2marg <- function(x.train,
 
     print("n.trees_censoring = ")
     print(n.trees_censoring)
-
 
     stop("Line 814. sigma2_mu_z  NA")
   }
@@ -860,15 +1043,138 @@ tbart2marg <- function(x.train,
   # Initialise the predicted values to zero
   mutemp_z = get_predictions(curr_trees_z, w.train, single_tree = n.trees_censoring == 1)
   # z_hat <- mutemp_z
+  if(linearterms){
+    mutemp_z <- mutemp_z + mutemp_z_lin
+  }
+
 
   mu_z <- mutemp_z
+
+
+  if(marginalize){
+    weightz <- (gamma1^2 + phi1)/phi1
+    weightstemp <- rep(1,n)
+    weightstemp[uncens_inds] <- weightz
+    binmat_all_y <- matrix(1, nrow = n1, ncol = n.trees_outcome)
+    binmat_all_z <- matrix(1, nrow = n, ncol = n.trees_censoring)
+    binmat_all_z_u <- matrix(1, nrow = n1, ncol = n.trees_censoring)
+    binmat_all_z_c <- matrix(1, nrow = n0, ncol = n.trees_censoring)
+    BtB_z_u <- crossprod(binmat_all_z[uncens_inds,])
+    BtB_z_c <- crossprod(binmat_all_z[cens_inds,])
+
+    firstcolindtrees_y <- 1:n.trees_outcome
+    firstcolindtrees_z <- 1:n.trees_censoring
+
+
+
+    if( (one_chol == TRUE)| linearterms ) {
+
+
+      if(linearterms){
+        if(one_chol ==TRUE){
+
+          reslisttemp = tree_full_conditional_z_marg_lin_savechol(curr_trees_z, #[[j]],
+                                                         z_resids,# sigma2,
+                                                         sigma2_mu_z,
+                                                         weightstemp,
+                                                         weightz,
+                                                         binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c,
+                                                         wmat_train, Amean_p, invAvar_p)
+
+          IR_old_z <- reslisttemp[[2]]
+          S_j_old_z <- reslisttemp[[3]]
+        }
+      }else{
+        if(one_chol ==TRUE){
+          reslisttemp = tree_full_conditional_z_marg_savechol(curr_trees_z, #[[j]],
+                                                              z_resids,# sigma2,
+                                                              sigma2_mu_z,
+                                                              weightstemp,
+                                                              weightz,
+                                                              binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c)
+
+          IR_old_z <- reslisttemp[[2]]
+          S_j_old_z <- reslisttemp[[3]]
+        }
+      }
+
+
+    if(linearterms){
+      if(one_chol ==TRUE){
+
+        mudrawlist_z = simulate_mu_weighted_all_z_fast_lin(curr_trees_z,
+                                                           z_resids,
+                                                           # sigma2,
+                                                           sigma2_mu_z,
+                                                           weightstemp,
+                                                           weightz,
+                                                           binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z,
+                                                           IR_old_z, S_j_old_z, wmat_train, Amean_p, invAvar_p)
+      }else{
+        mudrawlist_z = simulate_mu_weighted_all_z_lin(curr_trees_z,
+                                                           z_resids,
+                                                           # sigma2,
+                                                           sigma2_mu_z,
+                                                           weightstemp,
+                                                           weightz,
+                                                           binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z,
+                                                          wmat_train, Amean_p, invAvar_p)
+      }
+    }else{
+      mudrawlist_z = simulate_mu_weighted_all_z_fast(curr_trees_z,
+                                                     z_resids,
+                                                     # sigma2,
+                                                     sigma2_mu_z,
+                                                     weightstemp,
+                                                     weightz,
+                                                     binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z,
+                                                     IR_old_z, S_j_old_z)
+    }
+  }else{
+    mudrawlist_z = simulate_mu_weighted_all_z(curr_trees_z,
+                                              z_resids,
+                                              # sigma2,
+                                              sigma2_mu_z,
+                                              weightstemp,
+                                              weightz,
+                                              binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z)
+  }
+
+    mutemp_test_z <- get_predictions(curr_trees_z,
+                                     w.test,
+                                     single_tree = length(curr_trees_z) == 1)
+
+    if(linearterms){
+      mutemp_z <- cbind(wmat_train, binmat_all_z) %*% mudrawlist_z[[5]]
+    }else{
+      mutemp_z <- binmat_all_z %*% mudrawlist_z[[3]]
+    }
+
+  }
+
+
+
+
+  z_epsilon <- z - offsetz - mutemp_z
+
+  z_resids <- z - offsetz #z_epsilon
+  z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
+
+
+
+
+
+
+
+
+
 
   # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
 
-  if(sparse){
+  # if(sparse){
     var_count_z <- rep(0, p_z)
-  }
+  # }
   # if(sparse){
   #   tempcounts <- fcount(sampler_z$getTrees()$var)
   #   tempcounts <- tempcounts[tempcounts$x != -1, ]
@@ -892,6 +1198,8 @@ tbart2marg <- function(x.train,
   # print(nrow(xdf_z_test))
 
   y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
+  y_uncens <- ystar[uncens_inds]
+
   # sampler_y$setResponse(y = y_resids)
   # sampler_y$setSigma(sigma = sqrt(phi1) )
 
@@ -924,7 +1232,16 @@ tbart2marg <- function(x.train,
   # maybe (max(as.vector(Z.mat))-min(as.vector(Z.mat)))
   # can be replaced by something else
   # sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees_outcome))^2)
-  sigma2_mu_y <- ((max(y_resids)-min(y_resids))/(2 * k_y * sqrt(n.trees_outcome)))^2
+
+
+  sigma2_mu_y <- ((max(ystar)-min(ystar))/(2 * k_y * sqrt(n.trees_outcome)))^2
+  # sigma2_mu_y <- (max(ystar)-min(ystar))/((2 * k_y * sqrt(n.trees_outcome))^2)
+  # An alternative would be to scale with sigest, e.g. 4*sigest//(2 * k_y * sqrt(n.trees_outcome))^2
+  # sigma2_mu_y <-( 6*sigest/(2 * k_y * sqrt(n.trees_outcome)))^2
+
+  # if(marginalize){
+  #   sigma2_mu_y <- (max(ystar)-min(ystar))/(2 * k_y * sqrt(n.trees_outcome))^2
+  # }
 
   if(is.na(sigma2_mu_y )){
     stop("Line 1733 sigma2_mu_y  NA")
@@ -942,12 +1259,167 @@ tbart2marg <- function(x.train,
   # Initialise the predicted values to zero
   mutemp_y = get_predictions(curr_trees_y, x.train[uncens_inds,], single_tree = n.trees_outcome == 1)
   # y_hat <- mutemp_y
-
+  if(linearterms){
+    mutemp_y <- mutemp_y + mutemp_y_lin
+  }
   mu_y <- mutemp_y
 
-  if(sparse){
-    var_count_y <- rep(0, p_y)
+
+  if(marginalize){
+
+    binmat_all_y_z <- cbind(binmat_all_y, z_epsilon[uncens_inds])
+    BztBz_y <- crossprod(binmat_all_y_z)
+    BtB_y <- crossprod(binmat_all_y)
+
+
+    if(cov_prior == "VH"){
+      priorgammavar <- tau*phi1
+    }else{
+      if(cov_prior == "Omori"){
+        # stop("currently code only allows VH cov_prior")
+        priorgammavar <- G0
+      }else{
+        if(jointgammanodes){
+          stop("currently code only allows VH cov_prior with jointgammanodes")
+        }
+      }
+    }
+
+    if(linearterms){
+      if(jointgammanodes){
+        if(one_chol ==TRUE){
+
+        # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+        reslisttemp = tree_full_conditional_y_marg_savechol_lin(curr_trees_y,
+                                                                y_uncens, # current_partial_residuals,
+                                                                phi1,priorgammavar,
+                                                                sigma2_mu_y, binmat_all_y_z, BztBz_y,
+                                                                Bmean_p, invBvar_p, xmat_train, gamma0)
+        IR_old_y <- reslisttemp[[2]]
+        S_j_old_y <- reslisttemp[[3]]
+        }
+      }else{
+        if(one_chol ==TRUE){
+
+          # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+          reslisttemp = tree_full_conditional_y_marg_nogamma_savechol_lin(curr_trees_y,
+                                                                          y_resids, # current_partial_residuals,
+                                                                          phi1,
+                                                                          sigma2_mu_y, binmat_all_y, BtB_y,
+                                                                          Bmean_p, invBvar_p, xmat_train)
+          IR_old_y <- reslisttemp[[2]]
+          S_j_old_y <- reslisttemp[[3]]
+        }
+      }
+    }else{
+      if(jointgammanodes){
+        if(one_chol ==TRUE){
+          # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+          reslisttemp = tree_full_conditional_y_marg_savechol(curr_trees_y,
+                                                              y_uncens, # current_partial_residuals,
+                                                              phi1,priorgammavar,
+                                                              sigma2_mu_y, binmat_all_y_z, BztBz_y, gamma0)
+          IR_old_y <- reslisttemp[[2]]
+          S_j_old_y <- reslisttemp[[3]]
+        }
+      }else{
+        if(one_chol ==TRUE){
+          # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+          reslisttemp = tree_full_conditional_y_marg_nogamma_savechol(curr_trees_y,
+                                                                      y_resids, # current_partial_residuals,
+                                                                      phi1,
+                                                                      sigma2_mu_y, binmat_all_y, BtB_y)
+          IR_old_y <- reslisttemp[[2]]
+          S_j_old_y <- reslisttemp[[3]]
+        }
+      }
+    }
+
+    if(linearterms){
+      if(jointgammanodes){
+        if(one_chol ==TRUE){
+          mudrawlist_y = simulate_mu_all_y_fast_lin(curr_trees_y,
+                                                    y_uncens, # current_partial_residuals,
+                                                    phi1,
+                                                    priorgammavar,
+                                                    sigma2_mu_y, binmat_all_y_z, BztBz_y, firstcolindtrees_y, IR_old_y, S_j_old_y,
+                                                    xmat_train, Bmean_p, invBvar_p, gamma0)
+        }else{
+          mudrawlist_y = simulate_mu_all_y_lin(curr_trees_y,
+                                                    y_uncens, # current_partial_residuals,
+                                                    phi1,
+                                                    priorgammavar,
+                                                    sigma2_mu_y, binmat_all_y_z, BztBz_y, firstcolindtrees_y,
+                                                    xmat_train, Bmean_p, invBvar_p, gamma0)
+          }
+
+      }else{
+        if(one_chol ==TRUE){
+          mudrawlist_y = simulate_mu_all_y_nogamma_fast_lin(curr_trees_y,
+                                                            y_resids, # current_partial_residuals,
+                                                            phi1,
+                                                            sigma2_mu_y, binmat_all_y, BtB_y, firstcolindtrees_y, IR_old_y, S_j_old_y,
+                                                            xmat_train, Bmean_p, invBvar_p)
+        }else{
+
+          mudrawlist_y = simulate_mu_all_y_nogamma_lin(curr_trees_y,
+                                                       y_resids, # current_partial_residuals,
+                                                            phi1,
+                                                            sigma2_mu_y, binmat_all_y, BtB_y, firstcolindtrees_y,
+                                                            xmat_train, Bmean_p, invBvar_p)
+          }
+      }
+
+    }else{
+      if(jointgammanodes){
+        if(one_chol ==TRUE){
+          mudrawlist_y = simulate_mu_all_y_fast(curr_trees_y,
+                                                y_uncens, # current_partial_residuals,
+                                                phi1,
+                                                priorgammavar,
+                                                sigma2_mu_y, binmat_all_y_z, BztBz_y, firstcolindtrees_y, IR_old_y, S_j_old_y, gamma0)
+        }else{
+          mudrawlist_y = simulate_mu_all_y(curr_trees_y,
+                                           y_uncens, # current_partial_residuals,
+                                           phi1,
+                                           priorgammavar,
+                                           sigma2_mu_y, binmat_all_y_z, BztBz_y, firstcolindtrees_y, gamma0)
+        }
+
+      }else{
+        if(one_chol ==TRUE){
+          mudrawlist_y = simulate_mu_all_y_nogamma_fast(curr_trees_y,
+                                                        y_resids, # current_partial_residuals,
+                                                        phi1,
+                                                        sigma2_mu_y, binmat_all_y, BtB_y, firstcolindtrees_y, IR_old_y, S_j_old_y)
+        }else{
+          mudrawlist_y = simulate_mu_all_y_nogamma(curr_trees_y,
+                                                   y_resids, # current_partial_residuals,
+                                                   phi1,
+                                                   sigma2_mu_y, binmat_all_y, BtB_y, firstcolindtrees_y)
+        }
+
+      }
+    }
+
+
+    mutemp_y <- binmat_all_y %*% mudrawlist_y[[3]]
+    if(linearterms){
+      if(jointgammanodes){
+        mutemp_y <- mutemp_y + xmat_train %*% mudrawlist_y[[6]]
+      }else{
+        mutemp_y <- mutemp_y + xmat_train %*% mudrawlist_y[[4]]
+      }
+    }
+    if(jointgammanodes){
+      gamma1 <- mudrawlist_y[[5]]
+    }
   }
+
+
+  # if(sparse){
+    var_count_y <- rep(0, p_y)
+  # }
   # if(sparse){
   #   tempcounts <- fcount(sampler_y$getTrees()$var)
   #   tempcounts <- tempcounts[tempcounts$x != -1, ]
@@ -978,7 +1450,6 @@ tbart2marg <- function(x.train,
 
   # sigest <-  samplestemp_y$sigma
   # S0 <- 2*(sigest^2 -   (1/(8*(G0^2))) - 4*(gamma0^2)*G0   )
-
 
 
 
@@ -1039,15 +1510,6 @@ tbart2marg <- function(x.train,
   #   draw$sigma[1] <- sigma
   # }
 
-
-  #########  Begin Gibbs sampler ######################################################
-
-  # pb <- progress_bar$new(total = n.iter+n.burnin)
-  # pb <- progress_bar$new(
-  #   format = " [:bar] :percent eta: :eta",
-  #   total = n.iter+n.burnin, clear = FALSE, width= 60)
-
-
   # create matrices of indicator variables for terminal nodes
 
   # if all initialized as stumps then all just constant vectors
@@ -1067,30 +1529,75 @@ tbart2marg <- function(x.train,
 
   # or
 
-  binmat_all_y <- matrix(1, n1, n.trees_outcome)
-  binmat_all_z <- matrix(1, n, n.trees_censoring)
-  # then must save indices of column in matrix
-  firstcolindtrees_y <- 1:n.trees_outcome
-  firstcolindtrees_z <- 1:n.trees_censoring
+  if(marginalize){
+    binmat_all_y <- matrix(1, nrow = n1, ncol = n.trees_outcome)
+    binmat_all_z <- matrix(1, nrow = n, ncol = n.trees_censoring)
+    binmat_all_z_u <- matrix(1, nrow = n1, ncol = n.trees_censoring)
+    binmat_all_z_c <- matrix(1, nrow = n0, ncol = n.trees_censoring)
+
+    z_epsilon <- z - offsetz - mutemp_z
+
+    BtB_y <- matrix(n1, nrow = n.trees_outcome, ncol = n.trees_outcome)
+    BtB_y <- crossprod(binmat_all_y)
+
+    Btz <- crossprod(binmat_all_y, z_epsilon[uncens_inds])
+    # BztBz_y <- cbind(BtB_y, Btz)
+    # BztBz_y <- rbind(BztBz_y, c(t(BtB_y), crossprod(z_epsilon[uncens_inds])))
+
+    # BtB_z <- matrix(n, n.trees_censoring, n.trees_censoring)
+    BtB_z_u <- matrix(n1, nrow = n.trees_censoring, ncol = n.trees_censoring)
+    BtB_z_c <- matrix(n0, nrow = n.trees_censoring, ncol = n.trees_censoring)
+    BtB_z_u <- crossprod(binmat_all_z_u)
+    BtB_z_c <- crossprod(binmat_all_z_c)
 
 
+
+    # then must save indices of column in matrix
+    firstcolindtrees_y <- 1:n.trees_outcome
+    firstcolindtrees_z <- 1:n.trees_censoring
+  }
+
+  #########  Begin Gibbs sampler ######################################################
+
+  # pb <- progress_bar$new(total = n.iter+n.burnin)
+  # pb <- progress_bar$new(
+  #   format = " [:bar] :percent eta: :eta",
+  #   total = n.iter+n.burnin, clear = FALSE, width= 60)
+
+
+
+
+  # type_y_prev <- "none"
+  # type_z_prev <- "none"
 
   #loop through the Gibbs sampler iterations
   for(iter in 1:(n.iter+n.burnin)){
 
-    if(mutemp_y != rowSums(tree_fits_store_y)){
 
-      stop(" print mutemp_y != rowSums(tree_fits_store_y)")
+    if(iter>1 &  (!marginalize) ){
+      if(max(abs(mutemp_y - mutemp_y_lin - rowSums(tree_fits_store_y)))>0.0001){
 
+        print("iter = ")
+        print(iter)
+        print("cbind(mutemp_y, mutemp_y_lin + rowSums(tree_fits_store_y)) = ")
+        print(cbind(mutemp_y, mutemp_y_lin + rowSums(tree_fits_store_y)))
+
+
+        stop(" print mutemp_y != mutemp_y_lin + rowSums(tree_fits_store_y)")
+
+      }
+
+
+      if(max(abs(mutemp_z - mutemp_z_lin - rowSums(tree_fits_store_z)))>0.0001){
+        print("iter = ")
+        print(iter)
+        print("cbind(mutemp_z, mutemp_z_lin + rowSums(tree_fits_store_z)) = ")
+        print(cbind(mutemp_z, mutemp_z_lin + rowSums(tree_fits_store_z)))
+
+        stop(" print mutemp_z != mutemp_z_lin +  rowSums(tree_fits_store_z)")
+
+      }
     }
-
-
-    if(mutemp_z != rowSums(tree_fits_store_z)){
-
-      stop(" print mutemp_z != rowSums(tree_fits_store_z)")
-
-    }
-
 
     # if(eq_by_eq){
     #   var_zdraw <- 1
@@ -1121,7 +1628,6 @@ tbart2marg <- function(x.train,
 
       # temp_zmean_cens <- offsetz + mutemp_z[cens_inds] + (ystar[cens_inds]  - mutemp_y[cens_inds])*gamma1/(phi1 + gamma1^2)
       temp_zmean_cens <- offsetz + mutemp_z[cens_inds] #+ (ystar[cens_inds]  - mutemp_y[cens_inds])*gamma1/(phi1 + gamma1^2)
-
 
       z[cens_inds] <- rtruncnorm(n0, a= -Inf, b = 0, mean = temp_zmean_cens, sd = 1)
     }
@@ -1154,6 +1660,97 @@ tbart2marg <- function(x.train,
     # print("z = ")
     # print(z)
 
+    ############ draw linear terms if not marginalizing #################
+
+    if(linearterms & !marginalize){
+
+      alpha_var <- solve(solve(Avar_p) +
+                           crossprod(wmat_train[cens_inds, , drop = FALSE]) +
+                           ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]))
+
+
+      alpha0hat <- solve(crossprod(wmat_train[cens_inds,, drop = FALSE])) %*% crossprod(wmat_train[cens_inds,, drop = FALSE], z[cens_inds] - offsetz - mutemp_z_trees[cens_inds])
+      alpha1hat <- solve(crossprod(wmat_train[uncens_inds,, drop = FALSE])) %*% crossprod(wmat_train[uncens_inds,, drop = FALSE],
+                                                                            z[uncens_inds] - offsetz - mutemp_z_trees[uncens_inds] -
+                                                                              (ystar[uncens_inds]  - mutemp_y_lin - mutemp_y_trees)*gamma1/(phi1 + gamma1^2))
+      # print("line 1070 = ")
+
+      alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
+                                     crossprod(wmat_train[cens_inds,, drop = FALSE]) %*%  alpha0hat+
+                                     ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,, drop = FALSE]) %*% alpha1hat  )
+
+      # print("line 1076 = ")
+
+      alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
+
+      mutemp_z_lin <- wmat_train %*% alpha_vec
+      mutemp_test_z_lin <- wmat_test %*% alpha_vec
+
+      mutemp_z <- mutemp_z_lin + mutemp_z_trees
+      mutemp_test_z <- mutemp_test_z_lin + mutemp_test_z_trees
+
+      z_epsilon <- z - offsetz - mutemp_z
+
+      # if(any(is.na(mutemp_z_lin))){
+      #   stop("1213 any(is.na(mutemp_z))")
+      # }
+      # print("line 1081 = ")
+      if(jointbetagamma){
+
+        # print("line 1084 = ")
+
+        Xresmat <- cbind(xmat_train ,z[uncens_inds] - mutemp_z_lin[uncens_inds] - mutemp_z_trees[uncens_inds] )
+
+        gamma0res <- c(Bmean_p,gamma0)
+        G0res <- rbind(cbind(Bvar_p, rep(0, nrow(Bvar_p))),
+                       t(c(rep(0,ncol(Bvar_p)), tau*phi1)))
+
+        Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
+        ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds] - mutemp_y_trees)
+        g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+
+        # sample beta vector and gamma simulataneously
+        betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
+
+        gamma1 <- betagamma_vec[length(betagamma_vec)]
+        beta_vec <- betagamma_vec[- length(betagamma_vec)]
+        mutemp_y_lin <- xmat_train %*% beta_vec
+        mutemp_test_y_lin <- xmat_test %*% beta_vec
+
+        mutemp_y <- mutemp_y_lin + mutemp_y_trees
+        mutemp_test_y <- mutemp_test_y_lin + mutemp_test_y_trees
+
+      }else{
+        # print("line 1105 = ")
+
+        # # sample as SUR as outlined by VH? requires data augmentation of y.
+        # D0_mat <- rbind(cbind(Avar_p, matrix(0,nrow = nrow(Avar_p), ncol = ncol(Bvar_p))),
+        #                 cbind( matrix(0,nrow = nrow(Bvar_p), ncol = ncol(Avar_p)), Bvar_p))
+
+        # instead sample alpha and beta separately
+
+        y_resids <- ystar[uncens_inds] - mutemp_y_trees - gamma1*(z[uncens_inds] - offsetz - mutemp_z_lin[uncens_inds] - mutemp_z_trees[uncens_inds])
+
+        Xuncensmat <- xmat_train
+
+        Bvar <- solve(solve(Bvar_p) + (1/phi1)*crossprod(Xuncensmat)  )
+        Bhat <- solve((1/phi1)*crossprod(Xuncensmat))%*% ((1/phi1)*crossprod(Xuncensmat,  y_resids) )
+        B_bar <- Bvar %*% (solve(Bvar_p)%*%Bmean_p + (1/phi1)*crossprod(Xuncensmat)%*% Bhat)
+
+        # sample beta vector and gamma simulataneously
+        beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
+        mutemp_y_lin <- xmat_train %*% beta_vec
+        mutemp_test_y_lin <- xmat_test %*% beta_vec
+
+        mutemp_y <- mutemp_y_lin + mutemp_y_trees
+        mutemp_test <- mutemp_test_y_lin + mutemp_test_y_trees
+      }
+      y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
+
+    } # end linear samples !marginalize
+
+
+
 
     ####### draw sums of trees for z #######################################################
 
@@ -1171,17 +1768,21 @@ tbart2marg <- function(x.train,
     z_resids <- z - offsetz #z_epsilon
     z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
 
+    y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
+
     # #set the response for draws of z trees
     # sampler_z$setResponse(y = z_resids)
     # #set the standard deivation
     # sampler_z$setSigma(sigma = 1)
 
-    weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
+
     weightz <- (gamma1^2 + phi1)/phi1
+    weightstemp <- rep(1,n)
+    weightstemp[uncens_inds] <- weightz
+
+
 
     if(marginalize){
-
-
 
 
       for (j in 1:n.trees_censoring) {
@@ -1206,12 +1807,9 @@ tbart2marg <- function(x.train,
           splitting_rules = splitting_rules
         )
 
-
-
         # (c) Obtain the Metropolis-Hastings probability
         curr_tree_z <- curr_trees_z[[j]]
         new_tree_z <- new_trees_z[[j]]
-
 
         # must create tree matrices
 
@@ -1220,6 +1818,23 @@ tbart2marg <- function(x.train,
 
         # For now, just convert node indices to binary variables
 
+
+        # if( j > 1 | iter >1){
+        #   if(ncol(BtB_z_u)!= ncol(binmat_all_z)){
+        #     print("dim(BtB_z_u) =")
+        #     print(dim(BtB_z_u))
+        #     print("dim(binmat_all_z_new) =")
+        #     print(dim(binmat_all_z_new))
+        #
+        #     print("j = ")
+        #     print(j)
+        #
+        #     print("iter = ")
+        #     print(iter)
+        #
+        #     stop("line 1241 ncol(BtB_z_u)!= ncol(binmat_all_z)")
+        #   }
+        # }
 
         # firstcolindtrees_z[j]
 
@@ -1232,121 +1847,782 @@ tbart2marg <- function(x.train,
           # var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] + 1
 
           # split node is just parent of last rows
-          new_tree_z$tree_matrix[nrow(new_tree_z$tree_matrix)-1,'parent']
+          # new_tree_z$tree_matrix[nrow(new_tree_z$tree_matrix)-1,'parent']
 
-          terminal_nodes_old = which(as.numeric(old_tree$tree_matrix[,'terminal']) == 1)
-          terminal_nodes_new = which(as.numeric(new_tree$tree_matrix[,'terminal']) == 1)
+          terminal_nodes_old = which(as.numeric(curr_tree_z$tree_matrix[,'terminal']) == 1)
+          terminal_nodes_new = which(as.numeric(new_tree_z$tree_matrix[,'terminal']) == 1)
           removednode <- which(!( terminal_nodes_old %in% terminal_nodes_new ) )
           addednodes <- which(!( terminal_nodes_new %in% terminal_nodes_old ) )
 
-          # create binary variables for new nodes
-          # can either do this within a new grow_tree function or here
-          # can just use node indices
+          removednode_rowind <- terminal_nodes_old[removednode]
+          addednodes_rowind <- terminal_nodes_new[addednodes]
 
-          newnodesbin <- matrix(0, nrow(binmat_all_z),2)
-          newnodesbin[new_tree_z$node_indices == addednodes[1],1] <- rep(1, sum(new_tree_z$node_indices == addednodes[1]))
-          newnodesbin[new_tree_z$node_indices == addednodes[2],2] <- rep(1, sum(new_tree_z$node_indices == addednodes[2]))
+          firstcolindtrees_z_new <- firstcolindtrees_z
 
-          binmat_all_z_new <- binmat_all_z[, -(firstcolindtrees_z[j]-1+ removednode) ]
-
-          if(firstcolindtrees_z[j]-1 + addednodes[1]-1 == 0 ){
-            binmat_all_z_new <- cbind(#binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednodes-1 ) ],
-              newnodesbin,
-              binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(binmat_all_z_new) ])
-
+          if(length(addednodes)==0){
+            binmat_all_z_new <- binmat_all_z
+            # BtB_z_new <- BtB_z
+            BtB_z_new_u <- BtB_z_u
+            BtB_z_new_c <- BtB_z_c
+            # do not edit firstcolindtrees_z_new
           }else{
-            if(firstcolindtrees_z[j]-1 + addednodes[2]-1 == ncol(binmat_all_z_new) +1 ){
-              binmat_all_z_new <- cbind(binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) ],
-                                        newnodesbin#,
-                                        #binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes ):ncol(binmat_all_z_new) ]
-              )
+
+            # create binary variables for new nodes
+            # can either do this within a new grow_tree function or here
+            # can just use node indices
+
+            newnodesbin <- matrix(0, nrow(binmat_all_z),2)
+            newnodesbin[new_tree_z$node_indices == addednodes_rowind[1],1] <- rep(1, sum(new_tree_z$node_indices == addednodes_rowind[1]))
+            newnodesbin[new_tree_z$node_indices == addednodes_rowind[2],2] <- rep(1, sum(new_tree_z$node_indices == addednodes_rowind[2]))
+
+            binmat_all_z_new <- binmat_all_z[, -(firstcolindtrees_z[j]-1+ removednode) , drop = FALSE]
+
+            # BtB_z_new <- BtB_z[-(firstcolindtrees_z[j]-1+ removednode), -(firstcolindtrees_z[j]-1+ removednode) ]
+            BtB_z_new_u <- BtB_z_u[-(firstcolindtrees_z[j]-1+ removednode), -(firstcolindtrees_z[j]-1+ removednode) , drop = FALSE]
+            BtB_z_new_c <- BtB_z_c[-(firstcolindtrees_z[j]-1+ removednode), -(firstcolindtrees_z[j]-1+ removednode) , drop = FALSE]
+
+
+            if(firstcolindtrees_z[j]-1 + addednodes[1]-1 == 0 ){
+              binmat_all_z_new <- cbind(#binmat_all_z_new[, 1:(firstcolindtrees_z[j]-1 + addednodes-1 ) ],
+                newnodesbin,
+                binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(binmat_all_z_new)  ])
+
+
+              # if((ncol(binmat_all_z_new) != ncol(binmat_all_z)+1  )){
+              #
+              #
+              #   print("dim(BtB_z_new_u) = ")
+              #   print(dim(BtB_z_new_u))
+              #
+              #   print("dim(BtB_z_u) = ")
+              #   print(dim(BtB_z_u))
+              #
+              #   print("dim(binmat_all_z_new) = ")
+              #   print(dim(binmat_all_z_new))
+              #   print("dim(binmat_all_z) = ")
+              #   print(dim(binmat_all_z))
+              #   print("type_z = ")
+              #   print(type_z)
+              #
+              #   stop("(Line 1302. ncol(binmat_all_z_new) != ncol(binmat_all_z)+1 )")
+              # }
+
+
+              # BtB_z_new <- cbind(rep(0, nrow(BtB_z_new)), rep(0, nrow(BtB_z_new)), BtB_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(BtB_z_new) ])
+              # BtB_z_new <- rbind(rep(0, ncol(BtB_z_new)), rep(0, ncol(BtB_z_new)), BtB_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):nrow(BtB_z_new) ])
+              #
+              # BtB_z_new[1,1] <- sum(new_tree_z$node_indices == addednodes[1])
+              # BtB_z_new[2,2] <- sum(new_tree_z$node_indices == addednodes[2])
+              #
+              # BtB_z_new[ (1:2) ,-c( (1:2) )] <- crossprod((binmat_all_z_new[ ,(1:2) ]) , binmat_all_z_new[ , - (1:2) ])
+              # BtB_z_new[-c( (1:2)),(1:2)] <- t(BtB_z_new[(1:2),-c( (1:2))])
+
+
+              # print("dim(binmat_all_z_new) = ")
+              # print(dim(binmat_all_z_new))
+              # print("dim(BtB_z_new_u) = ")
+              # print(dim(BtB_z_new_u))
+              #
+              # print("addednodes = ")
+              # print(addednodes)
+              #
+              # print("(firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(BtB_z_new_u) = ")
+              # print((firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(BtB_z_new_u))
+              #
+              # print("line 1311")
+
+              BtB_z_new_u <- cbind(rep(0, nrow(BtB_z_new_u)), rep(0, nrow(BtB_z_new_u)),
+                                   BtB_z_new_u[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(BtB_z_new_u), drop = FALSE ])
+
+              # print("line 1314")
+              #
+              # print("dim(BtB_z_new_u) = ")
+              # print(dim(BtB_z_new_u))
+
+
+              BtB_z_new_u <- rbind(rep(0, ncol(BtB_z_new_u)), rep(0, ncol(BtB_z_new_u)),
+                                   BtB_z_new_u[(firstcolindtrees_z[j]-1 + addednodes[1] ):nrow(BtB_z_new_u), , drop = FALSE ])
+
+              # print("dim(BtB_z_new_u) = ")
+              # print(dim(BtB_z_new_u))
+
+              # print("dim(BtB_z_new_u) = ")
+              # print(dim(BtB_z_new_u))
+
+              BtB_z_new_u[1,1] <- sum(new_tree_z$node_indices[uncens_inds] == addednodes_rowind[1])
+              BtB_z_new_u[2,2] <- sum(new_tree_z$node_indices[uncens_inds] == addednodes_rowind[2])
+
+              BtB_z_new_u[ (1:2) ,-c( (1:2) )] <- crossprod((binmat_all_z_new[ uncens_inds,(1:2), drop = FALSE ]) ,
+                                                            binmat_all_z_new[ uncens_inds, - (1:2), drop = FALSE ])
+              BtB_z_new_u[-c( (1:2)),(1:2)] <- t(BtB_z_new_u[(1:2),-c( (1:2)), drop = FALSE ])
+
+              # print("line 1333 dim(BtB_z_new_u) = ")
+              # print(dim(BtB_z_new_u))
+
+              BtB_z_new_c <- cbind(rep(0, nrow(BtB_z_new_c)), rep(0, nrow(BtB_z_new_c)),
+                                   BtB_z_new_c[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(BtB_z_new_c), drop = FALSE ])
+              BtB_z_new_c <- rbind(rep(0, ncol(BtB_z_new_c)), rep(0, ncol(BtB_z_new_c)),
+                                   BtB_z_new_c[(firstcolindtrees_z[j]-1 + addednodes[1] ):nrow(BtB_z_new_c), , drop = FALSE])
+
+              BtB_z_new_c[1,1] <- sum(new_tree_z$node_indices[cens_inds] == addednodes_rowind[1])
+              BtB_z_new_c[2,2] <- sum(new_tree_z$node_indices[cens_inds] == addednodes_rowind[2])
+
+              BtB_z_new_c[ (1:2) ,-c( (1:2) )] <- crossprod((binmat_all_z_new[ cens_inds,(1:2), drop = FALSE  ]) ,
+                                                            binmat_all_z_new[ cens_inds, - (1:2), drop = FALSE  ])
+              BtB_z_new_c[-c( (1:2)),(1:2)] <- t(BtB_z_new_c[(1:2),-c( (1:2)), drop = FALSE ])
+
+
+              # # new_tree_z$node_indices gives node indices of all observations
+              #
+              # # create row for first of 2 new nodes
+              # # for each pair node in other trees,
+              # # count the number of node obs that are also in addednodes[1]
+              # for(j2 in setdiff(1:n.trees_censoring,j) ){
+              #   temptree_z <- curr_trees_z[[j2]]
+              #
+              #   terminal_nodes_j = which(as.numeric(temptree_z$tree_matrix[,'terminal']) == 1)
+              #
+              #   # can this loop be vectorized?
+              #   for(col_ind in 1:length(terminal_nodes_j)){
+              #     # +1 for 1 more node added
+              #     # + firstcolindtrees_z[j]-1 to go to just before columns of j2^th tree
+              #     # + col_ind to go to the relevant column for the particular node
+              #
+              #     BtB_z_new[1,1 +  firstcolindtrees_z[j2]-1 + col_ind] <-   sum( (new_tree_z$node_indices == addednodes[1])&
+              #                                                                      ( temptree_z$node_indices== terminal_nodes_j[col_ind] )  )
+              #
+              #     BtB_z_new[1 +  firstcolindtrees_z[j2]-1 + col_ind,1] <- BtB_z_new[1,1 +  firstcolindtrees_z[j2]-1 + col_ind]
+              #
+              #     BtB_z_new[2,1 +  firstcolindtrees_z[j2]-1 + col_ind] <-   sum( (new_tree_z$node_indices == addednodes[2])&
+              #                                                                      ( temptree_z$node_indices== terminal_nodes_j[col_ind] )  )
+              #
+              #     BtB_z_new[1 +  firstcolindtrees_z[j2]-1 + col_ind,2] <- BtB_z_new[2,1 +  firstcolindtrees_z[j2]-1 + col_ind]
+              #
+              #   }
+              # }
+              # firstcolindtrees_z_new[2:length(firstcolindtrees_z_new)] <- 1 + firstcolindtrees_z_new[2:length(firstcolindtrees_z_new)]
 
             }else{
-              binmat_all_z_new <- cbind(binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) ],
-                                        newnodesbin,
-                                        binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(binmat_all_z_new) ])
+              if(firstcolindtrees_z[j]-1 + addednodes[2]-1 == ncol(binmat_all_z_new) +1 ){
+                binmat_all_z_new <- cbind(binmat_all_z_new[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ), drop = FALSE  ],
+                                          newnodesbin#,
+                                          #binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes ):ncol(binmat_all_z_new) ]
+                )
 
+                # BtB_z_new <- cbind( BtB_z_new[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) ],
+                #                     rep(0, nrow(BtB_z_new)), rep(0, nrow(BtB_z_new)))
+                # BtB_z_new <- rbind(BtB_z_new[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) ],
+                #                    rep(0, ncol(BtB_z_new)), rep(0, ncol(BtB_z_new)))
+                #
+                # BtB_z_new[ncol(BtB_z_new)-1,ncol(BtB_z_new)-1] <- sum(new_tree_z$node_indices == addednodes[1])
+                # BtB_z_new[ncol(BtB_z_new),ncol(BtB_z_new)] <- sum(new_tree_z$node_indices == addednodes[2])
+                #
+                # BtB_z_new[c(ncol(BtB_z_new)-1,ncol(BtB_z_new) ),
+                #           -c(c(ncol(BtB_z_new)-1,ncol(BtB_z_new) ))] <-
+                #   crossprod((binmat_all_z_new[ ,c(ncol(BtB_z_new)-1,ncol(BtB_z_new)) ]) , binmat_all_z_new[ , - c(ncol(BtB_z_new)-1,ncol(BtB_z_new)) ])
+                #
+                # BtB_z_new[-c(c(ncol(BtB_z_new)-1,ncol(BtB_z_new) )),
+                #           c(ncol(BtB_z_new)-1,ncol(BtB_z_new) )] <- t(BtB_z_new[c(ncol(BtB_z_new)-1,ncol(BtB_z_new) ),
+                #                                                                 -c(c(ncol(BtB_z_new)-1,ncol(BtB_z_new) ))])
+
+
+                BtB_z_new_u <- cbind( BtB_z_new_u[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1  ), drop = FALSE  ],
+                                    rep(0, nrow(BtB_z_new_u)), rep(0, nrow(BtB_z_new_u)))
+                BtB_z_new_u <- rbind(BtB_z_new_u[1:(firstcolindtrees_z[j]-1 + addednodes[1]-1  ), , drop = FALSE ],
+                                   rep(0, ncol(BtB_z_new_u)), rep(0, ncol(BtB_z_new_u)))
+
+                # print("line 1410")
+
+                BtB_z_new_u[ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u)-1] <- sum(new_tree_z$node_indices[uncens_inds] == addednodes_rowind[1])
+                BtB_z_new_u[ncol(BtB_z_new_u),ncol(BtB_z_new_u)] <- sum(new_tree_z$node_indices[uncens_inds] == addednodes_rowind[2])
+
+                BtB_z_new_u[c(ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u) ),
+                          -c(c(ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u) ))] <-
+                  crossprod((binmat_all_z_new[uncens_inds ,c(ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u)), drop = FALSE  ]) ,
+                            binmat_all_z_new[uncens_inds , - c(ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u)), drop = FALSE  ])
+
+                BtB_z_new_u[-c(c(ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u) )),
+                          c(ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u) )] <- t(BtB_z_new_u[c(ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u) ),
+                                                                                -c(c(ncol(BtB_z_new_u)-1,ncol(BtB_z_new_u) )),
+                                                                                drop = FALSE ])
+
+
+                BtB_z_new_c <- cbind( BtB_z_new_c[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ), drop = FALSE  ],
+                                      rep(0, nrow(BtB_z_new_c)), rep(0, nrow(BtB_z_new_c)))
+                BtB_z_new_c <- rbind(BtB_z_new_c[1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ), ,drop = FALSE],
+                                     rep(0, ncol(BtB_z_new_c)), rep(0, ncol(BtB_z_new_c)))
+
+                BtB_z_new_c[ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c)-1] <- sum(new_tree_z$node_indices[cens_inds] == addednodes_rowind[1])
+                BtB_z_new_c[ncol(BtB_z_new_c),ncol(BtB_z_new_c)] <- sum(new_tree_z$node_indices[cens_inds] == addednodes_rowind[2])
+
+                BtB_z_new_c[c(ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c) ),
+                            -c(c(ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c) ))] <-
+                  crossprod((binmat_all_z_new[cens_inds ,c(ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c)) ]) ,
+                            binmat_all_z_new[cens_inds , - c(ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c)), drop = FALSE  ])
+
+                BtB_z_new_c[-c(c(ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c) )),
+                            c(ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c) )] <- t(BtB_z_new_c[c(ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c) ),
+                                                                                      -c(c(ncol(BtB_z_new_c)-1,ncol(BtB_z_new_c) )), drop = FALSE ])
+
+                # # new_tree_z$node_indices gives node indices of all observations
+                #
+                # # create row for first of 2 new nodes
+                # # for each pair node in other trees,
+                # # count the number of node obs that are also in addednodes[1]
+                # for(j2 in setdiff(1:n.trees_censoring,j) ){
+                #   temptree_z <- curr_trees_z[[j2]]
+                #
+                #   terminal_nodes_j = which(as.numeric(temptree_z$tree_matrix[,'terminal']) == 1)
+                #
+                #   # can this loop be vectorized?
+                #   for(col_ind in 1:length(terminal_nodes_j)){
+                #     # + firstcolindtrees_z[j]-1 to go to just before columns of j2^th tree
+                #     # + col_ind to go to the relevant column for the particular node
+                #
+                #     BtB_z_new[ncol(BtB_z_new)-1,firstcolindtrees_z[j2]-1 + col_ind] <-   sum( (new_tree_z$node_indices == addednodes[1])&
+                #                                                                      ( temptree_z$node_indices== terminal_nodes_j[col_ind] )  )
+                #
+                #     BtB_z_new[  firstcolindtrees_z[j2]-1 + col_ind,ncol(BtB_z_new)-1] <- BtB_z_new[1,1 +  firstcolindtrees_z[j2]-1 + col_ind]
+                #
+                #     BtB_z_new[ncol(BtB_z_new), firstcolindtrees_z[j2]-1 + col_ind] <-   sum( (new_tree_z$node_indices == addednodes[2])&
+                #                                                                      ( temptree_z$node_indices== terminal_nodes_j[col_ind] )  )
+                #
+                #     BtB_z_new[  firstcolindtrees_z[j2]-1 + col_ind,ncol(BtB_z_new)] <- BtB_z_new[2,1 +  firstcolindtrees_z[j2]-1 + col_ind]
+                #
+                #   }
+                # }
+
+                # last tree grown. First column index unchanged
+
+              }else{
+                binmat_all_z_new <- cbind(binmat_all_z_new[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) , drop = FALSE ],
+                                          newnodesbin,
+                                          binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(BtB_z_new_u), drop = FALSE  ])
+
+                # BtB_z_new <- cbind( BtB_z_new[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) ],
+                #                     rep(0, nrow(BtB_z_new)), rep(0, nrow(BtB_z_new)), BtB_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(binmat_all_z_new)  ])
+                # BtB_z_new <- rbind(BtB_z_new[ 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ), ],
+                #                    rep(0, ncol(BtB_z_new)), rep(0, ncol(BtB_z_new)),
+                #                    BtB_z_new[, (firstcolindtrees_z[j]-1 + addednodes[1] ):nrow(binmat_all_z_new)  ])
+                #
+                # BtB_z_new[firstcolindtrees_z[j]-1 + addednodes[1],
+                #           firstcolindtrees_z[j]-1 + addednodes[1]] <- sum(new_tree_z$node_indices == addednodes[1])
+                # BtB_z_new[firstcolindtrees_z[j]-1 + addednodes[2],
+                #           firstcolindtrees_z[j]-1 + addednodes[2]] <- sum(new_tree_z$node_indices == addednodes[2])
+                #
+                # BtB_z_new[firstcolindtrees_z[j]-1 + addednodes[1:2],
+                #           -c( firstcolindtrees_z[j]-1 + addednodes[1:2])] <-
+                #   crossprod((binmat_all_z_new[ ,firstcolindtrees_z[j]-1 + addednodes[1:2] ]) , binmat_all_z_new[ , - (firstcolindtrees_z[j]-1 + addednodes[1:2]) ])
+                #
+                # BtB_z_new[-c(firstcolindtrees_z[j]-1 + addednodes[1:2]),
+                #           firstcolindtrees_z[j]-1 + addednodes[1:2]] <- t(BtB_z_new[firstcolindtrees_z[j]-1 + addednodes[1:2],
+                #                                                                   -c( firstcolindtrees_z[j]-1 + addednodes[1:2])])
+
+
+                BtB_z_new_u <- cbind( BtB_z_new_u[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ), drop = FALSE  ],
+                                    rep(0, nrow(BtB_z_new_u)), rep(0, nrow(BtB_z_new_u)),
+                                    BtB_z_new_u[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(BtB_z_new_u) , drop = FALSE  ])
+                BtB_z_new_u <- rbind(BtB_z_new_u[ 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ), , drop = FALSE  ],
+                                   rep(0, ncol(BtB_z_new_u)), rep(0, ncol(BtB_z_new_u)),
+                                   BtB_z_new_u[(firstcolindtrees_z[j]-1 + addednodes[1] ):nrow(BtB_z_new_u), , drop = FALSE])
+
+
+                # print("line 1515")
+
+                BtB_z_new_u[firstcolindtrees_z[j]-1 + addednodes[1],
+                          firstcolindtrees_z[j]-1 + addednodes[1]] <- sum(new_tree_z$node_indices[uncens_inds] == addednodes_rowind[1])
+                BtB_z_new_u[firstcolindtrees_z[j]-1 + addednodes[2],
+                          firstcolindtrees_z[j]-1 + addednodes[2]] <- sum(new_tree_z$node_indices[uncens_inds] == addednodes_rowind[2])
+
+                BtB_z_new_u[firstcolindtrees_z[j]-1 + addednodes[1:2],
+                          -c( firstcolindtrees_z[j]-1 + addednodes[1:2])] <-
+                  crossprod((binmat_all_z_new[ uncens_inds,firstcolindtrees_z[j]-1 + addednodes[1:2] , drop = FALSE ]) ,
+                            binmat_all_z_new[ uncens_inds, - (firstcolindtrees_z[j]-1 + addednodes[1:2]) , drop = FALSE ])
+
+                BtB_z_new_u[-c(firstcolindtrees_z[j]-1 + addednodes[1:2]),
+                          firstcolindtrees_z[j]-1 + addednodes[1:2]] <- t(BtB_z_new_u[firstcolindtrees_z[j]-1 + addednodes[1:2],
+                                                                                  -c( firstcolindtrees_z[j]-1 + addednodes[1:2]),
+                                                                                  drop = FALSE ])
+
+
+
+                BtB_z_new_c <- cbind( BtB_z_new_c[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) , drop = FALSE ],
+                                      rep(0, nrow(BtB_z_new_c)), rep(0, nrow(BtB_z_new_c)),
+                                      BtB_z_new_c[, (firstcolindtrees_z[j]-1 + addednodes[1] ):ncol(BtB_z_new_c) , drop = FALSE  ])
+                BtB_z_new_c <- rbind(BtB_z_new_c[1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ), , drop = FALSE],
+                                     rep(0, ncol(BtB_z_new_c)), rep(0, ncol(BtB_z_new_c)),
+                                     BtB_z_new_c[(firstcolindtrees_z[j]-1 + addednodes[1] ):nrow(BtB_z_new_c), , drop = FALSE])
+
+                BtB_z_new_c[firstcolindtrees_z[j]-1 + addednodes[1],
+                            firstcolindtrees_z[j]-1 + addednodes[1]] <- sum(new_tree_z$node_indices[cens_inds] == addednodes_rowind[1])
+                BtB_z_new_c[firstcolindtrees_z[j]-1 + addednodes[2],
+                            firstcolindtrees_z[j]-1 + addednodes[2]] <- sum(new_tree_z$node_indices[cens_inds] == addednodes_rowind[2])
+
+                BtB_z_new_c[firstcolindtrees_z[j]-1 + addednodes[1:2],
+                            -c( firstcolindtrees_z[j]-1 + addednodes[1:2])] <-
+                  crossprod((binmat_all_z_new[ cens_inds,firstcolindtrees_z[j]-1 + addednodes[1:2] , drop = FALSE ]) ,
+                            binmat_all_z_new[ cens_inds, - (firstcolindtrees_z[j]-1 + addednodes[1:2]), drop = FALSE  ])
+
+                BtB_z_new_c[-c(firstcolindtrees_z[j]-1 + addednodes[1:2]),
+                            firstcolindtrees_z[j]-1 + addednodes[1:2]] <- t(BtB_z_new_c[firstcolindtrees_z[j]-1 + addednodes[1:2],
+                                                                                        -c( firstcolindtrees_z[j]-1 + addednodes[1:2]), drop = FALSE ])
+
+                # new_tree_z$node_indices gives node indices of all observations
+
+                # create row for first of 2 new nodes
+                # for each pair node in other trees,
+                # count the number of node obs that are also in addednodes[1]
+                # for(j2 in setdiff(1:n.trees_censoring,j) ){
+                #   temptree_z <- curr_trees_z[[j2]]
+                #   terminal_nodes_j = which(as.numeric(temptree_z$tree_matrix[,'terminal']) == 1)
+                #
+                #   # can this loop be vectorized?
+                #   for(col_ind in 1:length(terminal_nodes_j)){
+                #     # + firstcolindtrees_z[j]-1 to go to just before columns of j2^th tree
+                #     # + col_ind to go to the relevant column for the particular node
+                #
+                #     # if new tree before j2, add 1 to the index because there is a new column
+                #     if(j2 < j){
+                #       add_ind <- 0
+                #     }else{ #j2 > j
+                #       add_ind <- 1
+                #     }
+                #
+                #     BtB_z_new[firstcolindtrees_z[j]-1 + addednodes[1],
+                #               firstcolindtrees_z[j2]-1 + col_ind + add_ind] <-   sum( (new_tree_z$node_indices == addednodes[1])&
+                #                                                                                 ( temptree_z$node_indices== terminal_nodes_j[col_ind] )  )
+                #
+                #     BtB_z_new[  firstcolindtrees_z[j2]-1 + col_ind + add_ind,
+                #                 firstcolindtrees_z[j]-1 + addednodes[1]] <- BtB_z_new[1,1 +  firstcolindtrees_z[j2]-1 + col_ind]
+                #
+                #     BtB_z_new[firstcolindtrees_z[j]-1 + addednodes[2],
+                #               firstcolindtrees_z[j2]-1 + col_ind + add_ind] <-   sum( (new_tree_z$node_indices == addednodes[2])&
+                #                                                                                ( temptree_z$node_indices== terminal_nodes_j[col_ind] )  )
+                #
+                #     BtB_z_new[  firstcolindtrees_z[j2]-1 + col_ind + add_ind,
+                #                 firstcolindtrees_z[j]-1 + addednodes[2]] <- BtB_z_new[2,1 +  firstcolindtrees_z[j2]-1 + col_ind]
+                #
+                #   }
+                # }
+
+                # firstcolindtrees_z_new[(j+1):n.trees_censoring]<- firstcolindtrees_z_new[(j+1):n.trees_censoring] + 1
+
+              }
+            }
+
+            if(j < n.trees_censoring){
+              firstcolindtrees_z_new[(j+1):n.trees_censoring]<- firstcolindtrees_z_new[(j+1):n.trees_censoring] + 1
             }
           }
 
+          # if(any(dim(BtB_z_new_c) != dim(BtB_z_c)+1 )){
+          #   stop("any(dim(BtB_z_new_c) != dim(BtB_z_c) -1 )")
+          # }
+          #
+          # if(any(dim(BtB_z_new_u) != dim(BtB_z_u)+1 )){
+          #   stop("any(dim(BtB_z_new_u) != dim(BtB_z_u) -1)")
+          # }
+          #
+          # if((ncol(binmat_all_z_new) != ncol(binmat_all_z)+1  )){
+          #
+          #
+          #   print("dim(BtB_z_new_u) = ")
+          #   print(dim(BtB_z_new_u))
+          #
+          #   print("dim(BtB_z_u) = ")
+          #   print(dim(BtB_z_u))
+          #
+          #   print("dim(binmat_all_z_new) = ")
+          #   print(dim(binmat_all_z_new))
+          #   print("dim(binmat_all_z) = ")
+          #   print(dim(binmat_all_z))
+          #   print("type_z = ")
+          #   print(type_z)
+          #
+          #   stop("(ncol(binmat_all_z_new) != ncol(binmat_all_z)+1 )")
+          # }
+
         } else if (type_z == "prune") {
           # var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
-          terminal_nodes_old = which(as.numeric(old_tree$tree_matrix[,'terminal']) == 1)
-          terminal_nodes_new = which(as.numeric(new_tree$tree_matrix[,'terminal']) == 1)
+          terminal_nodes_old = which(as.numeric(curr_tree_z$tree_matrix[,'terminal']) == 1)
+          terminal_nodes_new = which(as.numeric(new_tree_z$tree_matrix[,'terminal']) == 1)
 
+
+          firstcolindtrees_z_new <- firstcolindtrees_z
           # if(   new_tree_z$pruned_parent ==-1   ){
-          if(   all(terminal_nodes_old == terminal_nodes_new)   ){
+          if(   length(terminal_nodes_old) == length(terminal_nodes_new)   ){
             binmat_all_z_new <- binmat_all_z
+            # BtB_z_new <- BtB_z
+            BtB_z_new_u <- BtB_z_u
+            BtB_z_new_c <- BtB_z_c
+            # no pruning, do not edit firstcolindtrees_z_new
           }else{
             # delete column corresponding to pruned nodes and create column corresponding to parent node (does ordering matter?)
             # yes, ordering matters because otherwise would not be able to find columns to delete or grow in future steps
-            new_tree_z$pruned_parent
+            # new_tree_z$pruned_parent
 
-            # perhaps more efficient to just consider the difference
-            removednodes <- which(!( terminal_nodes_old %in% terminal_nodes_new ) )
-            addednode <- which(!( terminal_nodes_new %in% terminal_nodes_old ) )
+            # # perhaps more efficient to just consider the difference
+            # removednodes <- terminal_nodes_old[which(!( terminal_nodes_old %in% terminal_nodes_new ) )]
+            # addednode <- terminal_nodes_new[which(!( terminal_nodes_new %in% terminal_nodes_old ) )]
 
-            newparentbin <- binmat_all_z[,firstcolindtrees_z[j]-1+ removednodes[1]] +
-              binmat_all_z[,firstcolindtrees_z[j]-1+ removednodes[2]]
+            addednode <- which(terminal_nodes_new == new_tree_z$pruned_parent) # new terminal node is parent of removed nodes
+
+            # if(length(addednode) == 0){
+            #   print("terminal_nodes_new = ")
+            #   print(terminal_nodes_new)
+            #   print("new_tree_z = ")
+            #   print(new_tree_z)
+            #   stop("line 1813 length(addednode) == 0")
+            # }
+
+            # removed nodes were children of parent node
+            removednodes <- which(terminal_nodes_old %in%  which(curr_tree_z$tree_matrix[ , 'parent'] == new_tree_z$pruned_parent))
+
+            removednodes_rowind <- terminal_nodes_old[removednodes]
+            addednode_rowind <- terminal_nodes_new[addednode]
+
+            newparentbin <- binmat_all_z[,firstcolindtrees_z[j]-1+ removednodes[1], drop = FALSE ] +
+              binmat_all_z[,firstcolindtrees_z[j]-1+ removednodes[2], drop = FALSE ]
 
 
-            binmat_all_z_new <- binmat_all_z[, -(firstcolindtrees_z[j]-1+ removednodes) ]
+            binmat_all_z_new <- binmat_all_z[, -(firstcolindtrees_z[j]-1+ removednodes) , drop = FALSE ]
+
+            # BtB_z_new <- BtB_z[-(firstcolindtrees_z[j]-1+ removednode), -(firstcolindtrees_z[j]-1+ removednode) ]
+
+            BtB_z_new_u <- BtB_z_u[-(firstcolindtrees_z[j]-1+ removednodes), -(firstcolindtrees_z[j]-1+ removednodes), drop = FALSE  ]
+            BtB_z_new_c <- BtB_z_c[-(firstcolindtrees_z[j]-1+ removednodes), -(firstcolindtrees_z[j]-1+ removednodes) , drop = FALSE ]
 
             if(firstcolindtrees_z[j]-1 + addednode-1 == 0 ){
-              binmat_all_z_new <- cbind(#binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
+
+              # print("line 1839")
+              binmat_all_z_new <- cbind(#binmat_all_z_new[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
                                         newparentbin,
-                                        binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new) ])
+                                        binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new) , drop = FALSE ])
+
+
+              # BtB_z_new <- cbind(rep(0, nrow(BtB_z_new)),  BtB_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(BtB_z_new) ])
+              # BtB_z_new <- rbind(rep(0, ncol(BtB_z_new)), BtB_z_new[, (firstcolindtrees_z[j]-1 + addednode ):nrow(BtB_z_new) ])
+              #
+              # BtB_z_new[1,1] <- sum(new_tree_z$node_indices == addednode)
+              #
+              # BtB_z_new[ 1 ,-c( 1 )] <- crossprod((binmat_all_z_new[ , 1 ]) , binmat_all_z_new[ , - c(1) ])
+              #
+              # BtB_z_new[-c( 1),1] <- t(BtB_z_new[1,-c( 1 )])
+
+
+              BtB_z_new_u <- cbind(rep(0, nrow(BtB_z_new_u)),  BtB_z_new_u[, (firstcolindtrees_z[j]-1 + addednode ):ncol(BtB_z_new_u), drop = FALSE  ])
+              BtB_z_new_u <- rbind(rep(0, ncol(BtB_z_new_u)),
+                                   BtB_z_new_u[(firstcolindtrees_z[j]-1 + addednode ):nrow(BtB_z_new_u), , drop = FALSE ])
+
+              BtB_z_new_u[1,1] <- sum(new_tree_z$node_indices[uncens_inds] == addednode_rowind)
+
+              BtB_z_new_u[ 1 ,-c( 1 )] <- crossprod((binmat_all_z_new[uncens_inds , 1 , drop = FALSE ]) ,
+                                                    binmat_all_z_new[uncens_inds , - c(1) , drop = FALSE ])
+
+              BtB_z_new_u[-c( 1),1] <- t(BtB_z_new_u[1,-c( 1 ), drop = FALSE])
+
+
+
+              BtB_z_new_c <- cbind(rep(0, nrow(BtB_z_new_c)),  BtB_z_new_c[, (firstcolindtrees_z[j]-1 + addednode ):ncol(BtB_z_new_c), drop = FALSE  ])
+              BtB_z_new_c <- rbind(rep(0, ncol(BtB_z_new_c)),
+                                   BtB_z_new_c[(firstcolindtrees_z[j]-1 + addednode ):nrow(BtB_z_new_c), , drop = FALSE])
+
+              BtB_z_new_c[1,1] <- sum(new_tree_z$node_indices[cens_inds] == addednode_rowind)
+
+              BtB_z_new_c[ 1 ,-c( 1 )] <- crossprod((binmat_all_z_new[cens_inds , 1 , drop = FALSE ]) ,
+                                                    binmat_all_z_new[cens_inds , - c(1) , drop = FALSE ])
+
+              BtB_z_new_c[-c( 1),1] <- t(BtB_z_new_c[1,-c( 1 ), drop = FALSE])
+
+              # firstcolindtrees_z_new[(j+1):n.trees_censoring]<- firstcolindtrees_z_new[(j+1):n.trees_censoring] - 1
 
             }else{
-              if(firstcolindtrees_z[j]-1 + addednode-1 == ncol(binmat_all_z_new) +1 ){
-                binmat_all_z_new <- cbind(binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
+              if(firstcolindtrees_z[j]-1 + addednode-1 == ncol(binmat_all_z_new) ){
+                binmat_all_z_new <- cbind(binmat_all_z_new[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ) , drop = FALSE ],
                                           newparentbin#,
                                           #binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new) ]
                                           )
 
+                # BtB_z_new <- cbind( BtB_z_new[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
+                #                     rep(0, nrow(BtB_z_new)))
+                # BtB_z_new <- rbind(BtB_z_new[, 1:(firstcolindtrees_z[j]-1 + addednodes[1]-1 ) ],
+                #                    rep(0, ncol(BtB_z_new)))
+                #
+                # BtB_z_new[ncol(BtB_z_new),ncol(BtB_z_new)] <- sum(new_tree_z$node_indices == addednode)
+                #
+                # BtB_z_new[c(ncol(BtB_z_new) ),-c(ncol(BtB_z_new) )] <-
+                #   crossprod((binmat_all_z_new[ ,c(ncol(BtB_z_new) ) ]) , binmat_all_z_new[ , - c(ncol(BtB_z_new) ) ])
+                #
+                # BtB_z_new[-c(ncol(BtB_z_new) ),c(ncol(BtB_z_new) )] <- t(BtB_z_new[c(ncol(BtB_z_new) ), - c(ncol(BtB_z_new) )])
+
+
+                BtB_z_new_u <- cbind( BtB_z_new_u[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ), drop = FALSE  ],
+                                    rep(0, nrow(BtB_z_new_u)))
+                BtB_z_new_u <- rbind(BtB_z_new_u[1:(firstcolindtrees_z[j]-1 + addednode-1 ), , drop = FALSE],
+                                   rep(0, ncol(BtB_z_new_u)))
+
+                BtB_z_new_u[ncol(BtB_z_new_u),ncol(BtB_z_new_u)] <- sum(new_tree_z$node_indices[uncens_inds] == addednode_rowind)
+
+                BtB_z_new_u[c(ncol(BtB_z_new_u) ),-c(ncol(BtB_z_new_u) )] <-
+                  crossprod((binmat_all_z_new[uncens_inds , c(ncol(BtB_z_new_u) ), drop = FALSE  ]) ,
+                            binmat_all_z_new[uncens_inds , - c(ncol(BtB_z_new_u) ), drop = FALSE  ])
+
+                BtB_z_new_u[-c(ncol(BtB_z_new_u) ),c(ncol(BtB_z_new_u) )] <- t(BtB_z_new_u[c(ncol(BtB_z_new_u) ),
+                                                                                           - c(ncol(BtB_z_new_u) ),
+                                                                                           drop = FALSE ])
+
+
+                BtB_z_new_c <- cbind( BtB_z_new_c[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ), drop = FALSE  ],
+                                      rep(0, nrow(BtB_z_new_c)))
+                BtB_z_new_c <- rbind(BtB_z_new_c[ 1:(firstcolindtrees_z[j]-1 + addednode-1 ), , drop = FALSE],
+                                     rep(0, ncol(BtB_z_new_c)))
+
+                BtB_z_new_c[ncol(BtB_z_new_c),ncol(BtB_z_new_c)] <- sum(new_tree_z$node_indices[cens_inds] == addednode_rowind)
+
+                BtB_z_new_c[c(ncol(BtB_z_new_c) ),-c(ncol(BtB_z_new_c) )] <-
+                  crossprod((binmat_all_z_new[cens_inds ,c(ncol(BtB_z_new_c) ), drop = FALSE  ]) ,
+                            binmat_all_z_new[cens_inds , - c(ncol(BtB_z_new_c) ), drop = FALSE  ])
+
+                BtB_z_new_c[-c(ncol(BtB_z_new_c) ),c(ncol(BtB_z_new_c) )] <- t(BtB_z_new_c[c(ncol(BtB_z_new_c) ),
+                                                                                           - c(ncol(BtB_z_new_c) ),
+                                                                                           drop = FALSE ])
+
+                # firstcolindtrees_z_new unchanged
               }else{
-                binmat_all_z_new <- cbind(binmat_all_z_new[, firstcolindtrees_z[j]:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
+
+                binmat_all_z_new <- cbind(binmat_all_z_new[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ), drop = FALSE  ],
                                           newparentbin,
-                                          binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new) ])
+                                          binmat_all_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new), drop = FALSE  ])
+
+                # BtB_z_new <- cbind( BtB_z_new[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ) ],
+                #                     rep(0, nrow(BtB_z_new)),
+                #                     BtB_z_new[, (firstcolindtrees_z[j]-1 + addednode ):ncol(binmat_all_z_new)  ])
+                # BtB_z_new <- rbind(BtB_z_new[ 1:(firstcolindtrees_z[j]-1 + addednode-1 ), ],
+                #                    rep(0, ncol(BtB_z_new)),
+                #                    BtB_z_new[, (firstcolindtrees_z[j]-1 + addednode ):nrow(binmat_all_z_new)  ])
+                #
+                # BtB_z_new[firstcolindtrees_z[j]-1 + addednode,
+                #           firstcolindtrees_z[j]-1 + addednode] <- sum(new_tree_z$node_indices == addednode)
+                #
+                # BtB_z_new[firstcolindtrees_z[j]-1 + addednode,
+                #           - c(firstcolindtrees_z[j]-1 + addednode)] <-
+                #   crossprod((binmat_all_z_new[ ,firstcolindtrees_z[j]-1 + addednode ]) , binmat_all_z_new[ , - (firstcolindtrees_z[j]-1 + addednode) ])
+                #
+                # BtB_z_new[-c( firstcolindtrees_z[j]-1 + addednode),
+                #           firstcolindtrees_z[j]-1 + addednode] <- t(BtB_z_new[firstcolindtrees_z[j]-1 + addednode,
+                #                                                                     - c( firstcolindtrees_z[j]-1 + addednode)])
+
+                BtB_z_new_u <- cbind( BtB_z_new_u[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ), drop = FALSE  ],
+                                    rep(0, nrow(BtB_z_new_u)),
+                                    BtB_z_new_u[, (firstcolindtrees_z[j]-1 + addednode ):ncol(BtB_z_new_u), drop = FALSE   ])
+                BtB_z_new_u <- rbind(BtB_z_new_u[1:(firstcolindtrees_z[j]-1 + addednode-1 ), , drop = FALSE],
+                                   rep(0, ncol(BtB_z_new_u)),
+                                   BtB_z_new_u[ (firstcolindtrees_z[j]-1 + addednode ):nrow(BtB_z_new_u), , drop = FALSE ])
+
+                BtB_z_new_u[firstcolindtrees_z[j]-1 + addednode,
+                          firstcolindtrees_z[j]-1 + addednode] <- sum(new_tree_z$node_indices[uncens_inds] == addednode_rowind)
+
+                BtB_z_new_u[firstcolindtrees_z[j]-1 + addednode,
+                          - c(firstcolindtrees_z[j]-1 + addednode)] <-
+                  crossprod((binmat_all_z_new[ uncens_inds,firstcolindtrees_z[j]-1 + addednode, drop = FALSE  ]) ,
+                            binmat_all_z_new[ uncens_inds, - (firstcolindtrees_z[j]-1 + addednode), drop = FALSE  ])
+
+                BtB_z_new_u[-c( firstcolindtrees_z[j]-1 + addednode),
+                          firstcolindtrees_z[j]-1 + addednode] <- t(BtB_z_new_u[firstcolindtrees_z[j]-1 + addednode,
+                                                                              - c( firstcolindtrees_z[j]-1 + addednode), drop = FALSE ])
+
+
+                BtB_z_new_c <- cbind( BtB_z_new_c[, 1:(firstcolindtrees_z[j]-1 + addednode-1 ) , drop = FALSE ],
+                                      rep(0, nrow(BtB_z_new_c)),
+                                      BtB_z_new_c[, (firstcolindtrees_z[j]-1 + addednode ):ncol(BtB_z_new_c) , drop = FALSE  ])
+                BtB_z_new_c <- rbind(BtB_z_new_c[1:(firstcolindtrees_z[j]-1 + addednode-1 ) , , drop = FALSE],
+                                     rep(0, ncol(BtB_z_new_c)),
+                                     BtB_z_new_c[(firstcolindtrees_z[j]-1 + addednode ):nrow(BtB_z_new_c) , , drop = FALSE ])
+
+                BtB_z_new_c[firstcolindtrees_z[j]-1 + addednode,
+                            firstcolindtrees_z[j]-1 + addednode] <- sum(new_tree_z$node_indices[cens_inds] == addednode_rowind)
+
+                BtB_z_new_c[firstcolindtrees_z[j]-1 + addednode,
+                            - c(firstcolindtrees_z[j]-1 + addednode)] <-
+                  crossprod((binmat_all_z_new[ cens_inds,firstcolindtrees_z[j]-1 + addednode , drop = FALSE ]) ,
+                            binmat_all_z_new[ cens_inds, - (firstcolindtrees_z[j]-1 + addednode), drop = FALSE  ])
+
+                BtB_z_new_c[-c( firstcolindtrees_z[j]-1 + addednode),
+                            firstcolindtrees_z[j]-1 + addednode] <- t(BtB_z_new_c[firstcolindtrees_z[j]-1 + addednode,
+                                                                                  - c( firstcolindtrees_z[j]-1 + addednode), drop = FALSE ])
+
+                # firstcolindtrees_z_new[(j+1):n.trees_censoring]<- firstcolindtrees_z_new[(j+1):n.trees_censoring] - 1
 
               }
             }
             # child_left = as.numeric(old_tree_z$tree_matrix[new_tree_z$pruned_parent, 'child_left'])
             # child_right = as.numeric(old_tree_z$tree_matrix[new_tree_z$pruned_parent, 'child_right'])
+
+            if(j < n.trees_censoring){
+              firstcolindtrees_z_new[(j+1):n.trees_censoring]<- firstcolindtrees_z_new[(j+1):n.trees_censoring] - 1
+            }
+
           }
+
         } else { # change step
-          if(curr_trees_z[[j]]$var[1] != 0){ # What if change step returned $var equal to c(0,0) ????
+          firstcolindtrees_z_new <- firstcolindtrees_z
+          if(new_tree_z$var[1] != 0){ # What if change step returned $var equal to c(0,0) ????
             # var_count_z[curr_trees_z[[j]]$var[1]] <- var_count_z[curr_trees_z[[j]]$var[1]] - 1
             # var_count_z[curr_trees_z[[j]]$var[2]] <- var_count_z[curr_trees_z[[j]]$var[2]] + 1
 
+            binmat_all_z_new <- binmat_all_z
+            # BtB_z_new <- BtB_z
+            BtB_z_new_u <- BtB_z_u
+            BtB_z_new_c <- BtB_z_c
 
             # find column of changed node
             # there is probably a more efficient way of doing this
             # changednodes <- sort(unique(new_tree_z$node_indices[which(new_tree_z$node_indices !=  old_tree_z$node_indices)]))
-            changednodes <- get_children(new_tree_z$tree_matrix, new_tree_z$node_to_change)
+            changednodes_rowind <- sort(get_children(new_tree_z$tree_matrix, new_tree_z$node_to_change))
+
+            terminal_nodes_new = which(as.numeric(new_tree_z$tree_matrix[,'terminal']) == 1)
+            changednodes <- sort(which(terminal_nodes_new %in% changednodes_rowind))
 
             # just replace the two columns for the relevant terminal nodes
-            newnodesbin <- matrix(0, nrow(binmat_all_z),2)
-            newnodesbin[new_tree_z$node_indices == addednodes[1],1] <- rep(1, sum(new_tree_z$node_indices == addednodes[1]))
-            newnodesbin[new_tree_z$node_indices == addednodes[2],2] <- rep(1, sum(new_tree_z$node_indices == addednodes[2]))
+            # newnodesbin <- matrix(0, nrow(binmat_all_z),2)
+            # newnodesbin[new_tree_z$node_indices == changednodes_rowind[1],1] <- rep(1, sum(new_tree_z$node_indices == changednodes_rowind[1]))
+            # newnodesbin[new_tree_z$node_indices == changednodes_rowind[2],2] <- rep(1, sum(new_tree_z$node_indices == changednodes_rowind[2]))
 
-            binmat_all_z_new <- binmat_all_z
+            newnodesbin <- matrix(0, nrow(binmat_all_z),length(changednodes))
+            for(change_ind in 1:length(changednodes)){
+              newnodesbin[new_tree_z$node_indices == changednodes_rowind[change_ind],change_ind] <- rep(1, sum(new_tree_z$node_indices == changednodes_rowind[change_ind]))
+
+              BtB_z_new_u[firstcolindtrees_z[j]-1 + changednodes[change_ind],
+                          firstcolindtrees_z[j]-1 + changednodes[change_ind]] <- sum(new_tree_z$node_indices[uncens_inds] == changednodes_rowind[change_ind])
+
+              BtB_z_new_c[firstcolindtrees_z[j]-1 + changednodes[change_ind],
+                          firstcolindtrees_z[j]-1 + changednodes[change_ind]] <- sum(new_tree_z$node_indices[cens_inds] == changednodes_rowind[change_ind])
+
+            }
+
+            binmat_all_z_new[,firstcolindtrees_z[j]-1 + changednodes] <- newnodesbin
+
+            # BtB_z_new[firstcolindtrees_z[j]-1 + changednodes[1],
+            #           firstcolindtrees_z[j]-1 + changednodes[1]] <- sum(new_tree_z$node_indices == addednode[1])
+            # BtB_z_new[firstcolindtrees_z[j]-1 + changednodes[2],
+            #           firstcolindtrees_z[j]-1 + changednodes[2]] <- sum(new_tree_z$node_indices == addednode[2])
+            #
+            # BtB_z_new[firstcolindtrees_z[j]-1 + changednodes,
+            #           - c(firstcolindtrees_z[j]-1 + changednodes)] <-
+            #   crossprod((binmat_all_z_new[ ,firstcolindtrees_z[j]-1 + changednodes ]) , binmat_all_z_new[ , - (firstcolindtrees_z[j]-1 + changednodes) ])
+            #
+            # BtB_z_new[-c( firstcolindtrees_z[j]-1 + changednodes),
+            #           firstcolindtrees_z[j]-1 + changednodes] <- t(BtB_z_new[firstcolindtrees_z[j]-1 + changednodes,
+            #                                                               - c( firstcolindtrees_z[j]-1 + changednodes)])
+
+
+            # BtB_z_new_u[firstcolindtrees_z[j]-1 + changednodes[1],
+            #           firstcolindtrees_z[j]-1 + changednodes[1]] <- sum(new_tree_z$node_indices[uncens_inds] == changednodes_rowind[1])
+            # BtB_z_new_u[firstcolindtrees_z[j]-1 + changednodes[2],
+            #           firstcolindtrees_z[j]-1 + changednodes[2]] <- sum(new_tree_z$node_indices[uncens_inds] == changednodes_rowind[2])
+
+            BtB_z_new_u[firstcolindtrees_z[j]-1 + changednodes,
+                      - c(firstcolindtrees_z[j]-1 + changednodes)] <-
+              crossprod((binmat_all_z_new[ uncens_inds ,firstcolindtrees_z[j]-1 + changednodes, drop = FALSE  ]) ,
+                        binmat_all_z_new[ uncens_inds , - (firstcolindtrees_z[j]-1 + changednodes), drop = FALSE  ])
+
+            BtB_z_new_u[-c( firstcolindtrees_z[j]-1 + changednodes),
+                      firstcolindtrees_z[j]-1 + changednodes] <- t(BtB_z_new_u[firstcolindtrees_z[j]-1 + changednodes,
+                                                                             - c( firstcolindtrees_z[j]-1 + changednodes), drop = FALSE ])
+
+            # BtB_z_new_c[firstcolindtrees_z[j]-1 + changednodes[1],
+            #             firstcolindtrees_z[j]-1 + changednodes[1]] <- sum(new_tree_z$node_indices[cens_inds] == changednodes_rowind[1])
+            # BtB_z_new_c[firstcolindtrees_z[j]-1 + changednodes[2],
+            #             firstcolindtrees_z[j]-1 + changednodes[2]] <- sum(new_tree_z$node_indices[cens_inds] == changednodes_rowind[2])
+
+            BtB_z_new_c[firstcolindtrees_z[j]-1 + changednodes,
+                        - c(firstcolindtrees_z[j]-1 + changednodes)] <-
+              crossprod((binmat_all_z_new[ cens_inds ,firstcolindtrees_z[j]-1 + changednodes , drop = FALSE ]) ,
+                        binmat_all_z_new[ cens_inds , - (firstcolindtrees_z[j]-1 + changednodes) , drop = FALSE ])
+
+            BtB_z_new_c[-c( firstcolindtrees_z[j]-1 + changednodes),
+                        firstcolindtrees_z[j]-1 + changednodes] <- t(BtB_z_new_c[firstcolindtrees_z[j]-1 + changednodes,
+                                                                                 - c( firstcolindtrees_z[j]-1 + changednodes), drop = FALSE ])
 
           }else{
-            binmat_all_z_new[firstcolindtrees_z[j]-1 + changednodes,] <- newnodesbin
+            binmat_all_z_new <- binmat_all_z
+            # BtB_z_new <- BtB_z
+            BtB_z_new_u <- BtB_z_u
+            BtB_z_new_c <- BtB_z_c
           }
+          # if(any(dim(BtB_z_new_c) != dim(BtB_z_c) )){
+          #   print("dim(BtB_z_new_c) = ")
+          #   print(dim(BtB_z_new_c))
+          #   print("dim(BtB_z_c) = ")
+          #   print(dim(BtB_z_c))
+          #
+          #   stop("any(dim(BtB_z_new_c) != dim(BtB_z_c) )")
+          # }
+          #
+          # if(any(dim(BtB_z_new_u) != dim(BtB_z_u) )){
+          #   stop("any(dim(BtB_z_new_u) != dim(BtB_z_u) )")
+          # }
+          #
+          # if(any(dim(binmat_all_z_new) != dim(binmat_all_z) )){
+          #   stop("any(dim(binmat_all_z_new) != dim(binmat_all_z) )")
+          # }
         }
 
 
+        # BtB_z_c <- crossprod(binmat_all_z[cens_inds, ])
+        # BtB_z_u <- crossprod(binmat_all_z[uncens_inds, ])
+        # BtB_z_new_c <- crossprod(binmat_all_z_new[cens_inds, ])
+        # BtB_z_new_u <- crossprod(binmat_all_z_new[uncens_inds, ])
 
-        if((nrow(new_tree_z$tree_matrix) == nrow(curr_tree_z$tree_matrix) ) & (type_z != "change" )){
-          alpha_MH <- 0
-          # print("no good trees")
-        }else{
+        #
+        #   # check that binmat_all_z_new defined properly
+        #
+        #   for(j2 in 1:n.trees_censoring){
+        #
+        #     tempnodes <- new_trees_z[[j2]]$node_indices
+        #     sorteduniqnodes <- sort(unique(tempnodes))
+        #     for(node_ind in 1:length(unique(tempnodes))){
+        #       nodeval <- sorteduniqnodes[node_ind]
+        #       if(any(binmat_all_z_new[,firstcolindtrees_z_new[j2]-1 + node_ind] !=   1*(new_trees_z[[j2]]$node_indices == nodeval) )){
+        #         print("j2 = ")
+        #         print(j2)
+        #         print("nodeval = ")
+        #         print(nodeval)
+        #         print("firstcolindtrees_z_new[j2] = ")
+        #         print(firstcolindtrees_z_new[j2])
+        #         print("tempnodes = ")
+        #         print(tempnodes)
+        #         print("node_ind = ")
+        #         print(node_ind)
+        #         print("sorteduniqnodes = ")
+        #         print(sorteduniqnodes)
+        #
+        #         print("binmat_all_z_new[,firstcolindtrees_z_new[j2]-1 + node_ind] = ")
+        #         print(binmat_all_z_new[,firstcolindtrees_z_new[j2]-1 + node_ind])
+        #         print("1*(new_trees_z[[j2]]$node_indices == nodeval) = ")
+        #         print(1*(new_trees_z[[j2]]$node_indices == nodeval))
+        #
+        #         stop("line 2254. any(binmat_all_z_new[,firstcolindtrees_z_new[j2]-1 + node_ind] !=   1*(new_trees_z[[j2]]$node_indices == nodeval) )")
+        #       }
+        #     }
+        #   }
+        #
+        #
+        #   stop("line 2217 max(abs((BtB_z_new_u + BtB_z_new_c) - crossprod(binmat_all_z_new))) > 0.0001 ")
+        # }
+
           # CURRENT TREE: compute the log of the marginalized likelihood + log of the tree prior
+          z_resids <- z - offsetz #z_epsilon
+          z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2)
 
           z_uncens <- z_resids[uncens_inds]
           z_cens <- z_resids[cens_inds]
+
+          current_partial_residuals <- z_resids
+
+          weightz <- (gamma1^2 + phi1)/phi1
+          weightstemp <- rep(1,n)
+          weightstemp[uncens_inds] <- weightz
 
 
           # most efficient code would update cross-product subsetted by censored and uncensored observations here
@@ -1354,76 +2630,224 @@ tbart2marg <- function(x.train,
           # also can apply kernel trick
 
 
+          # if(j==1){
+            # it should be possible to avoid duplication of this calculation
+
+            if(linearterms){
+              if(one_chol ==TRUE){
+                reslisttemp = tree_full_conditional_z_marg_lin_savechol(curr_trees_z, #[[j]],
+                                                                    current_partial_residuals,# sigma2,
+                                                                    sigma2_mu_z,
+                                                                    weightstemp,
+                                                                    weightz,
+                                                                    binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c,
+                                                                    wmat_train, Amean_p, invAvar_p)
+                l_old_z = reslisttemp[[1]] + get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
+
+                IR_old_z <- reslisttemp[[2]]
+                S_j_old_z <- reslisttemp[[3]]
+              }else{
+                l_old_z = tree_full_conditional_z_marg_lin(curr_trees_z, #[[j]],
+                                                               current_partial_residuals,# sigma2,
+                                                               sigma2_mu_z,
+                                                               weightstemp,
+                                                               weightz,
+                                                               binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c,
+                                                               wmat_train, Amean_p, invAvar_p) +
+                  get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
+              }
+            }else{
+              if(one_chol ==TRUE){
+                reslisttemp = tree_full_conditional_z_marg_savechol(curr_trees_z, #[[j]],
+                                                     current_partial_residuals,# sigma2,
+                                                     sigma2_mu_z,
+                                                     weightstemp,
+                                                     weightz,
+                                                     binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c)
+                l_old_z = reslisttemp[[1]] + get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
+
+                IR_old_z <- reslisttemp[[2]]
+                S_j_old_z <- reslisttemp[[3]]
+              }else{
+                l_old_z = tree_full_conditional_z_marg(curr_trees_z, #[[j]],
+                                                     current_partial_residuals,# sigma2,
+                                                     sigma2_mu_z,
+                                                     weightstemp,
+                                                     weightz,
+                                                     binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c) +
+                  get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
+              }
+            }
+          # }
+
+
+
+
+        if((nrow(new_tree_z$tree_matrix) == nrow(curr_tree_z$tree_matrix) ) & (type_z != "change" )){
+          alpha_MH <- 0
+          # print("no good trees")
+          # if(j==1){
           # it should be possible to avoid duplication of this calculation
-          l_old = tree_full_conditional_z_marg(curr_trees_z, #[[j]],
-                                               current_partial_residuals,# sigma2,
-                                               sigma2_mu_z,
-                                               weightz,
-                                               binmat_all_z, cens_inds, uncens_inds) +
-            get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
 
-          # NEW TREE: compute the log of the marginalized likelihood + log of the tree prior
-          l_new = tree_full_conditional_z_marg(new_trees_z, #[[j]],
-                                               current_partial_residuals,# sigma2,
-                                               sigma2_mu_z,
-                                               weightz,
-                                               binmat_all_z_new, cens_inds, uncens_inds) +
-            get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
 
-          alpha_MH = alpha_mh(l_new,l_old, curr_trees_z[[j]],new_trees_z[[j]], type_z)
+
+
+        }else{
+
+
+
+          if(linearterms){
+            if(one_chol ==TRUE){
+              # NEW TREE: compute the log of the marginalized likelihood + log of the tree prior
+              reslisttemp = tree_full_conditional_z_marg_lin_savechol(new_trees_z, #[[j]],
+                                                                  current_partial_residuals,# sigma2,
+                                                                  sigma2_mu_z,
+                                                                  weightstemp,
+                                                                  weightz,
+                                                                  binmat_all_z_new, cens_inds, uncens_inds, BtB_z_new_u, BtB_z_new_c,
+                                                             wmat_train, Amean_p, invAvar_p)
+              l_new_z = reslisttemp[[1]] + get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
+
+              IR_new_z <- reslisttemp[[2]]
+              S_j_new_z <- reslisttemp[[3]]
+            }else{
+              # NEW TREE: compute the log of the marginalized likelihood + log of the tree prior
+              l_new_z = tree_full_conditional_z_marg_lin(new_trees_z, #[[j]],
+                                                             current_partial_residuals,# sigma2,
+                                                             sigma2_mu_z,
+                                                             weightstemp,
+                                                             weightz,
+                                                             binmat_all_z_new, cens_inds, uncens_inds, BtB_z_new_u, BtB_z_new_c,
+                                                             wmat_train, Amean_p, invAvar_p) + get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
+
+              }
+          }else{
+            if(one_chol ==TRUE){
+              # NEW TREE: compute the log of the marginalized likelihood + log of the tree prior
+              reslisttemp = tree_full_conditional_z_marg_savechol(new_trees_z, #[[j]],
+                                                   current_partial_residuals,# sigma2,
+                                                   sigma2_mu_z,
+                                                   weightstemp,
+                                                   weightz,
+                                                   binmat_all_z_new, cens_inds, uncens_inds, BtB_z_new_u, BtB_z_new_c)
+              l_new_z = reslisttemp[[1]] + get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
+
+              IR_new_z <- reslisttemp[[2]]
+              S_j_new_z <- reslisttemp[[3]]
+
+            }else{
+
+              # NEW TREE: compute the log of the marginalized likelihood + log of the tree prior
+              l_new_z = tree_full_conditional_z_marg(new_trees_z, #[[j]],
+                                                   current_partial_residuals,# sigma2,
+                                                   sigma2_mu_z,
+                                                   weightstemp,
+                                                   weightz,
+                                                   binmat_all_z_new, cens_inds, uncens_inds, BtB_z_new_u, BtB_z_new_c) +
+                get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) # the priors for all unchanged trees will cancel out
+            }
+          }
+
+          alpha_MH = alpha_mh(l_new_z,l_old_z, curr_trees_z[[j]],new_trees_z[[j]], type_z)
 
         }
 
-
         if(is.na(alpha_MH)){
-          print("l_old = ")
-          print(l_old)
-          print("l_new = ")
-          print(l_new)
-
+          print("l_old_z = ")
+          print(l_old_z)
+          print("l_new_z = ")
+          print(l_new_z)
           print("curr_tree_z = ")
           print(curr_tree_z)
-
           print("new_tree_z = ")
           print(new_tree_z)
-
           print("get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z) = ")
           print(get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z))
-
           print(" get_tree_prior(new_trees_z[[j]], alpha_z, beta_z) = ")
           print( get_tree_prior(new_trees_z[[j]], alpha_z, beta_z))
-
-          stop(";ome 12-0. alpha_MH NA")
-
+          stop("line 2771 alpha_MH NA")
         }
 
         if(alpha_MH > runif(1)) {
           curr_trees_z[[j]] = new_trees_z[[j]]
+          binmat_all_z <- binmat_all_z_new
+          firstcolindtrees_z <- firstcolindtrees_z_new
+          BtB_z_u <- BtB_z_new_u
+          BtB_z_c <- BtB_z_new_c
 
-          if (type_z == "grow") {
-            var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] + 1
-          } else if (type_z == "prune") {
-            var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
-          } else {
-            if(curr_trees_z[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
-              var_count_z[curr_trees_z[[j]]$var[1]] <- var_count_z[curr_trees_z[[j]]$var[1]] - 1
-              var_count_z[curr_trees_z[[j]]$var[2]] <- var_count_z[curr_trees_z[[j]]$var[2]] + 1
-            }
+          l_old_z <- l_new_z
+
+          if( (one_chol == TRUE) ) {
+            IR_old_z <- IR_new_z
+            S_j_old_z <- S_j_new_z
           }
 
+          # if(sparse){
+            if (type_z == "grow") {
+              var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] + 1
+            } else if (type_z == "prune") {
+              var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
+            } else {
+              if(curr_trees_z[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
+                var_count_z[curr_trees_z[[j]]$var[1]] <- var_count_z[curr_trees_z[[j]]$var[1]] - 1
+                var_count_z[curr_trees_z[[j]]$var[2]] <- var_count_z[curr_trees_z[[j]]$var[2]] + 1
+              }
+            }
+          # }
         }
-
-
-
+        # type_z_prev <- type_z
       } # end loop over z trees
 
 
-      curr_trees_z[[j]] = simulate_mu_weighted_all(curr_trees_z,
-                                               current_partial_residuals,
-                                               # sigma2,
-                                               sigma2_mu_z,
-                                               weightstemp)
+      BtB_z_c <- crossprod(binmat_all_z[cens_inds, ])
+      BtB_z_u <- crossprod(binmat_all_z[uncens_inds, ])
 
+
+      if( (one_chol == TRUE)| linearterms ) {
+        if(linearterms){
+          if(one_chol ==TRUE){
+
+            mudrawlist_z = simulate_mu_weighted_all_z_fast_lin(curr_trees_z,
+                                                           current_partial_residuals,
+                                                           sigma2_mu_z,
+                                                           weightstemp,
+                                                           weightz,
+                                                           binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z,
+                                                           IR_old_z, S_j_old_z, wmat_train, Amean_p, invAvar_p)
+          }else{
+            mudrawlist_z = simulate_mu_weighted_all_z_lin(curr_trees_z,
+                                                               current_partial_residuals,
+                                                               sigma2_mu_z,
+                                                               weightstemp,
+                                                               weightz,
+                                                               binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z, wmat_train, Amean_p, invAvar_p)
+          }
+        }else{
+          mudrawlist_z = simulate_mu_weighted_all_z_fast(curr_trees_z,
+                                                    current_partial_residuals,
+                                                    sigma2_mu_z,
+                                                    weightstemp,
+                                                    weightz,
+                                                    binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z,
+                                                    IR_old_z, S_j_old_z)
+        }
+      }else{
+        mudrawlist_z = simulate_mu_weighted_all_z(curr_trees_z,
+                                                 current_partial_residuals,
+                                                 sigma2_mu_z,
+                                                 weightstemp,
+                                                 weightz,
+                                                 binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z)
+      }
+
+      curr_trees_z <- mudrawlist_z[[1]]
+      new_trees_z <- curr_trees_z
+
+      if(linearterms){
+        mutemp_z <- cbind(wmat_train, binmat_all_z) %*% mudrawlist_z[[5]]
+      }else{
+        mutemp_z <- binmat_all_z %*% mudrawlist_z[[3]]
+      }
       # # Updating BART predictions
       # current_fit = get_predictions(curr_trees_z[j], w.train, single_tree = TRUE)
       # mutemp_z = mutemp_z - tree_fits_store_z[,j] # subtract the old fit
@@ -1431,7 +2855,8 @@ tbart2marg <- function(x.train,
       # tree_fits_store_z[,j] = current_fit # update the new fit
       #
 
-    }else{
+    }else{  # z sample not marginalized code
+
 
       for (j in 1:n.trees_censoring) {
         current_partial_residuals = z_resids - mutemp_z + tree_fits_store_z[,j]
@@ -1466,30 +2891,33 @@ tbart2marg <- function(x.train,
           alpha_MH <- 0
           # print("no good trees")
         }else{
-          # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_old = tree_full_conditional_weighted(curr_trees_z[[j]],
-                                        current_partial_residuals,# sigma2,
-                                        sigma2_mu_z,
-                                        weightstemp) +
-            get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z)
+
+          # if(j==1){
+            # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+            l_old_z = tree_full_conditional_weighted(curr_trees_z[[j]],
+                                          current_partial_residuals,# sigma2,
+                                          sigma2_mu_z,
+                                          weightstemp) +
+              get_tree_prior(curr_trees_z[[j]], alpha_z, beta_z)
+          # }
 
           # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_new = tree_full_conditional_weighted(new_trees_z[[j]],
+          l_new_z = tree_full_conditional_weighted(new_trees_z[[j]],
                                         current_partial_residuals,# sigma2,
                                         sigma2_mu_z,
                                         weightstemp) +
             get_tree_prior(new_trees_z[[j]], alpha_z, beta_z)
 
-          alpha_MH = alpha_mh(l_new,l_old, curr_trees_z[[j]],new_trees_z[[j]], type_z)
+          alpha_MH = alpha_mh(l_new_z,l_old_z, curr_trees_z[[j]],new_trees_z[[j]], type_z)
 
         }
 
 
         if(is.na(alpha_MH)){
-          print("l_old = ")
-          print(l_old)
-          print("l_new = ")
-          print(l_new)
+          print("l_old_z = ")
+          print(l_old_z)
+          print("l_new_z = ")
+          print(l_new_z)
 
           print("curr_tree_z = ")
           print(curr_tree_z)
@@ -1509,17 +2937,20 @@ tbart2marg <- function(x.train,
 
         if(alpha_MH > runif(1)) {
           curr_trees_z[[j]] = new_trees_z[[j]]
+          l_old_z <- l_new_z
+          # if(sparse){
 
-          if (type_z == "grow") {
-            var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] + 1
-          } else if (type_z == "prune") {
-            var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
-          } else {
-            if(curr_trees_z[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
-              var_count_z[curr_trees_z[[j]]$var[1]] <- var_count_z[curr_trees_z[[j]]$var[1]] - 1
-              var_count_z[curr_trees_z[[j]]$var[2]] <- var_count_z[curr_trees_z[[j]]$var[2]] + 1
+            if (type_z == "grow") {
+              var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] + 1
+            } else if (type_z == "prune") {
+              var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
+            } else {
+              if(curr_trees_z[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
+                var_count_z[curr_trees_z[[j]]$var[1]] <- var_count_z[curr_trees_z[[j]]$var[1]] - 1
+                var_count_z[curr_trees_z[[j]]$var[2]] <- var_count_z[curr_trees_z[[j]]$var[2]] + 1
+              }
             }
-          }
+          # }
 
         }
 
@@ -1533,6 +2964,11 @@ tbart2marg <- function(x.train,
         current_fit = get_predictions(curr_trees_z[j], w.train, single_tree = TRUE)
         mutemp_z = mutemp_z - tree_fits_store_z[,j] # subtract the old fit
         mutemp_z = mutemp_z + current_fit # add the new fit
+
+        mutemp_z_trees = mutemp_z_trees - tree_fits_store_z[,j] # subtract the old fit
+        mutemp_z_trees = mutemp_z_trees + current_fit # add the new fit
+
+
         tree_fits_store_z[,j] = current_fit # update the new fit
 
       } # end loop over z trees
@@ -1592,6 +3028,15 @@ tbart2marg <- function(x.train,
                                      w.test,
                                      single_tree = length(curr_trees_z) == 1)
 
+    if(linearterms & !marginalize){
+      mutemp_test_z_trees <- mutemp_test_z
+      mutemp_test_z <- mutemp_test_z_trees + mutemp_test_z_lin
+    }
+
+    if(linearterms &  marginalize){
+      mutemp_test_z <- mutemp_test_z + wmat_test %*% mudrawlist_z[[4]]
+    }
+
     ####### draw sums of trees for y #######################################################
 
     #create residuals for z and set variance
@@ -1643,8 +3088,13 @@ tbart2marg <- function(x.train,
 
 
     if(marginalize){
+      Btz <- crossprod(binmat_all_y, z_epsilon[uncens_inds])
+      Btz_new <- Btz
+      ztz <- crossprod(z_epsilon[uncens_inds])
+      # print("2467. dim(ztz) = ")
+      # print(dim(ztz))
       for (j in 1:n.trees_outcome) {
-        current_partial_residuals = y_resids - mutemp_y + tree_fits_store_y[,j]
+        # current_partial_residuals = y_resids - mutemp_y + tree_fits_store_y[,j]
 
         # We need the new and old trees for the likelihoods
         new_trees_y <- curr_trees_y
@@ -1654,7 +3104,7 @@ tbart2marg <- function(x.train,
 
         # Generate a new tree based on the current
         new_trees_y[[j]] <- update_tree(
-          y = y_resids,
+          y = y_uncens,
           X = x.train[uncens_inds,],
           type = type_y,
           curr_tree = curr_trees_y[[j]],
@@ -1668,33 +3118,693 @@ tbart2marg <- function(x.train,
         curr_tree_y <- curr_trees_y[[j]]
         new_tree_y <- new_trees_y[[j]]
 
+
+
+        # if(ncol(binmat_all_y)!= ncol(BtB_y)){
+        #
+        #   print("iter = ")
+        #   print(iter)
+        #
+        #   print("j = ")
+        #   print(j)
+        #
+        #   print("dim(binmat_all_y) = ")
+        #   print(dim(binmat_all_y))
+        #
+        #   print("dim(BtB_y) = ")
+        #   print(dim(BtB_y))
+        #
+        #   stop("line 2500. ncol(binmat_all_y)!= ncol(BtB_y)")
+        # }
+
+        if (type_y == "grow") {
+          # var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] + 1
+
+          # split node is just parent of last rows
+          # new_tree_y$tree_matrix[nrow(new_tree_y$tree_matrix)-1,'parent']
+
+          terminal_nodes_old = which(as.numeric(curr_tree_y$tree_matrix[,'terminal']) == 1)
+          terminal_nodes_new = which(as.numeric(new_tree_y$tree_matrix[,'terminal']) == 1)
+          removednode <- which(!( terminal_nodes_old %in% terminal_nodes_new ) )
+          addednodes <- which(!( terminal_nodes_new %in% terminal_nodes_old ) )
+
+          removednode_rowind <- terminal_nodes_old[removednode]
+          addednodes_rowind <- terminal_nodes_new[addednodes]
+
+          firstcolindtrees_y_new <- firstcolindtrees_y
+
+          if(length(addednodes)==0){
+            binmat_all_y_new <- binmat_all_y
+            BtB_y_new <- BtB_y
+            Btz_new <- Btz
+            # BztBz_y_new <- BztBz_y
+            # do not edit firstcolindtrees_y_new
+          }else{
+            # create binary variables for new nodes
+            # can either do this within a new grow_tree function or here
+            # can just use node indices
+
+            # # check right node removed
+            # if( terminal_nodes_old[removednode] != (  new_tree_y$tree_matrix[nrow(new_tree_y$tree_matrix)-1,'parent']    )  ){
+            #   stop(" terminal_nodes_old[removednode] != (  new_tree_y$tree_matrix[nrow(new_tree_y$tree_matrix)-1,'parent']    ) ")
+            # }
+            # # check right node added
+            # if( any( terminal_nodes_new[addednodes] != (nrow(new_tree_y$tree_matrix)-1):(nrow(new_tree_y$tree_matrix)) ) ){
+            #   stop("terminal_nodes_new[addednodes] != (nrow(new_tree_y$tree_matrix)-1):(nrow(new_tree_y$tree_matrix)) ")
+            # }
+
+
+            newnodesbin <- matrix(0, nrow(binmat_all_y),2)
+            newnodesbin[new_tree_y$node_indices == addednodes_rowind[1],1] <- rep(1, sum(new_tree_y$node_indices == addednodes_rowind[1]))
+            newnodesbin[new_tree_y$node_indices == addednodes_rowind[2],2] <- rep(1, sum(new_tree_y$node_indices == addednodes_rowind[2]))
+
+            binmat_all_y_new <- binmat_all_y[, -(firstcolindtrees_y[j]-1+ removednode) , drop = FALSE ]
+            BtB_y_new <- BtB_y[-(firstcolindtrees_y[j]-1+ removednode), -(firstcolindtrees_y[j]-1+ removednode) , drop = FALSE]
+            BtB_y_new <- BtB_y[-(firstcolindtrees_y[j]-1+ removednode), -(firstcolindtrees_y[j]-1+ removednode), drop = FALSE ]
+            Btz_new <- Btz[-(firstcolindtrees_y[j]-1+ removednode)  ]
+
+            if(firstcolindtrees_y[j]-1 + addednodes[1]-1 == 0 ){
+              binmat_all_y_new <- cbind(#binmat_all_y_new[, 1:(firstcolindtrees_y[j]-1 + addednodes-1 ) ],
+                newnodesbin,
+                binmat_all_y_new[, (firstcolindtrees_y[j]-1 + addednodes[1] ):ncol(binmat_all_y_new), drop = FALSE ])
+
+              BtB_y_new <- cbind(rep(0, nrow(BtB_y_new)), rep(0, nrow(BtB_y_new)),
+                                 BtB_y_new[, (firstcolindtrees_y[j]-1 + addednodes[1] ):ncol(BtB_y_new), drop = FALSE ])
+              BtB_y_new <- rbind(rep(0, ncol(BtB_y_new)), rep(0, ncol(BtB_y_new)),
+                                 BtB_y_new[(firstcolindtrees_y[j]-1 + addednodes[1] ):nrow(BtB_y_new), , drop = FALSE])
+
+              BtB_y_new[1,1] <- sum(new_tree_y$node_indices == addednodes_rowind[1])
+              BtB_y_new[2,2] <- sum(new_tree_y$node_indices == addednodes_rowind[2])
+
+              BtB_y_new[ (1:2) ,-c( (1:2) )] <- crossprod((binmat_all_y_new[ ,(1:2), drop = FALSE ]) , binmat_all_y_new[ , - (1:2), drop = FALSE ])
+              BtB_y_new[-c( (1:2)),(1:2)] <- t(BtB_y_new[(1:2),-c( (1:2)), drop = FALSE])
+
+              Btz_new <- c(NA,NA,Btz_new)
+              Btz_new[(1:2)] <- crossprod((binmat_all_y_new[ ,(1:2), drop = FALSE ]) , z_epsilon[uncens_inds])
+
+            }else{
+              if(firstcolindtrees_y[j]-1 + addednodes[2]-1 == ncol(binmat_all_y_new) +1 ){
+                binmat_all_y_new <- cbind(binmat_all_y_new[, 1:(firstcolindtrees_y[j]-1 + addednodes[1]-1 ), drop = FALSE ],
+                                          newnodesbin#,
+                                          #binmat_all_y_new[, (firstcolindtrees_y[j]-1 + addednodes ):ncol(binmat_all_y_new) ]
+                )
+
+                BtB_y_new <- cbind( BtB_y_new[, 1:(firstcolindtrees_y[j]-1 + addednodes[1]-1 ), drop = FALSE ],
+                                    rep(0, nrow(BtB_y_new)), rep(0, nrow(BtB_y_new)))
+                BtB_y_new <- rbind(BtB_y_new[1:(firstcolindtrees_y[j]-1 + addednodes[1]-1 ), , drop = FALSE],
+                                   rep(0, ncol(BtB_y_new)), rep(0, ncol(BtB_y_new)))
+
+                BtB_y_new[ncol(BtB_y_new)-1,ncol(BtB_y_new)-1] <- sum(new_tree_y$node_indices == addednodes_rowind[1])
+                BtB_y_new[ncol(BtB_y_new),ncol(BtB_y_new)] <- sum(new_tree_y$node_indices == addednodes_rowind[2])
+
+                BtB_y_new[c(ncol(BtB_y_new)-1,ncol(BtB_y_new) ),
+                          -c(c(ncol(BtB_y_new)-1,ncol(BtB_y_new) ))] <-
+                  crossprod((binmat_all_y_new[ ,c(ncol(BtB_y_new)-1,ncol(BtB_y_new)), drop = FALSE ]) ,
+                            binmat_all_y_new[ , - c(ncol(BtB_y_new)-1,ncol(BtB_y_new)), drop = FALSE ])
+
+                BtB_y_new[-c(c(ncol(BtB_y_new)-1,ncol(BtB_y_new) )),
+                          c(ncol(BtB_y_new)-1,ncol(BtB_y_new) )] <- t(BtB_y_new[c(ncol(BtB_y_new)-1,ncol(BtB_y_new) ),
+                                                                                -c(c(ncol(BtB_y_new)-1,ncol(BtB_y_new) )), drop = FALSE])
+
+                Btz_new <- c(Btz_new,NA,NA)
+
+                Btz_new[c(length(Btz_new)-1,length(Btz_new))] <- crossprod((binmat_all_y_new[ ,c(ncol(BtB_y_new)-1,ncol(BtB_y_new)), drop = FALSE ]) ,
+                                                                           z_epsilon[uncens_inds])
+
+
+              }else{
+                binmat_all_y_new <- cbind(binmat_all_y_new[, 1:(firstcolindtrees_y[j]-1 + addednodes[1]-1 ), drop = FALSE ],
+                                          newnodesbin,
+                                          binmat_all_y_new[, (firstcolindtrees_y[j]-1 + addednodes[1] ):ncol(binmat_all_y_new), drop = FALSE ])
+
+                BtB_y_new <- cbind( BtB_y_new[, 1:(firstcolindtrees_y[j]-1 + addednodes[1]-1 ), drop = FALSE ],
+                                    rep(0, nrow(BtB_y_new)), rep(0, nrow(BtB_y_new)),
+                                    BtB_y_new[, (firstcolindtrees_y[j]-1 + addednodes[1] ):ncol(BtB_y_new), drop = FALSE  ])
+                BtB_y_new <- rbind(BtB_y_new[ 1:(firstcolindtrees_y[j]-1 + addednodes[1]-1 ), , drop = FALSE],
+                                   rep(0, ncol(BtB_y_new)), rep(0, ncol(BtB_y_new)),
+                                   BtB_y_new[(firstcolindtrees_y[j]-1 + addednodes[1] ):nrow(BtB_y_new), , drop = FALSE])
+
+                BtB_y_new[firstcolindtrees_y[j]-1 + addednodes[1],
+                          firstcolindtrees_y[j]-1 + addednodes[1]] <- sum(new_tree_y$node_indices == addednodes_rowind[1])
+                BtB_y_new[firstcolindtrees_y[j]-1 + addednodes[2],
+                          firstcolindtrees_y[j]-1 + addednodes[2]] <- sum(new_tree_y$node_indices == addednodes_rowind[2])
+
+
+                BtB_y_new[firstcolindtrees_y[j]-1 + addednodes[1:2],
+                          -c( firstcolindtrees_y[j]-1 + addednodes[1:2])] <-
+                  crossprod((binmat_all_y_new[ ,firstcolindtrees_y[j]-1 + addednodes[1:2] , drop = FALSE]) ,
+                            binmat_all_y_new[ , - (firstcolindtrees_y[j]-1 + addednodes[1:2]), drop = FALSE ])
+
+                BtB_y_new[-c(firstcolindtrees_y[j]-1 + addednodes[1:2]),
+                          firstcolindtrees_y[j]-1 + addednodes[1:2]] <- t(BtB_y_new[firstcolindtrees_y[j]-1 + addednodes[1:2],
+                                                                                  -c( firstcolindtrees_y[j]-1 + addednodes[1:2]), drop = FALSE])
+
+                Btz_new <- c(Btz_new[1:(firstcolindtrees_y[j]-1 + addednodes[1]-1)], NA, NA,
+                             Btz_new[(firstcolindtrees_y[j]-1 + addednodes[1]):(length(Btz_new))])
+
+                Btz_new[firstcolindtrees_y[j]-1 + addednodes[1:2]] <- crossprod((binmat_all_y_new[ ,firstcolindtrees_y[j]-1 + addednodes[1:2], drop = FALSE ]) ,
+                                                                                z_epsilon[uncens_inds])
+
+              }
+            }
+            if(j < n.trees_censoring){
+              firstcolindtrees_y_new[(j+1):n.trees_censoring] <- firstcolindtrees_y_new[(j+1):n.trees_censoring] + 1
+            }
+          }
+
+
+        } else if (type_y == "prune") {
+          # var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] - 1
+          terminal_nodes_old = which(as.numeric(curr_tree_y$tree_matrix[,'terminal']) == 1)
+          terminal_nodes_new = which(as.numeric(new_tree_y$tree_matrix[,'terminal']) == 1)
+          firstcolindtrees_y_new <- firstcolindtrees_y
+
+          # if(   new_tree_y$pruned_parent ==-1   ){
+          if(  length(terminal_nodes_old) == length(terminal_nodes_new)    ){
+            binmat_all_y_new <- binmat_all_y
+            Btz_new <- Btz
+            BtB_y_new <- BtB_y
+          }else{
+            # delete column corresponding to pruned nodes and create column corresponding to parent node (does ordering matter?)
+            # yes, ordering matters because otherwise would not be able to find columns to delete or grow in future steps
+            # new_tree_y$pruned_parent
+
+            # addednode <- new_tree_y$pruned_parent
+
+            # # perhaps more efficient to just consider the difference
+            # removednodes <- terminal_nodes_old[which(!( terminal_nodes_old %in% terminal_nodes_new ) )]
+            # addednode <- terminal_nodes_new[which(!( terminal_nodes_new %in% terminal_nodes_old ) )]
+
+            addednode <- which(terminal_nodes_new == new_tree_y$pruned_parent) # new terminal node is parent of removed nodes
+
+            # if(length(addednode) != 1){
+            #   print("terminal_nodes_new = ")
+            #   print(terminal_nodes_new)
+            #   print("new_tree_y = ")
+            #   print(new_tree_y)
+            #   print("addednode = ")
+            #   print(addednode)
+            #
+            #   print("addednode = ")
+            #   print(addednode)
+            #   stop("line 2844 length(addednode) != 1")
+            # }
+
+            # removed nodes were children of parent node
+            removednodes <- which(terminal_nodes_old %in%  which(curr_tree_y$tree_matrix[ , 'parent'] == new_tree_y$pruned_parent))
+
+            # if(length(removednodes) != 2){
+            #   print("terminal_nodes_old = ")
+            #   print(terminal_nodes_old)
+            #   print("new_tree_y = ")
+            #   print(new_tree_y)
+            #   stop("line 2857 length(removednodes) != 2")
+            # }
+
+
+            removednodes_rowind <- terminal_nodes_old[removednodes]
+            addednode_rowind <- terminal_nodes_new[addednode]
+
+            newparentbin <- binmat_all_y[,firstcolindtrees_y[j]-1+ removednodes[1], drop = FALSE] +
+              binmat_all_y[,firstcolindtrees_y[j]-1+ removednodes[2], drop = FALSE]
+
+
+            binmat_all_y_new <- binmat_all_y[, -(firstcolindtrees_y[j]-1+ removednodes), drop = FALSE ]
+
+            # print("line 2860. dim(binmat_all_y_new) = ")
+            # print(dim(binmat_all_y_new))
+
+            BtB_y_new <- BtB_y[-(firstcolindtrees_y[j]-1+ removednodes), -(firstcolindtrees_y[j]-1+ removednodes), drop = FALSE ]
+
+            Btz_new <- Btz[-(firstcolindtrees_y[j]-1+ removednodes)]
+
+            if(firstcolindtrees_y[j]-1 + addednode-1 == 0 ){
+              binmat_all_y_new <- cbind(#binmat_all_y_new[, 1:(firstcolindtrees_y[j]-1 + addednode-1 ) ],
+                newparentbin,
+                binmat_all_y_new[, (firstcolindtrees_y[j]-1 + addednode ):ncol(binmat_all_y_new), drop = FALSE ])
+
+              BtB_y_new <- cbind(rep(0, nrow(BtB_y_new)),  BtB_y_new[, (firstcolindtrees_y[j]-1 + addednode ):ncol(BtB_y_new), drop = FALSE ])
+              BtB_y_new <- rbind(rep(0, ncol(BtB_y_new)), BtB_y_new[(firstcolindtrees_y[j]-1 + addednode ):nrow(BtB_y_new), , drop = FALSE ])
+
+              # if(ncol(BtB_y_new)!=ncol(binmat_all_y_new)){
+              #   print("firstcolindtrees_y[j]-1 + addednode = ")
+              #   print(firstcolindtrees_y[j]-1 + addednode)
+              #
+              #   print("firstcolindtrees_y = ")
+              #   print(firstcolindtrees_y)
+              #
+              #   print("removednodes = ")
+              #   print(removednodes)
+              #
+              #
+              #   print("dim(BtB_y) = ")
+              #   print(dim(BtB_y))
+              #
+              #
+              #   print("dim(BtB_y) = ")
+              #   print(dim(BtB_y))
+              #
+              #   print("dim(binmat_all_y) = ")
+              #   print(dim(binmat_all_y))
+              #
+              #   print("addednode = ")
+              #   print(addednode)
+              #
+              #   print("dim(newparentbin) = ")
+              #   print(dim(newparentbin))
+              #
+              #
+              #   print("dim(BtB_y_new) = ")
+              #   print(dim(BtB_y_new))
+              #
+              #   print("dim(binmat_all_y_new) = ")
+              #   print(dim(binmat_all_y_new))
+              #   stop("ncol(BtB_y_new)!=ncol(binmat_all_y_new)")
+              # }
+
+              BtB_y_new[1,1] <- sum(new_tree_y$node_indices == addednode_rowind)
+              BtB_y_new[ 1 ,-c( 1 ) ] <- crossprod((binmat_all_y_new[ , 1, drop = FALSE ]) , binmat_all_y_new[ , - c(1), drop = FALSE ])
+              BtB_y_new[-c( 1),1 ] <- t(BtB_y_new[1,-c( 1 ), drop = FALSE])
+
+              Btz_new <- c(NA,Btz_new)
+
+              Btz_new[1] <- crossprod((binmat_all_y_new[ ,1, drop = FALSE ]) , z_epsilon[uncens_inds])
+
+            }else{
+              if(firstcolindtrees_y[j]-1 + addednode-1 == ncol(binmat_all_y_new)  ){
+                binmat_all_y_new <- cbind(binmat_all_y_new[, 1:(firstcolindtrees_y[j]-1 + addednode-1 ), drop = FALSE ],
+                                          newparentbin#,
+                                          #binmat_all_y_new[, (firstcolindtrees_y[j]-1 + addednode ):ncol(binmat_all_y_new) ]
+                                          )
+
+                BtB_y_new <- cbind( BtB_y_new[, 1:(firstcolindtrees_y[j]-1 + addednode-1 ), drop = FALSE ],
+                                    rep(0, nrow(BtB_y_new)))
+                BtB_y_new <- rbind(BtB_y_new[1:(firstcolindtrees_y[j]-1 + addednode-1 ), , drop = FALSE ],
+                                   rep(0, ncol(BtB_y_new)))
+
+                BtB_y_new[ncol(BtB_y_new),ncol(BtB_y_new)] <- sum(new_tree_y$node_indices == addednode_rowind)
+                BtB_y_new[c(ncol(BtB_y_new) ),-c(ncol(BtB_y_new) )] <-
+                  crossprod((binmat_all_y_new[ ,c(ncol(BtB_y_new) ) , drop = FALSE]) , binmat_all_y_new[ , - c(ncol(BtB_y_new) ), drop = FALSE ])
+                BtB_y_new[-c(ncol(BtB_y_new) ),c(ncol(BtB_y_new) )] <- t(BtB_y_new[c(ncol(BtB_y_new) ), - c(ncol(BtB_y_new) ), drop = FALSE])
+
+                Btz_new <- c(Btz_new,NA)
+
+                Btz_new[c(ncol(BtB_y_new) )] <- crossprod((binmat_all_y_new[ ,c(ncol(BtB_y_new) ), drop = FALSE ]) , z_epsilon[uncens_inds])
+
+              }else{
+                binmat_all_y_new <- cbind(binmat_all_y_new[, 1:(firstcolindtrees_y[j]-1 + addednode-1 ), drop = FALSE ],
+                                          newparentbin,
+                                          binmat_all_y_new[, (firstcolindtrees_y[j]-1 + addednode ):ncol(binmat_all_y_new), drop = FALSE ])
+
+
+                BtB_y_new <- cbind( BtB_y_new[, 1:(firstcolindtrees_y[j]-1 + addednode-1 ), drop = FALSE ],
+                                    rep(0, nrow(BtB_y_new)),
+                                    BtB_y_new[, (firstcolindtrees_y[j]-1 + addednode ):ncol(BtB_y_new), drop = FALSE  ])
+                BtB_y_new <- rbind(BtB_y_new[ 1:(firstcolindtrees_y[j]-1 + addednode-1 ), , drop = FALSE ],
+                                   rep(0, ncol(BtB_y_new)),
+                                   BtB_y_new[(firstcolindtrees_y[j]-1 + addednode ):nrow(BtB_y_new), , drop = FALSE ])
+
+                BtB_y_new[firstcolindtrees_y[j]-1 + addednode,
+                          firstcolindtrees_y[j]-1 + addednode] <- sum(new_tree_y$node_indices == addednode_rowind)
+                BtB_y_new[firstcolindtrees_y[j]-1 + addednode,
+                          - c(firstcolindtrees_y[j]-1 + addednode)] <-
+                  crossprod((binmat_all_y_new[ ,firstcolindtrees_y[j]-1 + addednode, drop = FALSE ]) ,
+                            binmat_all_y_new[ , - (firstcolindtrees_y[j]-1 + addednode), drop = FALSE ])
+                BtB_y_new[-c( firstcolindtrees_y[j]-1 + addednode),
+                          firstcolindtrees_y[j]-1 + addednode] <- t(BtB_y_new[firstcolindtrees_y[j]-1 + addednode,
+                                                                              - c( firstcolindtrees_y[j]-1 + addednode),
+                                                                              drop = FALSE])
+
+                Btz_new <- c(Btz_new[1:(firstcolindtrees_y[j]-1 + addednode-1)], NA,
+                             Btz_new[(firstcolindtrees_y[j]-1 + addednode):(length(Btz_new))])
+                Btz_new[firstcolindtrees_y[j]-1 + addednode] <- crossprod((binmat_all_y_new[ , firstcolindtrees_y[j]-1 + addednode, drop = FALSE ]) ,
+                                                                          z_epsilon[uncens_inds])
+              }
+            }
+            # child_left = as.numeric(old_tree_y$tree_matrix[new_tree_y$pruned_parent, 'child_left'])
+            # child_right = as.numeric(old_tree_y$tree_matrix[new_tree_y$pruned_parent, 'child_right'])
+            if(j < n.trees_censoring){
+              firstcolindtrees_y_new[(j+1):n.trees_censoring]<- firstcolindtrees_y_new[(j+1):n.trees_censoring] - 1
+            }
+          }
+        } else { # change step
+          firstcolindtrees_y_new <- firstcolindtrees_y
+
+          if(new_tree_y$var[1] != 0){ # What if change step returned $var equal to c(0,0) ????
+            # var_count_y[curr_trees_y[[j]]$var[1]] <- var_count_y[curr_trees_y[[j]]$var[1]] - 1
+            # var_count_y[curr_trees_y[[j]]$var[2]] <- var_count_y[curr_trees_y[[j]]$var[2]] + 1
+
+            binmat_all_y_new <- binmat_all_y
+            BtB_y_new <- BtB_y
+            Btz_new <- Btz
+
+            # find column of changed node
+            # there is probably a more efficient way of doing this
+            # changednodes <- sort(unique(new_tree_y$node_indices[which(new_tree_y$node_indices !=  old_tree_y$node_indices)]))
+            changednodes_rowind <- sort(get_children(new_tree_y$tree_matrix, new_tree_y$node_to_change))
+
+            terminal_nodes_new = which(as.numeric(new_tree_y$tree_matrix[,'terminal']) == 1)
+            changednodes <- sort(which(terminal_nodes_new %in% changednodes_rowind))
+
+            # just replace the two columns for the relevant terminal nodes
+            # newnodesbin <- matrix(0, nrow(binmat_all_y),2)
+            # newnodesbin[new_tree_y$node_indices == changednodes_rowind[1],1] <- rep(1, sum(new_tree_y$node_indices == changednodes_rowind[1]))
+            # newnodesbin[new_tree_y$node_indices == changednodes_rowind[2],2] <- rep(1, sum(new_tree_y$node_indices == changednodes_rowind[2]))
+
+            newnodesbin <- matrix(0, nrow(binmat_all_y),length(changednodes))
+            for(change_ind in 1:length(changednodes)){
+              newnodesbin[new_tree_y$node_indices == changednodes_rowind[change_ind],change_ind] <- rep(1, sum(new_tree_y$node_indices == changednodes_rowind[change_ind]))
+
+              BtB_y_new[firstcolindtrees_y[j]-1 + changednodes[change_ind],
+                          firstcolindtrees_y[j]-1 + changednodes[change_ind]] <- sum(new_tree_y$node_indices == changednodes_rowind[change_ind])
+
+            }
+
+            binmat_all_y_new[,firstcolindtrees_y[j]-1 + changednodes] <- newnodesbin
+
+            # BtB_y_new[firstcolindtrees_y[j]-1 + changednodes[1],
+            #           firstcolindtrees_y[j]-1 + changednodes[1]] <- sum(new_tree_y$node_indices == changednodes_rowind[1])
+            # BtB_y_new[firstcolindtrees_y[j]-1 + changednodes[2],
+            #           firstcolindtrees_y[j]-1 + changednodes[2]] <- sum(new_tree_y$node_indices == changednodes_rowind[2])
+
+            BtB_y_new[firstcolindtrees_y[j]-1 + changednodes,
+                      - c(firstcolindtrees_y[j]-1 + changednodes)] <-
+              crossprod((binmat_all_y_new[ ,firstcolindtrees_y[j]-1 + changednodes, drop = FALSE ]) ,
+                        binmat_all_y_new[ , - (firstcolindtrees_y[j]-1 + changednodes), drop = FALSE ])
+
+            BtB_y_new[-c( firstcolindtrees_y[j]-1 + changednodes),
+                      firstcolindtrees_y[j]-1 + changednodes] <- t(BtB_y_new[firstcolindtrees_y[j]-1 + changednodes,
+                                                                          - c( firstcolindtrees_y[j]-1 + changednodes), drop = FALSE])
+            Btz_new[firstcolindtrees_y[j]-1 + changednodes] <- crossprod((binmat_all_y_new[ , firstcolindtrees_y[j]-1 + changednodes, drop = FALSE ]) ,
+                                                                         z_epsilon[uncens_inds])
+
+
+            # if(any(BtB_y_new != crossprod(binmat_all_y_new) )){
+            #   print("BtB_y_new =")
+            #   print(BtB_y_new)
+            #   print("binmat_all_y_new =")
+            #   print(binmat_all_y_new)
+            #   stop("line 3052. any(BtB_y_new != crossprod(binmat_all_y_new) )")
+            # }
+
+          }else{
+            binmat_all_y_new <- binmat_all_y
+            BtB_y_new <- BtB_y
+            Btz_new <- Btz
+          }
+        }
+
+
+        binmat_all_y_z <- cbind(binmat_all_y,z_epsilon[uncens_inds])
+        binmat_all_y_new_z <- cbind(binmat_all_y_new,z_epsilon[uncens_inds])
+
+        # if(max(abs(crossprod(binmat_all_y_new,z_epsilon[uncens_inds]) - Btz_new)) > 0.001){
+        #   print("max(abs(crossprod(binmat_all_y_new,z_epsilon[uncens_inds]) - Btz_new)) = ")
+        #   print(max(abs(crossprod(binmat_all_y_new,z_epsilon[uncens_inds]) - Btz_new)))
+        #
+        #   print("((crossprod(binmat_all_y_new,z_epsilon[uncens_inds]) - Btz_new)) = ")
+        #   print(((crossprod(binmat_all_y_new,z_epsilon[uncens_inds]) - Btz_new)))
+        #
+        #   print("type_y = ")
+        #   print(type_y)
+        #
+        #   stop("max(abs(crossprod(binmat_all_y_new,z_epsilon[uncens_inds]) - Btz_new)) > 0.001")
+        # }
+
+        # technically this is inefficient.
+        # only need to update the elements of Btz corresponding to edited columns of B
+        # Btz <- crossprod(binmat_all_y, z_epsilon[uncens_inds])
+        # Btz_new <- crossprod(binmat_all_y_new, z_epsilon[uncens_inds])
+
+        # print("dim(BtB_y) = ")
+        # print(dim(BtB_y))
+        # print("dim(Btz) = ")
+        # print(dim(Btz))
+        #
+        # print("type_y = ")
+        # print(type_y)
+
+        # Btz <- crossprod(binmat_all_y,z_epsilon[uncens_inds])
+        # Btz_new <- crossprod(binmat_all_y_new,z_epsilon[uncens_inds])
+
+        # this must be updated because ztz has been updated
+        BztBz_y <- cbind(BtB_y, Btz)
+        BztBz_y <- rbind(BztBz_y, t(c(Btz, ztz)))
+        # both Btz_new and ztz have been updated
+        BztBz_y_new <- cbind(BtB_y_new, Btz_new)
+        BztBz_y_new <- rbind(BztBz_y_new, t(c(Btz_new, ztz)))
+
+
+          # for(j2 in 1:n.trees_outcome){
+          #
+          #   tempnodes <- new_trees_y[[j2]]$node_indices
+          #   sorteduniqnodes <- sort(unique(tempnodes))
+          #
+          #   for(node_ind in 1:length(unique(tempnodes))){
+          #     nodeval <- sorteduniqnodes[node_ind]
+          #     if(any(binmat_all_y_new_z[,firstcolindtrees_y_new[j2]-1 + node_ind] !=   1*(new_trees_y[[j2]]$node_indices == nodeval) )){
+          #       print("j2 = ")
+          #       print(j2)
+          #       print("nodeval = ")
+          #       print(nodeval)
+          #       print("firstcolindtrees_y_new[j2] = ")
+          #       print(firstcolindtrees_y_new[j2])
+          #       print("tempnodes = ")
+          #       print(tempnodes)
+          #       print("node_ind = ")
+          #       print(node_ind)
+          #       print("sorteduniqnodes = ")
+          #       print(sorteduniqnodes)
+          #
+          #       print("binmat_all_y_new_z[,firstcolindtrees_y_new[j2]-1 + node_ind] = ")
+          #       print(binmat_all_y_new_z[,firstcolindtrees_y_new[j2]-1 + node_ind])
+          #       print("1*(new_trees_y[[j2]]$node_indices == nodeval) = ")
+          #       print(1*(new_trees_y[[j2]]$node_indices == nodeval))
+          #
+          #       stop("line 2254. any(binmat_all_y_new_z[,firstcolindtrees_y_new[j2]-1 + node_ind] !=   1*(new_trees_y[[j2]]$node_indices == nodeval) )")
+          #     }
+          #   }
+          # }
+        #
+        #   stop("line 3150. any(BztBz_y_new != crossprod(binmat_all_y_new_z) )")
+        # }
+
+
+        if(cov_prior == "VH"){
+          priorgammavar <- tau*phi1
+        }else{
+          if(cov_prior == "Omori"){
+            # stop("currently code only allows VH cov_prior")
+            priorgammavar <- G0
+          }else{
+            if(jointgammanodes){
+              stop("currently code only allows VH cov_prior with jointgammanodes")
+            }
+          }
+        }
+
+        # # BtB_y <- crossprod(binmat_all_y)
+        # binmat_all_y_z <- cbind(binmat_all_y,z_epsilon[uncens_inds])
+        # # binmat_all_y_new_z <- cbind(binmat_all_y_new,z_epsilon[uncens_inds])
+        # # Btz <- crossprod(binmat_all_y,z_epsilon[uncens_inds])
+        # # this must be updated because ztz has been updated
+        # BztBz_y <- cbind(BtB_y, Btz)
+        # BztBz_y <- rbind(BztBz_y, t(c(Btz, ztz)))
+        # # both Btz_new and ztz have been updated
+        # binmat_all_y_new_z <- cbind(binmat_all_y_new,z_epsilon[uncens_inds])
+        # # BtB_y_new <- crossprod(binmat_all_y_new)
+        # # Btz_new <- crossprod(binmat_all_y_new,z_epsilon[uncens_inds])
+        # BztBz_y_new <- cbind(BtB_y_new, Btz_new)
+        # BztBz_y_new <- rbind(BztBz_y_new, t(c(Btz_new, ztz)))
+        # # BztBz_y_new <- crossprod(binmat_all_y_new_z)
+        y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
+
+        # if(j==1){
+
+          if(linearterms){
+            if(jointgammanodes){
+              if(one_chol ==TRUE){
+
+                # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+                reslisttemp = tree_full_conditional_y_marg_savechol_lin(curr_trees_y,
+                                                                    y_uncens, # current_partial_residuals,
+                                                                    phi1,priorgammavar,
+                                                                    sigma2_mu_y, binmat_all_y_z, BztBz_y,
+                                                                    Bmean_p, invBvar_p, xmat_train, gamma0)
+                l_old_y <- reslisttemp[[1]] + get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+                IR_old_y <- reslisttemp[[2]]
+                S_j_old_y <- reslisttemp[[3]]
+              }else{
+                # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+                l_old_y = tree_full_conditional_y_marg_lin(curr_trees_y,
+                                                                        y_uncens, # current_partial_residuals,
+                                                                        phi1,priorgammavar,
+                                                                        sigma2_mu_y, binmat_all_y_z, BztBz_y,
+                                                                        Bmean_p, invBvar_p, xmat_train, gamma0) + get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+              }
+            }else{
+              if(one_chol ==TRUE){
+
+                # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+                reslisttemp = tree_full_conditional_y_marg_nogamma_savechol_lin(curr_trees_y,
+                                                                                y_resids, # current_partial_residuals,
+                                                                            phi1,
+                                                                            sigma2_mu_y, binmat_all_y, BtB_y,
+                                                                            Bmean_p, invBvar_p, xmat_train)
+                l_old_y <- reslisttemp[[1]] + get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+                IR_old_y <- reslisttemp[[2]]
+                S_j_old_y <- reslisttemp[[3]]
+              }else{
+                # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+                l_old_y = tree_full_conditional_y_marg_nogamma_lin(curr_trees_y,
+                                                                   y_resids, # current_partial_residuals,
+                                                                phi1,
+                                                                sigma2_mu_y, binmat_all_y, BtB_y,
+                                                                Bmean_p, invBvar_p, xmat_train) + get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+              }
+            }
+          }else{
+            if(jointgammanodes){
+              if(one_chol ==TRUE){
+                # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+                reslisttemp = tree_full_conditional_y_marg_savechol(curr_trees_y,
+                                                                    y_uncens, # current_partial_residuals,
+                                                     phi1,priorgammavar,
+                                                     sigma2_mu_y, binmat_all_y_z, BztBz_y, gamma0)
+                l_old_y <- reslisttemp[[1]] + get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+                IR_old_y <- reslisttemp[[2]]
+                S_j_old_y <- reslisttemp[[3]]
+              }else{
+
+                # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+                l_old_y = tree_full_conditional_y_marg(curr_trees_y,
+                                                     y_uncens, # current_partial_residuals,
+                                                     phi1,priorgammavar,
+                                                     sigma2_mu_y, binmat_all_y_z, BztBz_y, gamma0) +
+                  get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+              }
+            }else{
+              if(one_chol ==TRUE){
+                # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+                reslisttemp = tree_full_conditional_y_marg_nogamma_savechol(curr_trees_y,
+                                                                            y_resids, # current_partial_residuals,
+                                                                    phi1,
+                                                                    sigma2_mu_y, binmat_all_y, BtB_y)
+                l_old_y <- reslisttemp[[1]] + get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+                IR_old_y <- reslisttemp[[2]]
+                S_j_old_y <- reslisttemp[[3]]
+              }else{
+                # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
+                l_old_y = tree_full_conditional_y_marg_nogamma(curr_trees_y,
+                                                               y_resids, # current_partial_residuals,
+                                                     phi1,
+                                                     sigma2_mu_y, binmat_all_y, BtB_y) +
+                  get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+              }
+            }
+          }
+
+        # } # end j==1
+
+        # print("line 3511")
+
         if((nrow(new_tree_y$tree_matrix) == nrow(curr_tree_y$tree_matrix) ) & (type_y != "change" )){
           alpha_MH <- 0
           # print("no good trees")
+
         }else{
-          # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_old = tree_full_conditional(curr_trees_y[[j]],
-                                        current_partial_residuals,
-                                        phi1,
-                                        sigma2_mu_y) +
-            get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+          if(linearterms){
+            if(jointgammanodes){
+              if(one_chol == TRUE){
 
-          # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_new = tree_full_conditional(new_trees_y[[j]],
-                                        current_partial_residuals,
-                                        phi1,
-                                        sigma2_mu_y) +
-            get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+                # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
+                reslisttemp = tree_full_conditional_y_marg_savechol_lin(new_trees_y,
+                                                                    y_uncens, # current_partial_residuals,
+                                                                    phi1,priorgammavar,
+                                                                    sigma2_mu_y, binmat_all_y_new_z, BztBz_y_new,
+                                                                    Bmean_p, invBvar_p, xmat_train, gamma0)
+                l_new_y <- reslisttemp[[1]] + get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+                IR_new_y <- reslisttemp[[2]]
+                S_j_new_y <- reslisttemp[[3]]
+              }else{
+                # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
+                l_new_y = tree_full_conditional_y_marg_lin(new_trees_y,
+                                                        y_uncens, # current_partial_residuals,
+                                                        phi1,priorgammavar,
+                                                        sigma2_mu_y, binmat_all_y_new_z, BztBz_y_new,
+                                                        Bmean_p, invBvar_p, xmat_train, gamma0) + get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+              }
+            }else{
+              if(one_chol ==TRUE){
+                # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
+                reslisttemp = tree_full_conditional_y_marg_nogamma_savechol_lin(new_trees_y,
+                                                                                y_resids, # current_partial_residuals,
+                                                                            phi1,
+                                                                            sigma2_mu_y, binmat_all_y_new, BtB_y_new,
+                                                                            Bmean_p, invBvar_p, xmat_train)
+                l_new_y <- reslisttemp[[1]] + get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+                IR_new_y <- reslisttemp[[2]]
+                S_j_new_y <- reslisttemp[[3]]
+              }else{
+                # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
+                l_new_y = tree_full_conditional_y_marg_nogamma_lin(new_trees_y,
+                                                                   y_resids, # current_partial_residuals,
+                                                                                phi1,
+                                                                                sigma2_mu_y, binmat_all_y_new, BtB_y_new,
+                                                                                Bmean_p, invBvar_p, xmat_train) + get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+              }
+            }
 
-          alpha_MH = alpha_mh(l_new,l_old, curr_trees_y[[j]],new_trees_y[[j]], type_y)
+          }else{
+            if(jointgammanodes){
+              if(one_chol ==TRUE){
+                # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
+                reslisttemp = tree_full_conditional_y_marg_savechol(new_trees_y,
+                                                                    y_uncens, # current_partial_residuals,
+                                                                    phi1,priorgammavar,
+                                                                    sigma2_mu_y, binmat_all_y_new_z, BztBz_y_new, gamma0)
+                l_new_y <- reslisttemp[[1]] + get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+                IR_new_y <- reslisttemp[[2]]
+                S_j_new_y <- reslisttemp[[3]]
+
+              }else{
+                # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
+                l_new_y = tree_full_conditional_y_marg(new_trees_y,
+                                                     y_uncens, # current_partial_residuals,
+                                                     phi1,priorgammavar,
+                                                     sigma2_mu_y, binmat_all_y_new_z, BztBz_y_new, gamma0) +
+                  get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+              }
+            }else{
+              if(one_chol ==TRUE){
+                # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
+                reslisttemp = tree_full_conditional_y_marg_nogamma_savechol(new_trees_y,
+                                                                            y_resids, # current_partial_residuals,
+                                                                    phi1,
+                                                                    sigma2_mu_y, binmat_all_y_new, BtB_y_new)
+                l_new_y <- reslisttemp[[1]] + get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+                IR_new_y <- reslisttemp[[2]]
+                S_j_new_y <- reslisttemp[[3]]
+              }else{
+                # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
+                l_new_y = tree_full_conditional_y_marg_nogamma(new_trees_y,
+                                                               y_resids, # current_partial_residuals,
+                                                     phi1,
+                                                     sigma2_mu_y, binmat_all_y_new, BtB_y_new) +
+                  get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
+              }
+            }
+          }
+
+          alpha_MH = alpha_mh(l_new_y,l_old_y, curr_trees_y[[j]],new_trees_y[[j]], type_y)
 
         }
 
         if(is.na(alpha_MH)){
-          print("l_old = ")
-          print(l_old)
-          print("l_new = ")
-          print(l_new)
+          print("l_old_y = ")
+          print(l_old_y)
+          print("l_new_y = ")
+          print(l_new_y)
 
           print("curr_tree_y = ")
           print(curr_tree_y)
@@ -1713,27 +3823,154 @@ tbart2marg <- function(x.train,
 
         if(alpha_MH > runif(1)) {
           curr_trees_y[[j]] = new_trees_y[[j]]
+          firstcolindtrees_y <- firstcolindtrees_y_new
+          Btz <- Btz_new
+          binmat_all_y_z <- binmat_all_y_new_z
+          binmat_all_y <- binmat_all_y_new
+          BtB_y <- BtB_y_new
+          BztBz_y <- BztBz_y_new
 
-          if (type_y == "grow") {
-            var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] + 1
-          } else if (type_y == "prune") {
-            var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] - 1
-          } else {
-            if(curr_trees_y[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
-              var_count_y[curr_trees_y[[j]]$var[1]] <- var_count_y[curr_trees_y[[j]]$var[1]] - 1
-              var_count_y[curr_trees_y[[j]]$var[2]] <- var_count_y[curr_trees_y[[j]]$var[2]] + 1
-            }
+          l_old_y <- l_new_y
+          if( (one_chol == TRUE) ){
+            IR_old_y <- IR_new_y
+            S_j_old_y <- S_j_new_y
           }
+          # if(sparse){
 
+            if (type_y == "grow") {
+              var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] + 1
+            } else if (type_y == "prune") {
+              var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] - 1
+            } else {
+              if(curr_trees_y[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
+                var_count_y[curr_trees_y[[j]]$var[1]] <- var_count_y[curr_trees_y[[j]]$var[1]] - 1
+                var_count_y[curr_trees_y[[j]]$var[2]] <- var_count_y[curr_trees_y[[j]]$var[2]] + 1
+              }
+            }
+          # }
         }
 
+        # type_y_prev <- type_y
 
       } # end loop over y trees
 
-      curr_trees_y[[j]] = simulate_mu_all(curr_trees_y[[j]],
-                                      current_partial_residuals,
-                                      phi1,
-                                      sigma2_mu_y)
+
+      # in case it is somehow not updated earlier
+      # print("line 3610")
+      if(cov_prior == "VH"){
+        priorgammavar <- tau*phi1
+      }else{
+        if(cov_prior == "Omori"){
+          # stop("currently code only allows VH cov_prior")
+          priorgammavar <- G0
+        }else{
+          if(jointgammanodes){
+            stop("currently code only allows VH cov_prior with jointgammanodes")
+          }
+        }
+      }
+
+
+
+      # BtB_y <- crossprod(binmat_all_y)
+      binmat_all_y_z <- cbind(binmat_all_y,z_epsilon[uncens_inds])
+      # binmat_all_y_new_z <- cbind(binmat_all_y_new,z_epsilon[uncens_inds])
+      # Btz <- crossprod(binmat_all_y,z_epsilon[uncens_inds])
+      # this must be updated because ztz has been updated
+      BztBz_y <- cbind(BtB_y, Btz)
+      BztBz_y <- rbind(BztBz_y, t(c(Btz, ztz)))
+      # both Btz_new and ztz have been updated
+      # BtB_y_new <- crossprod(binmat_all_y_new)
+      # Btz_new <- crossprod(binmat_all_y_new,z_epsilon[uncens_inds])
+      # BztBz_y_new <- cbind(BtB_y_new, Btz_new)
+      # BztBz_y_new <- rbind(BztBz_y_new, t(c(Btz_new, ztz)))
+      # BztBz_y <- crossprod(binmat_all_y_z)
+      y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
+
+
+      if(linearterms){
+        if(jointgammanodes){
+          if(one_chol ==TRUE){
+
+            mudrawlist_y = simulate_mu_all_y_fast_lin(curr_trees_y,
+                                                  y_uncens, # current_partial_residuals,
+                                                  phi1,
+                                                  priorgammavar,
+                                                  sigma2_mu_y, binmat_all_y_z, BztBz_y, firstcolindtrees_y, IR_old_y, S_j_old_y,
+                                                  xmat_train, Bmean_p, invBvar_p, gamma0)
+          }else{
+            mudrawlist_y = simulate_mu_all_y_lin(curr_trees_y,
+                                                      y_uncens, # current_partial_residuals,
+                                                      phi1,
+                                                      priorgammavar,
+                                                      sigma2_mu_y, binmat_all_y_z, BztBz_y, firstcolindtrees_y,
+                                                      xmat_train, Bmean_p, invBvar_p, gamma0)
+          }
+
+        }else{
+          if(one_chol ==TRUE){
+            mudrawlist_y = simulate_mu_all_y_nogamma_fast_lin(curr_trees_y,
+                                                              y_resids, # current_partial_residuals,
+                                                          phi1,
+                                                          sigma2_mu_y, binmat_all_y, BtB_y, firstcolindtrees_y, IR_old_y, S_j_old_y,
+                                                          xmat_train, Bmean_p, invBvar_p)
+          }else{
+            mudrawlist_y = simulate_mu_all_y_nogamma_lin(curr_trees_y,
+                                                         y_resids, # current_partial_residuals,
+                                                             phi1,
+                                                             sigma2_mu_y, binmat_all_y, BtB_y, firstcolindtrees_y,
+                                                             xmat_train, Bmean_p, invBvar_p)
+          }
+        }
+
+      }else{
+        if(jointgammanodes){
+          if(one_chol ==TRUE){
+            mudrawlist_y = simulate_mu_all_y_fast(curr_trees_y,
+                                                  y_uncens, # current_partial_residuals,
+                                                  phi1,
+                                                  priorgammavar,
+                                                  sigma2_mu_y, binmat_all_y_z, BztBz_y, firstcolindtrees_y, IR_old_y, S_j_old_y, gamma0)
+          }else{
+            mudrawlist_y = simulate_mu_all_y(curr_trees_y,
+                                             y_uncens, # current_partial_residuals,
+                                             phi1,
+                                             priorgammavar,
+                                             sigma2_mu_y, binmat_all_y_z, BztBz_y, firstcolindtrees_y, gamma0)
+          }
+
+        }else{
+          if(one_chol ==TRUE){
+            mudrawlist_y = simulate_mu_all_y_nogamma_fast(curr_trees_y,
+                                                          y_resids, # current_partial_residuals,
+                                                  phi1,
+                                                  sigma2_mu_y, binmat_all_y, BtB_y, firstcolindtrees_y, IR_old_y, S_j_old_y)
+          }else{
+            mudrawlist_y = simulate_mu_all_y_nogamma(curr_trees_y,
+                                                     y_resids, # current_partial_residuals,
+                                             phi1,
+                                             sigma2_mu_y, binmat_all_y, BtB_y, firstcolindtrees_y)
+          }
+
+        }
+      }
+
+
+      curr_trees_y <- mudrawlist_y[[1]]
+      new_trees_y <- curr_trees_y
+      mutemp_y <- binmat_all_y %*% mudrawlist_y[[3]]
+      if(linearterms){
+        if(jointgammanodes){
+          mutemp_y <- mutemp_y + xmat_train %*% mudrawlist_y[[6]]
+        }else{
+          mutemp_y <- mutemp_y + xmat_train %*% mudrawlist_y[[4]]
+          mutemp_y <- cbind(xmat_train, binmat_all_y) %*% mudrawlist_y[[5]]
+
+        }
+      }
+      if(jointgammanodes){
+        gamma1 <- mudrawlist_y[[5]]
+      }
 
       # # Updating BART predictions
       # current_fit = get_predictions(curr_trees_y[j], x.train[uncens_inds,], single_tree = TRUE)
@@ -1741,9 +3978,7 @@ tbart2marg <- function(x.train,
       # mutemp_y = mutemp_y + current_fit # add the new fit
       # tree_fits_store_y[,j] = current_fit # update the new fit
 
-
     }else{
-
 
       for (j in 1:n.trees_outcome) {
         current_partial_residuals = y_resids - mutemp_y + tree_fits_store_y[,j]
@@ -1775,28 +4010,31 @@ tbart2marg <- function(x.train,
           # print("no good trees")
         }else{
           # CURRENT TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_old = tree_full_conditional(curr_trees_y[[j]],
-                                        current_partial_residuals,
-                                        phi1,
-                                        sigma2_mu_y) +
-            get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+
+          # if(j==1){
+            l_old_y = tree_full_conditional(curr_trees_y[[j]],
+                                          current_partial_residuals,
+                                          phi1,
+                                          sigma2_mu_y) +
+              get_tree_prior(curr_trees_y[[j]], alpha_y, beta_y)
+          # }
 
           # NEW TREE: compute the log of the marginalised likelihood + log of the tree prior
-          l_new = tree_full_conditional(new_trees_y[[j]],
+          l_new_y = tree_full_conditional(new_trees_y[[j]],
                                         current_partial_residuals,
                                         phi1,
                                         sigma2_mu_y) +
             get_tree_prior(new_trees_y[[j]], alpha_y, beta_y)
 
-          alpha_MH = alpha_mh(l_new,l_old, curr_trees_y[[j]],new_trees_y[[j]], type_y)
+          alpha_MH = alpha_mh(l_new_y,l_old_y, curr_trees_y[[j]],new_trees_y[[j]], type_y)
 
         }
 
         if(is.na(alpha_MH)){
-          print("l_old = ")
-          print(l_old)
-          print("l_new = ")
-          print(l_new)
+          print("l_old_y = ")
+          print(l_old_y)
+          print("l_new_y = ")
+          print(l_new_y)
 
           print("curr_tree_y = ")
           print(curr_tree_y)
@@ -1815,17 +4053,19 @@ tbart2marg <- function(x.train,
 
         if(alpha_MH > runif(1)) {
           curr_trees_y[[j]] = new_trees_y[[j]]
-
-          if (type_y == "grow") {
-            var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] + 1
-          } else if (type_y == "prune") {
-            var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] - 1
-          } else {
-            if(curr_trees_y[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
-              var_count_y[curr_trees_y[[j]]$var[1]] <- var_count_y[curr_trees_y[[j]]$var[1]] - 1
-              var_count_y[curr_trees_y[[j]]$var[2]] <- var_count_y[curr_trees_y[[j]]$var[2]] + 1
+          l_old_y <- l_new_y
+          # if(sparse){
+            if (type_y == "grow") {
+              var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] + 1
+            } else if (type_y == "prune") {
+              var_count_y[curr_trees_y[[j]]$var] <- var_count_y[curr_trees_y[[j]]$var] - 1
+            } else {
+              if(curr_trees_y[[j]]$var[1]!=0){ # What if change step returned $var equal to c(0,0) ????
+                var_count_y[curr_trees_y[[j]]$var[1]] <- var_count_y[curr_trees_y[[j]]$var[1]] - 1
+                var_count_y[curr_trees_y[[j]]$var[2]] <- var_count_y[curr_trees_y[[j]]$var[2]] + 1
+              }
             }
-          }
+          # }
 
         }
 
@@ -1838,6 +4078,10 @@ tbart2marg <- function(x.train,
         current_fit = get_predictions(curr_trees_y[j], x.train[uncens_inds,], single_tree = TRUE)
         mutemp_y = mutemp_y - tree_fits_store_y[,j] # subtract the old fit
         mutemp_y = mutemp_y + current_fit # add the new fit
+
+        mutemp_y_trees = mutemp_y_trees - tree_fits_store_y[,j] # subtract the old fit
+        mutemp_y_trees = mutemp_y_trees + current_fit # add the new fit
+
         tree_fits_store_y[,j] = current_fit # update the new fit
 
       } # end loop over y trees
@@ -1853,54 +4097,80 @@ tbart2marg <- function(x.train,
 
     #update z_epsilon
     y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
+    z_epsilon <- z - offsetz - mutemp_z # should be unnecessary
 
     mutemp_test_y <- get_predictions(curr_trees_y,
                                      x.test,
                                      single_tree = length(curr_trees_y) == 1)
 
+    if(linearterms & !marginalize){
+      mutemp_test_y_trees <- mutemp_test_y
+      mutemp_test_y <- mutemp_test_y_trees + mutemp_test_y_lin
+    }
+
+    if(linearterms & marginalize){
+      if(jointgammanodes){
+        mutemp_test_y <- mutemp_test_y + xmat_test %*% mudrawlist_y[[6]]
+      }else{
+        mutemp_test_y <- mutemp_test_y + xmat_test %*% mudrawlist_y[[4]]
+      }
+    }
+
     ############# Covariance matrix samples ##########################
 
 
     if(cov_prior == "Ding"){
-      rho1 <- gamma1/sqrt(Sigma_mat[2,2])
+
+      rho1 <- gamma1/sqrt(phi1 + (gamma1^2) )  #sqrt(Sigma_mat[2,2])
 
       sigz2 <- 1/rgamma(n = 1,
                         shape = nu0/2,
-                        rate = cding/(2*(1- (rho1^2))))
-
+                        rate = cding/(2*(1- (rho1^2))) )
 
       z_epsilon2 <- sqrt(sigz2)*(z - offsetz - mutemp_z)
 
-      zsquares <- crossprod(z_epsilon2[uncens_inds], z_epsilon2[uncens_inds])[1]
-      ysquares <- crossprod(y_epsilon[uncens_inds], y_epsilon[uncens_inds])[1]
+      zsquares <- crossprod(z_epsilon2[uncens_inds])[1] # crossprod(z_epsilon2[uncens_inds], z_epsilon2[uncens_inds])[1]
+      ysquares <- crossprod(y_epsilon[uncens_inds])[1] # crossprod(y_epsilon[uncens_inds], y_epsilon[uncens_inds])[1]
       zycross <- crossprod(z_epsilon2[uncens_inds], y_epsilon[uncens_inds])[1]
 
-      Stemp <- cbind(c(ysquares,zycross),
+      Stemp <- cbind(c(ysquares, zycross),
                      c(zycross, zsquares))
 
 
+      # Cmat <- cbind(c(cding,0),c(0,1))
+
       tempsigma <- rinvwishart(nu = n1 + nu0,
                                S = Stemp+cding*diag(2))
-
+      # tempsigma <- rinvwishart(nu = n1 + nu0,
+      #                          S = Stemp+Cmat)
 
       transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
       tempomega <- (transmat %*% tempsigma) %*% transmat
 
       temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
+      # if(tempomega[1,1] != tempsigma[1,1]){
+      #     print("tempomega[1,1] = ")
+      #     print(tempomega[1,1])
+      #     print("tempsigma[1,1] = ")
+      #     print(tempsigma[1,1])
+      # }
+
       gamma1 <- tempomega[1,2]
+      # if(temprho < -0.3){
+      #   print("n1 + nu0 = ")
+      #   print(n1 + nu0)
+      #   print("cding = ")
+      #   print(cding)
+      #   print("temprho = ")
+      #   print(temprho)
+      #   print("sigz2 = ")
+      #   print(sigz2)
+      #   print("Stemp = ")
+      #   print(Stemp)
+      # }
+
       phi1 <- tempomega[1,1] - (gamma1^2)
-
-
-      # if(tempomega[2,2] != 1){
-      #   print("tempomega[2,2] = ")
-      #   print(tempomega[2,2])
-      # }
-      #
-      # if(phi1 < 0){
-      #   print("phi1 = ")
-      #   print(phi1)
-      # }
 
 
     }else{
@@ -1909,6 +4179,9 @@ tbart2marg <- function(x.train,
 
       if(simultaneous_covmat == TRUE){
 
+        if(marginalize & jointgammanodes){
+          stop("Code does not allow all 3 of simultaneous_covmat == TRUE, jointgammanodes and marginalize == TRUE")
+        }
         if(cov_prior == "VH"){
           h_num <- (gamma0/tau) + crossprod(z_epsilon[uncens_inds], y_epsilon[uncens_inds])[1]
           a_temp <- (1/tau) + crossprod(z_epsilon[uncens_inds], z_epsilon[uncens_inds])[1]
@@ -1923,12 +4196,12 @@ tbart2marg <- function(x.train,
                            rate = k_temp/2)
 
           gamma1 <- rnorm(n = 1, mean = h_temp, sd = sqrt(phi1/a_temp))
+
+
         }else{
           stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
         }
       }else{
-
-
 
         #########  set parameters for gamma draw  ######################################################
 
@@ -1950,39 +4223,28 @@ tbart2marg <- function(x.train,
           }
         }
 
-        # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
-        G1inv <- (1/G0draw) + (1/phi1)*crossprod(z_epsilon[uncens_inds])[1]
-        # G1inv <- (1/tau) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
-        G1 <- (1/G1inv)#[1,1]
+        if( ( (!marginalize) & !(linearterms & jointbetagamma))| (!jointgammanodes) ){
 
-        # gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
-        gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1]   ))
-        # gamma_one <- (G1*( (1/tau)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
+          # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
+          G1inv <- (1/G0draw) + (1/phi1)*crossprod(z_epsilon[uncens_inds])[1]
+          # G1inv <- (1/tau) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
+          G1 <- (1/G1inv)#[1,1]
 
-        # print("phi1 = ")
-        # print(phi1)
-        # print("G0draw = ")
-        # print(G0draw)
-        #
-        # print("(G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )) = ")
-        # print((G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )))
-        #
-        # print("gamma_one = ")
-        # print(gamma_one)
-        #
-        # print("crossprod(z_epsilon , y_epsilon   ) = ")
-        # print(crossprod(z_epsilon , y_epsilon   ))
-        #
-        # print("crossprod(z_epsilon    ) = ")
-        # print(crossprod(z_epsilon   ))
-        #
-        # print("crossprod(z_epsilon[uncens_inds])[1]     = ")
-        # print(crossprod(z_epsilon[uncens_inds])[1]   )
-        #
-        # print("G1 = ")
-        # print(G1)
+          # gamma_one <- (G1*( (1/G0draw)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
+          gamma_one <- (G1*( (1/G0draw)*gamma0 +
+                               (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1]   ))
 
-        gamma1 <- rnorm(n = 1, mean = gamma_one, sd =  sqrt(G1) )
+          if(cov_prior == "VH"){
+            gamma_one <- ((gamma0/tau) + crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )[1] )/
+              ((1/tau) + crossprod(z_epsilon[uncens_inds])[1])
+            G1 <- phi1/((1/tau) + crossprod(z_epsilon[uncens_inds])[1])
+          }
+          # gamma_one <- (G1*( (1/tau)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
+
+          # print("gamma1 = ")
+          # print(gamma1)
+          gamma1 <- rnorm(n = 1, mean = gamma_one, sd =  sqrt(G1) )
+        }
 
         # print("gamma1 = ")
         # print(gamma1)
@@ -2009,7 +4271,7 @@ tbart2marg <- function(x.train,
 
         if(cov_prior == "VH"){
           # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
-          S1 <- S0 + (gamma1^2)/tau +
+          S1 <- S0 + ((gamma1- gamma0)^2)/tau +
             crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] # + crossprod(y_epsilon)
         }else{
           if(cov_prior == "Omori"){
@@ -2019,7 +4281,7 @@ tbart2marg <- function(x.train,
             mixind <- rbinom(n = 1,size = 1,prob = mixprob)
             if(mixind == 1){
               # S1 <- S0 + (gamma1^2)/tau + gamma1*crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )  + crossprod(y_epsilon)
-              S1 <- S0 + (gamma1^2)/tau +
+              S1 <- S0 + ((gamma1- gamma0)^2)/tau +
                 crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] # + crossprod(y_epsilon)
             }else{
               S1 <- S0 + #+ (gamma1^2)/G0 +
@@ -2039,6 +4301,32 @@ tbart2marg <- function(x.train,
         # draw from inverse gamma
         phi1 <- 1/rgamma(n = 1, shape =  n_one/2, rate = S1/2)
 
+
+        if(is.na(phi1)){
+          print("n_one = ")
+          print(n_one)
+          print("S1 = ")
+          print(S1)
+
+          print("S1 = ")
+          print(S1)
+
+          print("gamma1 = ")
+          print(gamma1)
+
+
+          print(" y_epsilon[uncens_inds] = ")
+          print( y_epsilon[uncens_inds])
+
+          print("gamma1*z_epsilon[uncens_inds]  = ")
+          print(gamma1*z_epsilon[uncens_inds] )
+
+          print("((gamma1- gamma0)^2)/tau = ")
+          print(((gamma1- gamma0)^2)/tau)
+          print("crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1] = ")
+          print(crossprod( y_epsilon[uncens_inds] - gamma1*z_epsilon[uncens_inds]  )[1])
+          stop("is.na(phi1)")
+        }
 
         # print("Line 890 phi1 = ")
         # print(phi1)
@@ -2060,6 +4348,11 @@ tbart2marg <- function(x.train,
     Sigma_mat <- cbind(c(1,gamma1),c(gamma1,phi1+gamma1^2))
     Sigma_orig_scale <- cbind(c(1,tempsd*gamma1),c(tempsd*gamma1,  (tempsd^2)*(phi1+gamma1^2)) )
 
+    ########## tau draws ############
+
+    if(tau_hyperprior){
+      tau <- 1/rgamma(n = 1,shape = alpha_tau + 1/2, rate = beta_tau + (1/(2*phi1))*(gamma1 - gamma0)^2)
+    }
 
     ###### Accelerated sampler  ###############################
 
@@ -2299,12 +4592,11 @@ tbart2marg <- function(x.train,
         draw$ydraws_test[, iter_min_burnin] <- (ifelse(zytest[,1] < 0, censored_value, zytest[,2] ) + (y_max + y_min)/2 )*tempsd+tempmean
       }
 
-
+      draw$var_count_y_store[iter_min_burnin,] <- var_count_y
+      draw$var_count_z_store[iter_min_burnin,] <- var_count_z
       if(sparse){
         draw$alpha_s_y_store[iter_min_burnin] <- alpha_s_y
         draw$alpha_s_z_store[iter_min_burnin] <- alpha_s_z
-        draw$var_count_y_store[iter_min_burnin,] <- var_count_y
-        draw$var_count_z_store[iter_min_burnin,] <- var_count_z
         draw$s_prob_y_store[iter_min_burnin,] <- s_y
         draw$s_prob_z_store[iter_min_burnin,] <- s_z
 

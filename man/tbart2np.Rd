@@ -40,7 +40,6 @@ tbart2np(
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
   sigmadbarts = NA_real_,
   print.opt = 100,
-  eq_by_eq = TRUE,
   accelerate = FALSE,
   cov_prior = "VH",
   tau = 0.5,
@@ -127,8 +126,6 @@ tbart2np(
 \item{sigmadbarts}{(dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.}
 
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
-
-\item{eq_by_eq}{If TRUE, implements sampler equation by equation (as in BAVART by Huber and Rossini (2021)). If FALSE, implements sampler in similar approach to SUR-BART (Chakraborty 2016) or MPBART (Kindo 2016).}
 
 \item{accelerate}{If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).}
 
@@ -286,8 +283,7 @@ tbartII_example <- tbart2c(Xmat_train,
                            y2obs_train,
                            n.iter=5000,
                            n.burnin=1000,
-                           censored_value = 0,
-                           eq_by_eq = TRUE)
+                           censored_value = 0)
 
 
 pred_probs_tbart2_test <- rowMeans(tbartII_example$test.probcens)

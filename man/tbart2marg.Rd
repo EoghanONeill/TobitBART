@@ -34,7 +34,7 @@ tbart2marg(
   beta_y = 2,
   node.prior = dbarts:::normal,
   resid.prior = dbarts:::chisq,
-  proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
+  proposal.probs = c(birth_death = 0.5, swap = 0, change = 0.5, birth = 0.5),
   sigmadbarts = NA_real_,
   print.opt = 100,
   eq_by_eq = TRUE,
@@ -44,6 +44,7 @@ tbart2marg(
   simultaneous_covmat = TRUE,
   fast = TRUE,
   nu0 = 3,
+  offsetz = FALSE,
   quantsig = 0.9,
   sparse = FALSE,
   alpha_a_y = 0.5,
@@ -55,7 +56,14 @@ tbart2marg(
   node_min_size = 5,
   centre_y = TRUE,
   splitting_rules = "discrete",
-  marginalize = FALSE
+  marginalize = FALSE,
+  one_chol = FALSE,
+  tau_hyperprior = TRUE,
+  alpha_tau = 1,
+  beta_tau = 10,
+  jointgammanodes = FALSE,
+  linearterms = FALSE,
+  jointbetagamma = FALSE
 )
 }
 \arguments{
@@ -188,33 +196,33 @@ num_train <- 5000
 
 #consider increasing the number of covariates
 
-Xmat_train <- matrix(NA,nrow = num_train,
+xmat_train <- matrix(NA,nrow = num_train,
                      ncol = 8)
 
-Xmat_train[,1] <- runif(num_train, min = -1, max = 1)
-Xmat_train[,2] <- rf(num_train,20,20)
-Xmat_train[,3] <- rbinom(num_train, size = 1, prob = 0.75)
-Xmat_train[,4] <- rnorm(num_train, mean = 1, sd = 1)
-Xmat_train[,5] <- rnorm(num_train)
-Xmat_train[,6] <- rbinom(num_train, size = 1, prob = 0.5)
-Xmat_train[,7] <- rf(num_train,20,200)
-Xmat_train[,8] <- runif(num_train, min = 0, max = 2)
+xmat_train[,1] <- runif(num_train, min = -1, max = 1)
+xmat_train[,2] <- rf(num_train,20,20)
+xmat_train[,3] <- rbinom(num_train, size = 1, prob = 0.75)
+xmat_train[,4] <- rnorm(num_train, mean = 1, sd = 1)
+xmat_train[,5] <- rnorm(num_train)
+xmat_train[,6] <- rbinom(num_train, size = 1, prob = 0.5)
+xmat_train[,7] <- rf(num_train,20,200)
+xmat_train[,8] <- runif(num_train, min = 0, max = 2)
 
 #it would be better to test performance of the models when there is correlation in the error terms.
 varepsilon1_train <- rnorm(num_train, mean = 0, sd = sqrt(0.00025))
 varepsilon2_train <- rnorm(num_train, mean = 0, sd = sqrt(0.00025))
 
-y1star_train <- 1 - 0.75*Xmat_train[,1] + 0.75*Xmat_train[,2] -
-  0.5*Xmat_train[,4] -  0.5*Xmat_train[,6] - 0.25*Xmat_train[,1]^2 -
-  0.75*Xmat_train[,1]*Xmat_train[,4] - 0.25*Xmat_train[,1]*Xmat_train[,2] -
-  1*Xmat_train[,1]*Xmat_train[,6] + 0.5*Xmat_train[,2]*Xmat_train[,6] +
+y1star_train <- 1 - 0.75*xmat_train[,1] + 0.75*xmat_train[,2] -
+  0.5*xmat_train[,4] -  0.5*xmat_train[,6] - 0.25*xmat_train[,1]^2 -
+  0.75*xmat_train[,1]*xmat_train[,4] - 0.25*xmat_train[,1]*xmat_train[,2] -
+  1*xmat_train[,1]*xmat_train[,6] + 0.5*xmat_train[,2]*xmat_train[,6] +
   varepsilon1_train
 
-y2star_train <- 1 + 0.25*Xmat_train[,4] - 0.75*Xmat_train[,6] +
-  0.5*Xmat_train[,7] + 0.25*Xmat_train[,8] +
-  0.25*Xmat_train[,4]^2 + 0.75*Xmat_train[,7]^2 + 0.5*Xmat_train[,8]^2 -
-  1*Xmat_train[,4]*Xmat_train[,6] + 0.5*Xmat_train[,4]*Xmat_train[,8] +
-  1*Xmat_train[,6]*Xmat_train[,7] - 0.25*Xmat_train[,7]*Xmat_train[,8] +
+y2star_train <- 1 + 0.25*xmat_train[,4] - 0.75*xmat_train[,6] +
+  0.5*xmat_train[,7] + 0.25*xmat_train[,8] +
+  0.25*xmat_train[,4]^2 + 0.75*xmat_train[,7]^2 + 0.5*xmat_train[,8]^2 -
+  1*xmat_train[,4]*xmat_train[,6] + 0.5*xmat_train[,4]*xmat_train[,8] +
+  1*xmat_train[,6]*xmat_train[,7] - 0.25*xmat_train[,7]*xmat_train[,8] +
   varepsilon2_train
 
 y2obs_train <- ifelse(y1star_train>0, y2star_train,0)
@@ -258,9 +266,9 @@ y2obs_test <- ifelse(y1star_test>0, y2star_test,0)
 
 y2response_test <- ifelse(y1star_test>0, 1,0)
 
-tbartII_example <- tbart2c(Xmat_train,
+tbartII_example <- tbart2c(xmat_train,
                            Xmat_test,
-                           Xmat_train,
+                           xmat_train,
                            Xmat_test,
                            y2obs_train,
                            n.iter=5000,

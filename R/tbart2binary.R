@@ -802,6 +802,8 @@ tbart2binary <- function(x.train,
   sampler_z$setSigma(sigma = 1)
   sampler_z$setWeights(weights = weightstemp)
 
+  # sampler_z$model@node.scale <- 3
+
   if(sparse){
     tempmodel <- sampler_z$model
     tempmodel@tree.prior@splitProbabilities <- s_z
@@ -864,6 +866,7 @@ tbart2binary <- function(x.train,
 
   # sampler_y$setSigma(sigma = sigest)
 
+  # sampler_y$model@node.scale <- 3
 
   if(sparse){
     tempmodel <- sampler_y$model

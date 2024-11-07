@@ -41,7 +41,6 @@
 #' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
 #' @param sigmadbarts (dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.
 #' @param print.opt Print every print.opt number of Gibbs samples.
-#' @param eq_by_eq If TRUE, implements sampler equation by equation (as in BAVART by Huber and Rossini (2021)). If FALSE, implements sampler in similar approach to SUR-BART (Chakraborty 2016) or MPBART (Kindo 2016).
 #' @param accelerate If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).
 #' @param cov_prior Prior for the covariance of the error terms. If VH, apply the prior of van Hasselt (2011), N(gamma0, tau*phi), imposing dependence between gamma and phi. If Omori, apply the prior N(gamma0,G0). If mixture, then a mixture of the VH and Omori priors with probability mixprob applied to the VH prior.
 #' @param tau Parameter for the prior of van Hasselt (2011) on the covariance of the error terms.
@@ -179,8 +178,7 @@
 #'                            y2obs_train,
 #'                            n.iter=5000,
 #'                            n.burnin=1000,
-#'                            censored_value = 0,
-#'                            eq_by_eq = TRUE)
+#'                            censored_value = 0)
 #'
 #'
 #' pred_probs_tbart2_test <- rowMeans(tbartII_example$test.probcens)
@@ -240,7 +238,6 @@ tbart2np <- function(x.train,
                     proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
                     sigmadbarts = NA_real_,
                     print.opt = 100,
-                    eq_by_eq = TRUE,
                     accelerate = FALSE,
                     cov_prior = "VH",
                     tau = 0.5,
@@ -500,10 +497,16 @@ tbart2np <- function(x.train,
       # print(correst)
       # print("correst = ")
       # print(correst)
+      gamma0 <- correst*sigest
+
     } else {
       sigest = sd(y[uncens_inds])
       correst <- 0
+      gamma0 <- 0
     }
+  }else{
+    correst <- 0
+    gamma0 <- 0
   }
 
 
@@ -520,29 +523,47 @@ tbart2np <- function(x.train,
   M_inv <- solve(M_mat)
 
   S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+  # S0 <- 0.5*(sigest^2 - gamma0^2)*(nzero-2)/(2+tau)
 
-  #alternatively, draw this from the prior
-  Sigma_mat <- cbind(c(1,0),c(0,sigest^2))
+  print("S0 = ")
+  print(S0)
 
-  #set initial gamma
-  gamma1 <- correst*sigest  #0#cov(ystar,z)
+  # # alternative: calibrate prior on phi as if gamma equals zero
+  # qchi = qchisq(1.0-quantsig,nzero)
+  # lambda = (sigest*sigest*qchi)/nzero #lambda parameter for sigma prior
+  # S0 <- nzero*lambda
+  # S0 <- 2*(sigest^2) * (nzero/2 - 1)
 
-  #set initial phi
-  phi1 <- sigest^2 - gamma1^2
+  print("2* sigest*(n0/2 - 1) = ")
+  print(2* sigest*(n0/2 - 1))
+  print("(sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau) = ")
+  print((sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau))
 
-  # print("phi1 = ")
-  # print(phi1)
-  # print("correst = ")
-  # print(correst)
-  # print("sigest = ")
-  # print(sigest)
-  # print("gamma1 = ")
-  # print(gamma1)
+  print("sigest = ")
+  print(sigest)
+  print("sigest^2 = ")
+  print(sigest^2)
 
-  gamma0 <- correst*sigest
+  print("S0 = ")
+  print(S0)
+
+  print("(tempsd^2)*sigest^2 = ")
+  print((tempsd^2)*sigest^2)
+
+  print("(tempsd^2)*prior mean outcome variance = ")
+  print((tempsd^2)*S0*(1+tau)/(nzero-2) + gamma0^2)
+
+
+  print("prior mean outcome variance = ")
+  print(S0*(1+tau)/(nzero-2) + gamma0^2)
+
+  # S0 <- 2
+  # nzero <- 2
+
 
   if(cov_prior == "Ding"){
     gamma0 <- 0
+
 
     # sigquant <- 0.9
     qchi <- qchisq(1.0-quantsig,nu0-1)
@@ -551,6 +572,11 @@ tbart2np <- function(x.train,
 
     rhoinit <- 0
     siginit <- sigest
+
+  }
+
+  if(cov_prior == "Omori"){
+    S0 <- (sigest^2 - G0*(1 + gamma0^2))*(nzero-2)
   }
 
   #set initial sigma
@@ -721,7 +747,7 @@ tbart2np <- function(x.train,
 
           }else{ # if VH prior, use VH full conditional
 
-            dbar_temp <- (S0/2) + (gammatilde^2/tau) +
+            dbar_temp <- (S0/2) + ((gammatilde-gamma0)^2/tau) +
               (1/2)*( (u_y[uncens_count] - mutilde[2] - gammatilde*(u_z[i] - mutilde[1]) )^2 )
 
             phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  1, rate = dbar_temp)
@@ -836,15 +862,15 @@ tbart2np <- function(x.train,
     draw$ydraws_test <- array(NA, dim = c(ntest, n.iter))
   }
 
-
+  var_count_y <- rep(0, p_y)
+  var_count_z <- rep(0, p_z)
+  draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
+  draw$var_count_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
   if(sparse){
-    var_count_y <- rep(0, p_y)
-    var_count_z <- rep(0, p_z)
 
     draw$alpha_s_y_store <- rep(NA, n.iter)
     draw$alpha_s_z_store <- rep(NA, n.iter)
-    draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
-    draw$var_count_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
+
     draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
     draw$s_prob_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
 
@@ -1036,12 +1062,12 @@ tbart2np <- function(x.train,
   mutemp_test_z <- samplestemp_z$test[,1]
 
   # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
-  if(sparse){
+  # if(sparse){
     tempcounts <- fcount(sampler_z$getTrees()$var)
     tempcounts <- tempcounts[tempcounts$x != -1, ]
     var_count_z <- rep(0, p_z)
     var_count_z[tempcounts$x] <- tempcounts$N
-  }
+  # }
 
 
 
@@ -1099,12 +1125,12 @@ tbart2np <- function(x.train,
   mutemp_y <- samplestemp_y$train[,1]
   mutemp_test_y <- samplestemp_y$test[,1]
 
-  if(sparse){
+  # if(sparse){
     tempcounts <- fcount(sampler_y$getTrees()$var)
     tempcounts <- tempcounts[tempcounts$x != -1, ]
     var_count_y <- rep(0, p_y)
     var_count_y[tempcounts$x] <- tempcounts$N
-  }
+  # }
 
   # print("length(mutemp_test_y) = ")
   # print(length(mutemp_test_y))
@@ -1207,16 +1233,6 @@ tbart2np <- function(x.train,
     #   print(iter)
     # }
 
-    # if(eq_by_eq){
-    #   sig_zdraw <- 1
-    #   sig_ydraw <- phi1
-    #
-    # }else{
-    #   sig_zdraw <- phi1/(gamma1^2+phi1)
-    #   sig_ydraw <- phi1
-    #
-    # }
-
 
     ###### sample Z #################
 
@@ -1303,15 +1319,6 @@ tbart2np <- function(x.train,
 
     #create residuals for z and set variance
 
-    # if(eq_by_eq){
-    #   z_resids <- z - offsetz #z_epsilon
-    #   sd_zdraw <- 1
-    # }else{
-    #   #not sure about this step for tobit2b
-    #   z_resids <- z - offsetz - y_epsilon*(gamma1/(phi1+gamma1^2))
-    #   sd_zdraw <- sqrt(phi1 / (phi1 + gamma1^2)  )
-    # }
-
     z_resids <- z - offsetz - mu1_vec_train #z_epsilon
     z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
       (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - mutemp_y)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
@@ -1361,12 +1368,12 @@ tbart2np <- function(x.train,
     # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
 
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler_z$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_z <- rep(0, p_z)
       var_count_z[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
 
 
@@ -1424,13 +1431,6 @@ tbart2np <- function(x.train,
     # print(gamma1)
 
 
-    # if(eq_by_eq){
-    #   y_resids <- ystar[uncens_inds] - gamma1*z_epsilon[uncens_inds]
-    #   sd_ydraw <- sqrt(phi1)
-    # }else{
-    #   y_resids <- ystar[uncens_inds] - gamma1*z_epsilon[uncens_inds]
-    #   sd_ydraw <- sqrt(phi1)
-    # }
 
     y_resids <- ystar[uncens_inds] - mu2_vec_train[uncens_inds] - gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds]- mutemp_z[uncens_inds])
     # sd_ydraw <- sqrt(phi1_vec_train[uncens_inds])
@@ -1462,12 +1462,12 @@ tbart2np <- function(x.train,
     mutemp_test_y <- samplestemp_y$test[,1]
 
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler_y$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
 
     checkypred <- sampler_y$predict(x.test = xdf_y)[,1]
@@ -2735,7 +2735,7 @@ tbart2np <- function(x.train,
                   stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
                 }
               }else{
-                dbar_temp <- (S0/2) + (gammatilde^2/tau) +
+                dbar_temp <- (S0/2) + ((gammatilde-gamma0)^2/tau) +
                   (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
 
                 phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (n_rho_j + 1)/2 , rate = dbar_temp)
@@ -2908,7 +2908,7 @@ tbart2np <- function(x.train,
                                   sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
 
 
-              dbar_temp <- (S0/2) + (gammatilde^2/tau) +
+              dbar_temp <- (S0/2) + ((gammatilde- gamma0)^2/tau) +
                 (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
 
               phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (num_uncens_temp + 1)/2 , rate = dbar_temp)
@@ -3489,12 +3489,12 @@ tbart2np <- function(x.train,
 
       draw$alpha[iter_min_burnin] <- alpha
 
-
+      draw$var_count_y_store[iter_min_burnin,] <- var_count_y
+      draw$var_count_z_store[iter_min_burnin,] <- var_count_z
       if(sparse){
         draw$alpha_s_y_store[iter_min_burnin] <- alpha_s_y
         draw$alpha_s_z_store[iter_min_burnin] <- alpha_s_z
-        draw$var_count_y_store[iter_min_burnin,] <- var_count_y
-        draw$var_count_z_store[iter_min_burnin,] <- var_count_z
+
         draw$s_prob_y_store[iter_min_burnin,] <- s_y
         draw$s_prob_z_store[iter_min_burnin,] <- s_z
 
