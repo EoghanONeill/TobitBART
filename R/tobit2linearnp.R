@@ -203,7 +203,7 @@
 #'
 #' @export
 
-tbart2np <- function(x.train,
+tobit2linearnp <- function(x.train,
                     x.test,
                     w.train,
                     w.test,
@@ -357,6 +357,20 @@ tbart2np <- function(x.train,
 
   p_y <- ncol(x.train)
   p_z <- ncol(w.train)
+
+  xmat_train <- cbind(1, x.train)
+  wmat_train <- cbind(1, w.train)
+  xmat_test <- cbind(1, x.test)
+  wmat_test <- cbind(1, w.test)
+
+  Amean_p <- rep(0, p_z + 1)
+  Bmean_p <- rep(0, p_y + 1)
+
+  Avar_p <- 10*diag(p_z + 1)
+  Bvar_p <- 10*diag(p_y + 1)
+
+  alpha_vec <- rep(0, p_z+1)
+  beta_vec <- rep(0, p_y+1)
 
   if(sparse){
     s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
@@ -598,7 +612,6 @@ tbart2np <- function(x.train,
   if(phi1 <0){
     phi1 <- sigest^2
   }
-
   # phi1_vec_train <- rep(sigest^2, n)
   # phi1_vec_test <- rep(sigest^2, ntest)
   phi1_vec_train <- rep(phi1, n)
@@ -1024,117 +1037,179 @@ tbart2np <- function(x.train,
   preds.test_z <- matrix(NA, ntest, 1)
 
 
-  #initialize sum-of-tree sampler
+  mutemp_y <- rep(mean(ystar[uncens_inds]), length(uncens_inds))
+
+  # #initialize sum-of-tree sampler
+  # z_resids <- z - offsetz #z_epsilon
+  # # z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - 0)*gamma1/(phi1 + gamma1^2)
+  # z_resids[uncens_inds] <- z[uncens_inds] - offsetz -
+  #   (ystar[uncens_inds]  - mean(ystar[uncens_inds]))*gamma1/(phi1 + gamma1^2)
 
 
-  z_resids <- z - offsetz - mu1_vec_train #z_epsilon
-  z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
-    (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - 0)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
+  # print("line 788 = ")
 
-  #set the response for draws of z trees
-  sampler_z$setResponse(y = z_resids)
-  #set the standard deivation
-  sampler_z$setSigma(sigma = 1)
+  inv_c2_vec <-(gamma1_vec_train^2 + phi1_vec_train)/phi1_vec_train
 
-  # weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
+  alpha_var <- solve(solve(Avar_p) +
+                       crossprod(wmat_train[cens_inds,]) +
+                       crossprod(inv_c2_vec[uncens_inds]*wmat_train[uncens_inds,], wmat_train[uncens_inds,]))
 
-  # print("weightstemp = ")
-  # print(weightstemp)
+  # print("line 795 = ")
 
+  alpha0hat <- solve(crossprod(wmat_train[cens_inds,])) %*% crossprod(wmat_train[cens_inds,], z[cens_inds] - offsetz)
+  # print("line 798 = ")
+  alpha1hat <- solve(crossprod(inv_c2_vec[uncens_inds]*wmat_train[uncens_inds,], wmat_train[uncens_inds,])) %*% crossprod(inv_c2_vec[uncens_inds]*wmat_train[uncens_inds,],
+                                                                        z[uncens_inds] - offsetz -
+                                                                          (ystar[uncens_inds]  - mutemp_y)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2))
+  # print("line 800 = ")
+
+  alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
+                                 crossprod(wmat_train[cens_inds,]) %*%  alpha0hat +
+                                 crossprod(inv_c2_vec[uncens_inds]*wmat_train[uncens_inds,], wmat_train[uncens_inds,]) %*% alpha1hat  )
+
+
+  alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
+  # print("line 808 = ")
+
+  mutemp_z <- wmat_train %*% alpha_vec
+  mutemp_test_z <- wmat_test %*% alpha_vec
+  z_epsilon <- z - offsetz - mutemp_z
+
+  # y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
+  y_resids <- ystar[uncens_inds]  - #mu2_vec_train[uncens_inds]-
+    gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds] #- mu1_vec_train[uncens_inds]
+                                   )
+
+  # print("line 849 = ")
+
+  Xuncensmat <- xmat_train[uncens_inds,]
+  Bvar <- solve(solve(Bvar_p) + crossprod((1/phi1_vec_train[uncens_inds])*Xuncensmat, Xuncensmat)  )
+  Bhat <- solve(crossprod((1/phi1_vec_train[uncens_inds])*Xuncensmat, Xuncensmat)  ) %*% (crossprod((1/phi1_vec_train[uncens_inds])*Xuncensmat,  y_resids) )
+  B_bar <- Bvar %*% (solve(Bvar_p)%*%Bmean_p + crossprod((1/phi1_vec_train[uncens_inds])*Xuncensmat, Xuncensmat)%*% Bhat)
+  print("line 860 = ")
+
+  # sample beta vector and gamma simulataneously
+  beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
+
+  mutemp_y <- xmat_train[uncens_inds,] %*% beta_vec
+  mutemp_test_y <- xmat_test %*% beta_vec
+
+
+  y_epsilon <- rep(0, n)
+  y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
+
+
+  # #initialize sum-of-tree sampler
+  #
+  #
+  # z_resids <- z - offsetz - mu1_vec_train #z_epsilon
+  # z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
+  #   (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - 0)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
+  #
+  # #set the response for draws of z trees
+  # sampler_z$setResponse(y = z_resids)
+  # #set the standard deivation
   # sampler_z$setSigma(sigma = 1)
-  sampler_z$setWeights(weights = weightstemp)
-
-
-  if(sparse){
-    tempmodel <- sampler_z$model
-    tempmodel@tree.prior@splitProbabilities <- s_z
-    sampler_z$setModel(newModel = tempmodel)
-  }
-
-  # sampler_z$sampleTreesFromPrior()
-
-  # priormean_z <- sampler_z$predict(xdf_z)[1,]
-
-  # sampler_z$sampleNodeParametersFromPrior()
-
-  samplestemp_z <- sampler_z$run()
-
-  # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
-  # mutemp_test_z <- rep(0,ntest) #samplestemp_z$test[,1]
-
-  mutemp_z <- samplestemp_z$train[,1]
-  mutemp_test_z <- samplestemp_z$test[,1]
-
-  # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+  #
+  # # weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
+  #
+  # # print("weightstemp = ")
+  # # print(weightstemp)
+  #
+  # # sampler_z$setSigma(sigma = 1)
+  # sampler_z$setWeights(weights = weightstemp)
+  #
+  #
   # if(sparse){
-    tempcounts <- fcount(sampler_z$getTrees()$var)
-    tempcounts <- tempcounts[tempcounts$x != -1, ]
-    var_count_z <- rep(0, p_z)
-    var_count_z[tempcounts$x] <- tempcounts$N
+  #   tempmodel <- sampler_z$model
+  #   tempmodel@tree.prior@splitProbabilities <- s_z
+  #   sampler_z$setModel(newModel = tempmodel)
   # }
-
-
-
-  # print("length(mutemp_test_z) = ")
-  # print(length(mutemp_test_z))
   #
-  # print("mutemp_test_z[1000:1010] = ")
-  # print(mutemp_test_z[1000:1010])
+  # # sampler_z$sampleTreesFromPrior()
   #
-  # print("mutemp_test_z[1:10] = ")
-  # print(mutemp_test_z[1:10])
+  # # priormean_z <- sampler_z$predict(xdf_z)[1,]
   #
-  # print("nrow(xdf_z_test) = ")
-  # print(nrow(xdf_z_test))
-
-  # print("weightstemp_y = ")
-  # print(weightstemp_y)
-
-
-
-  y_resids <- ystar[uncens_inds] - mu2_vec_train[uncens_inds] -
-    gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds]- mutemp_z[uncens_inds])
-  # sd_ydraw <- sqrt(phi1_vec_train[uncens_inds])
-
-
-  # print("y_resids = ")
+  # # sampler_z$sampleNodeParametersFromPrior()
   #
-  # print(y_resids)
-
-  #set the response for draws of z trees
-  sampler_y$setResponse(y = y_resids)
-  sampler_y$setSigma(sigma = 1)
-
-  # sampler_y$setSigma(sigma = sigest)
-  sampler_y$setWeights(weights = weightstemp_y)
-
-  if(sparse){
-    tempmodel <- sampler_y$model
-    tempmodel@tree.prior@splitProbabilities <- s_y
-    sampler_y$setModel(newModel = tempmodel)
-  }
-
-
-  # sampler_y$sampleTreesFromPrior()
-
-  # priormean_y <- sampler_y$predict(xdf_y)[1,]
-
-  # sampler_y$sampleNodeParametersFromPrior()
-
-  samplestemp_y <- sampler_y$run()
-
-  # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
-  # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
-
-  mutemp_y <- samplestemp_y$train[,1]
-  mutemp_test_y <- samplestemp_y$test[,1]
-
+  # samplestemp_z <- sampler_z$run()
+  #
+  # # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
+  # # mutemp_test_z <- rep(0,ntest) #samplestemp_z$test[,1]
+  #
+  # mutemp_z <- samplestemp_z$train[,1]
+  # mutemp_test_z <- samplestemp_z$test[,1]
+  #
+  # # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+  # # if(sparse){
+  #   tempcounts <- fcount(sampler_z$getTrees()$var)
+  #   tempcounts <- tempcounts[tempcounts$x != -1, ]
+  #   var_count_z <- rep(0, p_z)
+  #   var_count_z[tempcounts$x] <- tempcounts$N
+  # # }
+  #
+  #
+  #
+  # # print("length(mutemp_test_z) = ")
+  # # print(length(mutemp_test_z))
+  # #
+  # # print("mutemp_test_z[1000:1010] = ")
+  # # print(mutemp_test_z[1000:1010])
+  # #
+  # # print("mutemp_test_z[1:10] = ")
+  # # print(mutemp_test_z[1:10])
+  # #
+  # # print("nrow(xdf_z_test) = ")
+  # # print(nrow(xdf_z_test))
+  #
+  # # print("weightstemp_y = ")
+  # # print(weightstemp_y)
+  #
+  #
+  #
+  # y_resids <- ystar[uncens_inds] - mu2_vec_train[uncens_inds] -
+  #   gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds]- mutemp_z[uncens_inds])
+  # # sd_ydraw <- sqrt(phi1_vec_train[uncens_inds])
+  #
+  #
+  # # print("y_resids = ")
+  # #
+  # # print(y_resids)
+  #
+  # #set the response for draws of z trees
+  # sampler_y$setResponse(y = y_resids)
+  # sampler_y$setSigma(sigma = 1)
+  #
+  # # sampler_y$setSigma(sigma = sigest)
+  # sampler_y$setWeights(weights = weightstemp_y)
+  #
   # if(sparse){
-    tempcounts <- fcount(sampler_y$getTrees()$var)
-    tempcounts <- tempcounts[tempcounts$x != -1, ]
-    var_count_y <- rep(0, p_y)
-    var_count_y[tempcounts$x] <- tempcounts$N
+  #   tempmodel <- sampler_y$model
+  #   tempmodel@tree.prior@splitProbabilities <- s_y
+  #   sampler_y$setModel(newModel = tempmodel)
   # }
+  #
+  #
+  # # sampler_y$sampleTreesFromPrior()
+  #
+  # # priormean_y <- sampler_y$predict(xdf_y)[1,]
+  #
+  # # sampler_y$sampleNodeParametersFromPrior()
+  #
+  # samplestemp_y <- sampler_y$run()
+  #
+  # # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
+  # # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
+  #
+  # mutemp_y <- samplestemp_y$train[,1]
+  # mutemp_test_y <- samplestemp_y$test[,1]
+  #
+  # # if(sparse){
+  #   tempcounts <- fcount(sampler_y$getTrees()$var)
+  #   tempcounts <- tempcounts[tempcounts$x != -1, ]
+  #   var_count_y <- rep(0, p_y)
+  #   var_count_y[tempcounts$x] <- tempcounts$N
+  # # }
 
   # print("length(mutemp_test_y) = ")
   # print(length(mutemp_test_y))
@@ -1301,7 +1376,8 @@ tbart2np <- function(x.train,
     # z_epsilon <- z - offsetz - mutemp_z
     # y_epsilon <- ystar - mutemp_y
 
-    z_epsilon <- z - offsetz - mutemp_z - mu1_vec_train
+    z_epsilon <- z - offsetz - mutemp_z #- mu1_vec_train
+    y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
 
     # y_epsilon <- rep(0, n)
     # y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
@@ -1319,186 +1395,278 @@ tbart2np <- function(x.train,
     # print(z)
 
 
-    ####### draw sums of trees for z #######################################################
-
-    #create residuals for z and set variance
-
-    z_resids <- z - offsetz - mu1_vec_train #z_epsilon
-    z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
-      (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - mutemp_y)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
-
-    # print("z_resids = ")
-    # print(z_resids)
-
-    # print("length(z_resids) =")
-    # print(length(z_resids))
-    #
-    # print("length(mu1_vec_train) =")
-    # print(length(mu1_vec_train))
-    #
-    # print("length(z) =")
-    # print(length(z))
-
-    #set the response for draws of z trees
-    sampler_z$setResponse(y = z_resids)
-    #set the standard deivation
-    sampler_z$setSigma(sigma = 1)
-
-    weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
 
 
-    if(any(is.nan(weightstemp))){
 
-      print("weightstemp = ")
-      print(weightstemp)
-      stop("weightstemp contains NaNs")
+    inv_c2_vec <-(gamma1_vec_train^2 + phi1_vec_train)/phi1_vec_train
+
+
+    alpha_var <- solve(solve(Avar_p) +
+                         crossprod(wmat_train[cens_inds,]) +
+                         crossprod(inv_c2_vec[uncens_inds]*wmat_train[uncens_inds,], wmat_train[uncens_inds,]))
+
+
+    alpha0hat <- solve(crossprod(wmat_train[cens_inds,])) %*% crossprod(wmat_train[cens_inds,], z[cens_inds] - offsetz - mu1_vec_train[cens_inds])
+    alpha1hat <- solve(crossprod(inv_c2_vec[uncens_inds]*wmat_train[uncens_inds,], wmat_train[uncens_inds,])) %*% crossprod(inv_c2_vec[uncens_inds]*wmat_train[uncens_inds,],
+                                                                          z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
+                                                                            (ystar[uncens_inds]  - mutemp_y - mu2_vec_train[uncens_inds])*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2))
+    # print("line 1070 = ")
+
+    alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
+                                   crossprod(wmat_train[cens_inds,]) %*%  alpha0hat+
+                                   crossprod(inv_c2_vec[uncens_inds]*wmat_train[uncens_inds,], wmat_train[uncens_inds,]) %*% alpha1hat  )
+
+    # print("line 1076 = ")
+
+    alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
+
+    mutemp_z <- wmat_train %*% alpha_vec
+    mutemp_test_z <- wmat_test %*% alpha_vec
+    z_epsilon <- z - offsetz - mutemp_z
+
+    if(any(is.na(mutemp_z))){
+      stop("1090 any(is.na(mutemp_z))")
     }
+    # print("line 1081 = ")
+    # if(jointbetagamma){
+    #
+    #   # print("line 1084 = ")
+    #
+    #   Xresmat <- cbind(xmat_train[uncens_inds,] ,z[uncens_inds] - mutemp_z[uncens_inds] )
+    #
+    #   gamma0res <- c(Bmean_p,gamma0)
+    #   G0res <- rbind(cbind(Bvar_p, rep(0, nrow(Bvar_p))),
+    #                  t(c(rep(0,ncol(Bvar_p)), tau*phi1)))
+    #
+    #   Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
+    #   ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds])
+    #   g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+    #
+    #   # sample beta vector and gamma simulataneously
+    #   betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
+    #
+    #   gamma1 <- betagamma_vec[length(betagamma_vec)]
+    #   beta_vec <- betagamma_vec[- length(betagamma_vec)]
+    #   mutemp_y <- xmat_train[uncens_inds,] %*% beta_vec
+    #   mutemp_test_y <- xmat_test %*% beta_vec
+    #
+    # }else{
+      # print("line 1105 = ")
 
-    # print("length(weightstemp) = ")
-    # print(length(weightstemp))
+      # # sample as SUR as outlined by VH? requires data augmentation of y.
+      # D0_mat <- rbind(cbind(Avar_p, matrix(0,nrow = nrow(Avar_p), ncol = ncol(Bvar_p))),
+      #                 cbind( matrix(0,nrow = nrow(Bvar_p), ncol = ncol(Avar_p)), Bvar_p))
 
-    sampler_z$setWeights(weights = weightstemp)
+      # instead sample alpha and beta separately
 
-    if(sparse){
-      tempmodel <- sampler_z$model
-      tempmodel@tree.prior@splitProbabilities <- s_z
-      sampler_z$setModel(newModel = tempmodel)
-    }
-
-    samplestemp_z <- sampler_z$run()
-
-    mutemp_z <- samplestemp_z$train[,1]
-    mutemp_test_z <- samplestemp_z$test[,1]
-    # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+      y_resids <- ystar[uncens_inds]  - mu2_vec_train[uncens_inds]-
+        gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds] - mu1_vec_train[uncens_inds])
 
 
-    # if(sparse){
-      tempcounts <- fcount(sampler_z$getTrees()$var)
-      tempcounts <- tempcounts[tempcounts$x != -1, ]
-      var_count_z <- rep(0, p_z)
-      var_count_z[tempcounts$x] <- tempcounts$N
+      Xuncensmat <- xmat_train[uncens_inds,]
+
+      Bvar <- solve(solve(Bvar_p) + crossprod((1/phi1_vec_train[uncens_inds])*Xuncensmat, Xuncensmat)  )
+      Bhat <- solve(crossprod((1/phi1_vec_train[uncens_inds])*Xuncensmat, Xuncensmat)  ) %*% (crossprod((1/phi1_vec_train[uncens_inds])*Xuncensmat,  y_resids) )
+      B_bar <- Bvar %*% (solve(Bvar_p)%*%Bmean_p + crossprod((1/phi1_vec_train[uncens_inds])*Xuncensmat, Xuncensmat)%*% Bhat)
+
+      # sample beta vector and gamma simulataneously
+      beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
+      mutemp_y <- xmat_train[uncens_inds,] %*% beta_vec
+      mutemp_test_y <- xmat_test %*% beta_vec
+
     # }
+    y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
 
 
 
-    checkzpred <- sampler_z$predict(x.test = xdf_z)[,1]
-
-    if(any(abs(mutemp_z - checkzpred) >0.0001)){
-      print(" cbind(mutemp_z,  checkzpred)  ")
-      print(cbind(mutemp_z,  checkzpred))
-
-      print("which(abs(mutemp_z - checkzpred) >0.0001)) = ")
-      print(which(abs(mutemp_z - checkzpred) >0.0001))
-      stop("zpredictions not equal")
-    }
 
 
 
-    checkzpred <- sampler_z$predict(x.test = xdf_z_test)[,1]
-
-    if(!all(mutemp_test_z == checkzpred)){
-      print(" cbind(mutemp_test_z,  checkzpred, weightstemp)  ")
-      print(cbind(mutemp_test_z,  checkzpred, weightstemp))
-
-      print("which(mutemp_test_z != checkzpred) = ")
-      print(which(mutemp_test_z != checkzpred))
-      stop("zpredictions not equal")
-    }
 
 
 
-    # print("length(mutemp_test_z) = ")
-    # print(length(mutemp_test_z))
+
+
+    # ####### draw sums of trees for z #######################################################
     #
-    # print("nrow(xdf_z_test) = ")
-    # print(nrow(xdf_z_test))
-
-    #update z_epsilon
-    z_epsilon <- z - offsetz - mutemp_z - mu1_vec_train
-
-
-    ####### draw sums of trees for y #######################################################
-
-    #create residuals for z and set variance
-
-    # print("y_epsilon = ")
+    # #create residuals for z and set variance
     #
-    # print(y_epsilon)
+    # z_resids <- z - offsetz - mu1_vec_train #z_epsilon
+    # z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
+    #   (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - mutemp_y)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
+    #
+    # # print("z_resids = ")
+    # # print(z_resids)
+    #
+    # # print("length(z_resids) =")
+    # # print(length(z_resids))
+    # #
+    # # print("length(mu1_vec_train) =")
+    # # print(length(mu1_vec_train))
+    # #
+    # # print("length(z) =")
+    # # print(length(z))
+    #
+    # #set the response for draws of z trees
+    # sampler_z$setResponse(y = z_resids)
+    # #set the standard deivation
+    # sampler_z$setSigma(sigma = 1)
+    #
+    # weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
     #
     #
-    # print("z_epsilon = ")
+    # if(any(is.nan(weightstemp))){
     #
-    # print(z_epsilon)
-    #
-    # print("gamma1 = ")
-    #
-    # print(gamma1)
-
-
-
-    y_resids <- ystar[uncens_inds] - mu2_vec_train[uncens_inds] - gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds]- mutemp_z[uncens_inds])
-    # sd_ydraw <- sqrt(phi1_vec_train[uncens_inds])
-
-
-    # print("y_resids = ")
-    #
-    # print(y_resids)
-
-    #set the response for draws of z trees
-    sampler_y$setResponse(y = y_resids)
-    #set the standard deviation
-    # sampler_y$setSigma(sigma = sd_ydraw)
-
-    sampler_y$setSigma(sigma = 1)
-
-    weightstemp_y  <- 1/phi1_vec_train[uncens_inds]
-    sampler_y$setWeights(weights = weightstemp_y)
-
-    if(sparse){
-      tempmodel <- sampler_y$model
-      tempmodel@tree.prior@splitProbabilities <- s_y
-      sampler_y$setModel(newModel = tempmodel)
-    }
-
-    samplestemp_y <- sampler_y$run()
-
-    mutemp_y <- samplestemp_y$train[,1]
-    mutemp_test_y <- samplestemp_y$test[,1]
-
-
-    # if(sparse){
-      tempcounts <- fcount(sampler_y$getTrees()$var)
-      tempcounts <- tempcounts[tempcounts$x != -1, ]
-      var_count_y <- rep(0, p_y)
-      var_count_y[tempcounts$x] <- tempcounts$N
+    #   print("weightstemp = ")
+    #   print(weightstemp)
+    #   stop("weightstemp contains NaNs")
     # }
-
-
-    checkypred <- sampler_y$predict(x.test = xdf_y)[,1]
-
-    if(any(abs(mutemp_y - checkypred) >0.0001)){
-      print(" cbind(mutemp_y,  checkypred)  ")
-      print(cbind(mutemp_y,  checkypred))
-
-      print("which(abs(mutemp_y - checkypred) >0.0001) = ")
-      print(which(abs(mutemp_y - checkypred) >0.0001))
-      stop("zpredictions not equal")
-    }
-
-
-    checkypred <- sampler_y$predict(x.test = xdf_y_test)[,1]
-
-    if(!all(mutemp_test_y == checkypred)){
-      print(" cbind(mutemp_test_y,  checkypred)  ")
-      print(cbind(mutemp_test_y,  checkypred))
-
-      print("which(mutemp_test_y != checkypred) = ")
-      print(which(mutemp_test_y != checkypred))
-      stop("zpredictions not equal")
-    }
-
-    #update z_epsilon
-    # y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
+    #
+    # # print("length(weightstemp) = ")
+    # # print(length(weightstemp))
+    #
+    # sampler_z$setWeights(weights = weightstemp)
+    #
+    # if(sparse){
+    #   tempmodel <- sampler_z$model
+    #   tempmodel@tree.prior@splitProbabilities <- s_z
+    #   sampler_z$setModel(newModel = tempmodel)
+    # }
+    #
+    # samplestemp_z <- sampler_z$run()
+    #
+    # mutemp_z <- samplestemp_z$train[,1]
+    # mutemp_test_z <- samplestemp_z$test[,1]
+    # # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
+    #
+    #
+    # # if(sparse){
+    #   tempcounts <- fcount(sampler_z$getTrees()$var)
+    #   tempcounts <- tempcounts[tempcounts$x != -1, ]
+    #   var_count_z <- rep(0, p_z)
+    #   var_count_z[tempcounts$x] <- tempcounts$N
+    # # }
+    #
+    #
+    #
+    # checkzpred <- sampler_z$predict(x.test = xdf_z)[,1]
+    #
+    # if(any(abs(mutemp_z - checkzpred) >0.0001)){
+    #   print(" cbind(mutemp_z,  checkzpred)  ")
+    #   print(cbind(mutemp_z,  checkzpred))
+    #
+    #   print("which(abs(mutemp_z - checkzpred) >0.0001)) = ")
+    #   print(which(abs(mutemp_z - checkzpred) >0.0001))
+    #   stop("zpredictions not equal")
+    # }
+    #
+    #
+    #
+    # checkzpred <- sampler_z$predict(x.test = xdf_z_test)[,1]
+    #
+    # if(!all(mutemp_test_z == checkzpred)){
+    #   print(" cbind(mutemp_test_z,  checkzpred, weightstemp)  ")
+    #   print(cbind(mutemp_test_z,  checkzpred, weightstemp))
+    #
+    #   print("which(mutemp_test_z != checkzpred) = ")
+    #   print(which(mutemp_test_z != checkzpred))
+    #   stop("zpredictions not equal")
+    # }
+    #
+    #
+    #
+    # # print("length(mutemp_test_z) = ")
+    # # print(length(mutemp_test_z))
+    # #
+    # # print("nrow(xdf_z_test) = ")
+    # # print(nrow(xdf_z_test))
+    #
+    # #update z_epsilon
+    # z_epsilon <- z - offsetz - mutemp_z - mu1_vec_train
+    #
+    #
+    # ####### draw sums of trees for y #######################################################
+    #
+    # #create residuals for z and set variance
+    #
+    # # print("y_epsilon = ")
+    # #
+    # # print(y_epsilon)
+    # #
+    # #
+    # # print("z_epsilon = ")
+    # #
+    # # print(z_epsilon)
+    # #
+    # # print("gamma1 = ")
+    # #
+    # # print(gamma1)
+    #
+    #
+    #
+    # y_resids <- ystar[uncens_inds] - mu2_vec_train[uncens_inds] - gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds]- mutemp_z[uncens_inds])
+    # # sd_ydraw <- sqrt(phi1_vec_train[uncens_inds])
+    #
+    #
+    # # print("y_resids = ")
+    # #
+    # # print(y_resids)
+    #
+    # #set the response for draws of z trees
+    # sampler_y$setResponse(y = y_resids)
+    # #set the standard deviation
+    # # sampler_y$setSigma(sigma = sd_ydraw)
+    #
+    # sampler_y$setSigma(sigma = 1)
+    #
+    # weightstemp_y  <- 1/phi1_vec_train[uncens_inds]
+    # sampler_y$setWeights(weights = weightstemp_y)
+    #
+    # if(sparse){
+    #   tempmodel <- sampler_y$model
+    #   tempmodel@tree.prior@splitProbabilities <- s_y
+    #   sampler_y$setModel(newModel = tempmodel)
+    # }
+    #
+    # samplestemp_y <- sampler_y$run()
+    #
+    # mutemp_y <- samplestemp_y$train[,1]
+    # mutemp_test_y <- samplestemp_y$test[,1]
+    #
+    #
+    # # if(sparse){
+    #   tempcounts <- fcount(sampler_y$getTrees()$var)
+    #   tempcounts <- tempcounts[tempcounts$x != -1, ]
+    #   var_count_y <- rep(0, p_y)
+    #   var_count_y[tempcounts$x] <- tempcounts$N
+    # # }
+    #
+    #
+    # checkypred <- sampler_y$predict(x.test = xdf_y)[,1]
+    #
+    # if(any(abs(mutemp_y - checkypred) >0.0001)){
+    #   print(" cbind(mutemp_y,  checkypred)  ")
+    #   print(cbind(mutemp_y,  checkypred))
+    #
+    #   print("which(abs(mutemp_y - checkypred) >0.0001) = ")
+    #   print(which(abs(mutemp_y - checkypred) >0.0001))
+    #   stop("zpredictions not equal")
+    # }
+    #
+    #
+    # checkypred <- sampler_y$predict(x.test = xdf_y_test)[,1]
+    #
+    # if(!all(mutemp_test_y == checkypred)){
+    #   print(" cbind(mutemp_test_y,  checkypred)  ")
+    #   print(cbind(mutemp_test_y,  checkypred))
+    #
+    #   print("which(mutemp_test_y != checkypred) = ")
+    #   print(which(mutemp_test_y != checkypred))
+    #   stop("zpredictions not equal")
+    # }
+    #
+    # #update z_epsilon
+    # # y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
 
 
 
@@ -2029,7 +2197,28 @@ tbart2np <- function(x.train,
         # print(temp_samp_probs)
         # some of the observations not equal to i have the same vartheta values
         # so it is possible to sample the same parameters again
+        if(any(is.na(temp_samp_probs))){
+          print("temp_samp_probs= ")
+          print(temp_samp_probs)
+          print("phitilde= ")
+          print(phitilde)
+          print("gammatilde= ")
+          print(gammatilde)
+          print("temp_zdiff= ")
+          print(temp_zdiff)
+          print("temp_ydiff= ")
+          print(temp_ydiff)
 
+          print("mutilde= ")
+          print(mutilde)
+          print("ystar[i]= ")
+          print(ystar[i])
+          print("mutemp_y[itemp]= ")
+          print(mutemp_y[itemp])
+
+
+
+        }
         # new_vartheta <- sample(Ctemp_i*temp_samp_probs, size = 1)
         new_varind <- sample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
 
@@ -2225,6 +2414,18 @@ tbart2np <- function(x.train,
 
         # print("temp_samp_probs= ")
         # print(temp_samp_probs)
+        if(any(is.na(temp_samp_probs))){
+          print("temp_samp_probs= ")
+          print(temp_samp_probs)
+          print("phi1_vec_train= ")
+          print(phi1_vec_train)
+          print("gamma1_vec_train= ")
+          print(gamma1_vec_train)
+          print("temp_zdiff= ")
+          print(temp_zdiff)
+          print("temp_ydiff= ")
+          print(temp_ydiff)
+        }
 
         new_varind <- sample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
 
