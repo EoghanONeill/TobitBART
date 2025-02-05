@@ -50,7 +50,8 @@ softtbart2np(
   nu0 = 3,
   quantsig = 0.95,
   mixstep = TRUE,
-  simultaneous_covmat = TRUE
+  simultaneous_covmat = TRUE,
+  mu1_tozero = TRUE
 )
 }
 \arguments{

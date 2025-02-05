@@ -1896,9 +1896,9 @@ tobit2linear <- function(x.train,
       IMR_test <- exp( dnorm(temp_ztest,log=T) - pnorm(temp_ztest,log.p = T) )
       # }
 
-      if(cor(IMR_train,mutemp_y)> 0.9){
-        stop("Highly correlated f_y and IMR")
-      }
+      # if(cor(IMR_train,mutemp_y)> 0.99){
+      #   stop("Highly correlated f_y and IMR")
+      # }
 
       condexptrain <- mutemp_y + gamma1*IMR_train
       condexptest <- mutemp_test_y + gamma1*IMR_test

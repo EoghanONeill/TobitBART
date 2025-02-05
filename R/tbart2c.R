@@ -520,40 +520,40 @@ tbart2c <- function(x.train,
   S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
   # S0 <- 0.5*(sigest^2 - gamma0^2)*(nzero-2)/(2+tau)
 
-  print("S0 = ")
-  print(S0)
-
-  # # alternative: calibrate prior on phi as if gamma equals zero
-  # qchi = qchisq(1.0-quantsig,nzero)
-  # lambda = (sigest*sigest*qchi)/nzero #lambda parameter for sigma prior
-  # S0 <- nzero*lambda
-  # S0 <- 2*(sigest^2) * (nzero/2 - 1)
-
-  print("2* sigest*(n0/2 - 1) = ")
-  print(2* sigest*(n0/2 - 1))
-  print("(sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau) = ")
-  print((sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau))
-
-  print("sigest = ")
-  print(sigest)
-  print("sigest^2 = ")
-  print(sigest^2)
-
-  print("correst = ")
-  print(correst)
-
-  print("S0 = ")
-  print(S0)
-
-  print("(tempsd^2)*sigest^2 = ")
-  print((tempsd^2)*sigest^2)
-
-  print("(tempsd^2)*prior mean outcome variance = ")
-  print((tempsd^2)*S0*(1+tau)/(nzero-2) + gamma0^2)
-
-
-  print("prior mean outcome variance = ")
-  print(S0*(1+tau)/(nzero-2) + gamma0^2)
+  # print("S0 = ")
+  # print(S0)
+  #
+  # # # alternative: calibrate prior on phi as if gamma equals zero
+  # # qchi = qchisq(1.0-quantsig,nzero)
+  # # lambda = (sigest*sigest*qchi)/nzero #lambda parameter for sigma prior
+  # # S0 <- nzero*lambda
+  # # S0 <- 2*(sigest^2) * (nzero/2 - 1)
+  #
+  # print("2* sigest*(n0/2 - 1) = ")
+  # print(2* sigest*(n0/2 - 1))
+  # print("(sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau) = ")
+  # print((sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau))
+  #
+  # print("sigest = ")
+  # print(sigest)
+  # print("sigest^2 = ")
+  # print(sigest^2)
+  #
+  # print("correst = ")
+  # print(correst)
+  #
+  # print("S0 = ")
+  # print(S0)
+  #
+  # print("(tempsd^2)*sigest^2 = ")
+  # print((tempsd^2)*sigest^2)
+  #
+  # print("(tempsd^2)*prior mean outcome variance = ")
+  # print((tempsd^2)*S0*(1+tau)/(nzero-2) + gamma0^2)
+  #
+  #
+  # print("prior mean outcome variance = ")
+  # print(S0*(1+tau)/(nzero-2) + gamma0^2)
 
   # S0 <- 2
   # nzero <- 2
@@ -565,20 +565,23 @@ tbart2c <- function(x.train,
     cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
     cding <- cdivnu*(nu0-1)
 
-    print("cding old = ")
-    print(cding)
+    # print("cding old = ")
+    # print(cding)
 
 
     qig_noscale <- qgamma(p =  1- quantsig, shape = (nu0-1)/2, rate = 1/2)
     cding <- sigest*sigest*qig_noscale
-    print("cding = ")
-    print(cding)
+    # print("cding = ")
+    # print(cding)
+    #
+    # print("1/qgamma(p = 1- quantsig, shape = (nu0-1)/2, rate = cding/2) = ")
+    # print(1/qgamma(p = 1- quantsig, shape = (nu0-1)/2, rate = cding/2))
+    #
+    # print("sigest^2 = ")
+    # print(sigest^2)
 
-    print("1/qgamma(p = 1- quantsig, shape = (nu0-1)/2, rate = cding/2) = ")
-    print(1/qgamma(p = 1- quantsig, shape = (nu0-1)/2, rate = cding/2))
+    gamma1 <- correst*sigest  #0#cov(ystar,z)
 
-    print("sigest^2 = ")
-    print(sigest^2)
     # rhoinit <- 0
     # siginit <- sigest
     Sigma_mat <- cbind(c(1,gamma1),c(gamma1,sigest^2))
@@ -1344,9 +1347,9 @@ tbart2c <- function(x.train,
         # print("G1 = ")
         # print(G1)
 
-        if(iter > n.burnin/2){
+        # if(iter > n.burnin/2){
           gamma1 <- rnorm(n = 1, mean = gamma_one, sd =  sqrt(G1) )
-        }
+        # }
         # print("gamma1 = ")
         # print(gamma1)
 

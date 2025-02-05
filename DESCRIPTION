@@ -25,7 +25,8 @@ Imports:
     truncnorm,
     sampleSelection,
     SoftBart,
-    wrswoR
+    wrswoR,
+    CholWishart
 Remotes:
   github::boennecd/fastncdf
 Depends: 
@@ -47,4 +48,5 @@ LinkingTo:
     accelerometry,
     wrswoR,
     SoftBart,
-    sampleSelection
+    sampleSelection,
+    CholWishart

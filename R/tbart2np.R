@@ -9,6 +9,7 @@
 #' @import GIGrvg
 #' @import mvtnorm
 #' @import Rfast
+#' @import CholWishart
 #' @param x.train The outcome model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param x.test The outcome model test covariate data for all test observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
 #' @param w.train The censoring model training covariate data for all training observations. Number of rows equal to the number of observations. Number of columns equal to the number of covariates.
@@ -257,7 +258,8 @@ tbart2np <- function(x.train,
                     alpha_b_y = 1,
                     alpha_a_z = 0.5,
                     alpha_b_z = 1,
-                    alpha_split_prior = TRUE){
+                    alpha_split_prior = TRUE,
+                    mu1_tozero = TRUE){
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -525,41 +527,6 @@ tbart2np <- function(x.train,
   S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
   # S0 <- 0.5*(sigest^2 - gamma0^2)*(nzero-2)/(2+tau)
 
-  print("S0 = ")
-  print(S0)
-
-  # # alternative: calibrate prior on phi as if gamma equals zero
-  # qchi = qchisq(1.0-quantsig,nzero)
-  # lambda = (sigest*sigest*qchi)/nzero #lambda parameter for sigma prior
-  # S0 <- nzero*lambda
-  # S0 <- 2*(sigest^2) * (nzero/2 - 1)
-
-  print("2* sigest*(n0/2 - 1) = ")
-  print(2* sigest*(n0/2 - 1))
-  print("(sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau) = ")
-  print((sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau))
-
-  print("sigest = ")
-  print(sigest)
-  print("sigest^2 = ")
-  print(sigest^2)
-
-  print("S0 = ")
-  print(S0)
-
-  print("(tempsd^2)*sigest^2 = ")
-  print((tempsd^2)*sigest^2)
-
-  print("(tempsd^2)*prior mean outcome variance = ")
-  print((tempsd^2)*S0*(1+tau)/(nzero-2) + gamma0^2)
-
-
-  print("prior mean outcome variance = ")
-  print(S0*(1+tau)/(nzero-2) + gamma0^2)
-
-  # S0 <- 2
-  # nzero <- 2
-
 
   if(cov_prior == "Ding"){
     gamma0 <- 0
@@ -602,7 +569,10 @@ tbart2np <- function(x.train,
   # phi1_vec_train <- rep(sigest^2, n)
   # phi1_vec_test <- rep(sigest^2, ntest)
   phi1_vec_train <- rep(phi1, n)
+  logphi1_vec_train <- rep(log(phi1), n)
   phi1_vec_test <- rep(phi1, ntest)
+
+  var1_vec_train <- rep(phi1+ gamma0^2, n)
 
   mu1_vec_train <- rep(0,n)
   mu1_vec_test <- rep(0,ntest)
@@ -635,8 +605,11 @@ tbart2np <- function(x.train,
           tempsigma <- rinvwishart(nu = nu0,
                                    S = cding*diag(2))
 
-          transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-          tempomega <- (transmat %*% tempsigma) %*% transmat
+          # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+          # tempomega <- (transmat %*% tempsigma) %*% transmat
+
+          offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
+          tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
 
           temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
@@ -665,7 +638,9 @@ tbart2np <- function(x.train,
                                   sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
 
         mutilde[1] <- mu1_vec_train[i]
-
+        if(mu1_tozero == TRUE){
+          mutilde[1] <- 0
+        }
         mu2_vec_train[i] <- rnorm(n = 1,
                                   mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
                                   sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
@@ -684,6 +659,9 @@ tbart2np <- function(x.train,
 
         # initialize (could even use draws from prior to initialize this)
         mutilde <- c(mu1_vec_train[i],mu2_vec_train[i])
+        if(mu1_tozero == TRUE){
+          mutilde[1] <- 0
+        }
 
         phitilde <- phi1_vec_train[i]
         gammatilde <- gamma1_vec_train[i]
@@ -707,6 +685,10 @@ tbart2np <- function(x.train,
                              mu = (tempsigmamat%*%tempsigmainv) %*%
                                c((u_z[i]),(u_y[uncens_count])),
                              sigma = tempsigmamat )
+
+          if(mu1_tozero == TRUE){
+            mutilde[1] <- 0
+          }
 
           if(cov_prior == "Ding"){
 
@@ -741,8 +723,11 @@ tbart2np <- function(x.train,
             tempsigma <- rinvwishart(nu = 1 + nu0,
                                      S = Stemp+cding*diag(2))
 
-            transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-            tempomega <- (transmat %*% tempsigma) %*% transmat
+            # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+            # tempomega <- (transmat %*% tempsigma) %*% transmat
+
+            offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
+            tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
 
             temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
@@ -777,16 +762,22 @@ tbart2np <- function(x.train,
       } # end else statement for uncensrored observations
 
     } # end loop over i
+    logphi1_vec_train <- log(phi1_vec_train)
+    var1_vec_train <- phi1_vec_train + gamma1_vec_train^2
+
   }else{ #just one cluster for initial values
         # for both selected and unselected observations?
 
     # phi1_vec_train <- phi1 #sigest #  1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
     phi1_vec_train <- rep(phi1, n)
+    logphi1_vec_train <- rep(log(phi1), n)
 
     phitilde <- phi1_vec_train[1]
 
     # gamma1_vec_train <- gamma0 # rnorm(1, mean = gamma0, sd = sqrt(tau*phitilde))
     gamma1_vec_train <- rep(gamma0,n)
+
+    var1_vec_train <- rep(phi1 + gamma0^2,n)
 
     # mutilde <- c(NA,NA)
     #
@@ -893,8 +884,8 @@ tbart2np <- function(x.train,
     # draw correlations and other dependence measures
     # just one value per iteration, so it is a vector
     draw$pearsoncorr_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
-    draw$kendalltau_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
-    draw$spearmanrho_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
+    # draw$kendalltau_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
+    # draw$spearmanrho_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
 
 
   }
@@ -1593,49 +1584,22 @@ tbart2np <- function(x.train,
 
         logtemp_alpha_postprobs <- log_tempvals + log(temp_aprior)
 
-        maxll <- max(logtemp_alpha_postprobs)
+        # maxll <- max(logtemp_alpha_postprobs)
+        #
+        # temp_alpha_postprobs <- exp(logtemp_alpha_postprobs- maxll)
+        #
+        # post_probs_alphs = temp_alpha_postprobs/sum(temp_alpha_postprobs)
+        #
+        # # print("post_probs_alphs = ")
+        # # print(post_probs_alphs)
+        #
+        # #sample from 1 to alpha_gridsize
+        # index_alpha <- dqsample.int(n = alpha_gridsize, size = 1, prob = post_probs_alphs, replace = TRUE)
+        #
+        # alpha <- alpha_values[index_alpha]
 
-        temp_alpha_postprobs <- exp(logtemp_alpha_postprobs- maxll)
-
-
-        # print("logtemp_alpha_postprobs = ")
-        # print(logtemp_alpha_postprobs)
-        #
-        # print("log_tempvals = ")
-        # print(log_tempvals)
-        #
-        # print("gamma(alpha_values) = ")
-        # print(gamma(alpha_values))
-        #
-        #
-        # print("gamma(n+alpha_values) = ")
-        # print(gamma(n+alpha_values))
-        #
-        # print("lgamma(n+alpha_values) = ")
-        # print(lgamma(n+alpha_values))
-        #
-        # print("alpha_values = ")
-        # print(alpha_values)
-        #
-        # print("temp_kgivenalpha = ")
-        # print(temp_kgivenalpha)
-        #
-        # print("temp_aprior = ")
-        # print(temp_aprior)
-        #
-        # print("temp_alpha_postprobs = ")
-        # print(temp_alpha_postprobs)
-
-        post_probs_alphs = temp_alpha_postprobs/sum(temp_alpha_postprobs)
-
-        # print("post_probs_alphs = ")
-        # print(post_probs_alphs)
-
-        #sample from 1 to alpha_gridsize
-        index_alpha <- sample.int(n = alpha_gridsize, size = 1, prob = post_probs_alphs, replace = TRUE)
-
-        alpha <- alpha_values[index_alpha]
-
+        tempgumbsamps <- -log(-log(dqrunif(length(logtemp_alpha_postprobs))))
+        alpha <- alpha_values[ which.max(logtemp_alpha_postprobs + tempgumbsamps ) ]
 
       }else{
         stop("Alpha prior must be vh or george")
@@ -1834,8 +1798,26 @@ tbart2np <- function(x.train,
     #reset index for uncensored observations
     itemp <- 0
 
+    mutildemat <- Rfast::rmvnorm(n = n,
+                              mu = c(0, 0),
+                              sigma = M_mat)
 
+    if(mu1_tozero == TRUE){
+      mutilde[1] <- 0
+      mutildemat[,1] <- rep(0,n)
+    }
 
+    if( (iter ==1) #| (mixstep == TRUE)
+        ){
+      rho_i_counts <- fcount(varthetamat[,4])
+      n_rho_i_vec <- rep(NA, n)
+
+      for(countmatrow in 1:nrow(rho_i_counts)){
+        tempnum <- rho_i_counts$x[countmatrow]
+        tempinds <- which(varthetamat[,4] == tempnum)
+        n_rho_i_vec[tempinds] <- rho_i_counts$N[countmatrow]
+      }
+    }
 
     for(i in 1:n){
       # find number of individuals in the same cluster
@@ -1847,26 +1829,29 @@ tbart2np <- function(x.train,
       # }
 
       # temp_samp_probs <- rep(NA,n)
-      log_temp_samp_probs <- rep(NA,n)
+      # log_temp_samp_probs <- rep(NA,n)
 
       if(i %in% uncens_inds){
         itemp <- itemp +1
       }
 
-      #there is probably a more efficient way of coding this
-      temp_params <- varthetamat[i,]
+      # #there is probably a more efficient way of coding this
+      # temp_params <- varthetamat[i,]
+      #
+      # # colSums(t(varthetamat) == temp_params) == ncol(varthetamat)
+      #
+      # # code form https://stackoverflow.com/questions/32640682/check-whether-matrix-rows-equal-a-vector-in-r-vectorized
+      # #this gives the same number
+      # # n_rho_i <- sum(colSums(t(varthetamat) == temp_params) == ncol(varthetamat))
+      #
+      # #recalculate in each iteration because vartheta has been updated
+      # # n_rho_i <- sum(!Rfast::colsums(t(varthetamat) != temp_params))
+      #
+      # #continuous parameters, so fine to check just one value
+      # n_rho_i <- sum(varthetamat[,4] == temp_params[4])
 
-      # colSums(t(varthetamat) == temp_params) == ncol(varthetamat)
 
-      # code form https://stackoverflow.com/questions/32640682/check-whether-matrix-rows-equal-a-vector-in-r-vectorized
-      #this gives the same number
-      # n_rho_i <- sum(colSums(t(varthetamat) == temp_params) == ncol(varthetamat))
-
-      #recalculate in each iteration because vartheta has been updated
-      # n_rho_i <- sum(!Rfast::colsums(t(varthetamat) != temp_params))
-
-      #continuous parameters, so fine to check just one value
-      n_rho_i <- sum(varthetamat[,4] == temp_params[4])
+      n_rho_i <- n_rho_i_vec[i]
 
       # n_rho_i_temp <- sum(!Rfast::colsums(t(varthetamat) != temp_params))
       #
@@ -1884,8 +1869,11 @@ tbart2np <- function(x.train,
           #       sd = 1)
 
           # temp_samp_probs <- exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
-          log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -
-            0.5*log(2*pi)
+          # log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -
+          #   0.5*log(2*pi)
+
+          log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) #-
+            # 0.5*log(2*pi)
 
           # jointdens_tilde <-  dnorm((z - offsetz)[i] ,
           #                           mean = mutemp_z[i] +  mutilde[1],
@@ -1904,12 +1892,26 @@ tbart2np <- function(x.train,
           #       ((temp_ydiff)^2 )
           #   ) )
 
-          log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train)- (1/(2*phi1_vec_train))*(
-              (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
-                2*(gamma1_vec_train   )*
-                (temp_zdiff )*
-                (temp_ydiff ) +
-                ((temp_ydiff)^2 ))
+          # log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train)- (1/(2*phi1_vec_train))*(
+          #     (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
+          #       2*(gamma1_vec_train   )*
+          #       (temp_zdiff )*
+          #       (temp_ydiff ) +
+          #       ((temp_ydiff)^2 ))
+
+          # log_temp_samp_probs <-  - 0.5*logphi1_vec_train - (1/(2*phi1_vec_train))*(
+          #   (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
+          #     2*(gamma1_vec_train   )*
+          #     (temp_zdiff )*
+          #     (temp_ydiff ) +
+          #     ((temp_ydiff)^2 ))# -log(2*pi)
+
+          log_temp_samp_probs <-  - 0.5*logphi1_vec_train - (1/(2*phi1_vec_train))*(
+            (var1_vec_train)*( temp_zdiff )^2 -
+              2*(gamma1_vec_train   )*
+              (temp_zdiff )*
+              (temp_ydiff ) +
+              ((temp_ydiff)^2 ))# -log(2*pi)
 
           # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
           #                               ystar[i]),
@@ -1918,16 +1920,26 @@ tbart2np <- function(x.train,
           #                             sigma = Sigma_mat_temp_tilde)
         }
 
-        mutilde <- Rfast::rmvnorm(n = 1,
-                                  mu = c(0, 0),
-                                  sigma = M_mat)
+        # mutilde <- Rfast::rmvnorm(n = 1,
+        #                           mu = c(0, 0),
+        #                           sigma = M_mat)
+        mutilde <- mutildemat[i,]
+        if(mu1_tozero == TRUE){
+          mutilde[1] <- 0
+        }
 
         if(cov_prior == "Ding"){
-          tempsigma <- rinvwishart(nu = nu0,
-                                   S = cding*diag(2))
+          # tempsigma <- rinvwishart(nu = nu0,
+          #                          S = cding*diag(2))
 
-          transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-          tempomega <- (transmat %*% tempsigma) %*% transmat
+          tempsigma <- rInvWishart(n = 1L, nu0, cding*diag(2) )[,,1]
+
+
+          # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+          # tempomega <- (transmat %*% tempsigma) %*% transmat
+
+          offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
+          tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
 
           temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
@@ -1972,9 +1984,10 @@ tbart2np <- function(x.train,
           #                           sd = 1)
 
           # jointdens_tilde <-exp(-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2)/sqrt(2*pi)
-          log_jointdens_tilde <- (-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2) -
-            0.5*log(2*pi)
-
+          # log_jointdens_tilde <- (-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2) -
+          #   0.5*log(2*pi)
+          log_jointdens_tilde <- (-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2) #-
+            # 0.5*log(2*pi)
 
         }else{
           # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
@@ -1995,13 +2008,22 @@ tbart2np <- function(x.train,
           #       (temp_ydiff^2 )
           #   ) )
 
-          log_jointdens_tilde <- - log(2*pi) - 0.5*log(phitilde) - # (1/(2*pi*sqrt(phitilde)))*
-             (1/(2*phitilde))*(
+          # log_jointdens_tilde <- - log(2*pi) - 0.5*log(phitilde) - # (1/(2*pi*sqrt(phitilde)))*
+          #    (1/(2*phitilde))*(
+          #     (phitilde+gammatilde^2)*( temp_zdiff )^2 -
+          #       2*(gammatilde  )*
+          #       (temp_zdiff )*
+          #       (temp_ydiff ) +
+          #       (temp_ydiff^2 )
+          #   )
+
+          log_jointdens_tilde <-  - 0.5*log(phitilde) - # (1/(2*pi*sqrt(phitilde)))*
+            (1/(2*phitilde))*(
               (phitilde+gammatilde^2)*( temp_zdiff )^2 -
                 2*(gammatilde  )*
                 (temp_zdiff )*
                 (temp_ydiff ) +
-                (temp_ydiff^2 )
+                (temp_ydiff^2 ) # - log(2*pi)
             )
 
         }
@@ -2019,29 +2041,43 @@ tbart2np <- function(x.train,
         # temp_samp_probs[i] <- alpha*jointdens_tilde
         log_temp_samp_probs[i] <- log(alpha)+log_jointdens_tilde
 
-        maxll <- max(log_temp_samp_probs)
-
-        temp_samp_probs <- exp(log_temp_samp_probs- maxll)
-
-        temp_samp_probs <- temp_samp_probs/sum(temp_samp_probs) # this step is probably unnecessary
-
-        # print("temp_samp_probs= ")
-        # print(temp_samp_probs)
-        # some of the observations not equal to i have the same vartheta values
-        # so it is possible to sample the same parameters again
-
-        # new_vartheta <- sample(Ctemp_i*temp_samp_probs, size = 1)
-        new_varind <- sample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
+        # maxll <- max(log_temp_samp_probs)
+        #
+        # temp_samp_probs <- exp(log_temp_samp_probs- maxll)
+        #
+        # temp_samp_probs <- temp_samp_probs/sum(temp_samp_probs) # this step is probably unnecessary
+        #
+        # # print("temp_samp_probs= ")
+        # # print(temp_samp_probs)
+        # # some of the observations not equal to i have the same vartheta values
+        # # so it is possible to sample the same parameters again
+        #
+        # # new_vartheta <- sample(Ctemp_i*temp_samp_probs, size = 1)
+        # new_varind <- dqsample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
 
         # new_vartheta <- NA
+        tempgumbsamps <- -log(-log(dqrunif(length(log_temp_samp_probs))))
+        new_varind <- which.max(log_temp_samp_probs + tempgumbsamps )
 
         if(new_varind == i){
+          # the new value is unique since the parameters are drawn from continuous distributions
+          # reduce count by 1 for observations that were in the same cluster
+          # [an alternative way of coding this would be to save the observation indices for each cluster]
+
+          n_rho_i_vec[which(varthetamat[,4] == varthetamat[i,4])] <- n_rho_i_vec[i] - 1
+          n_rho_i_vec[i] <- 1
+
           #accept new proposal
           mu1_vec_train[i] <- mutilde[1]
           mu2_vec_train[i] <- mutilde[2]
 
           phi1_vec_train[i] <- phitilde
+          logphi1_vec_train[i] <- log(phitilde)
           gamma1_vec_train[i] <- gammatilde
+
+          var1_vec_train[i] <- phitilde + gammatilde^2
+
+
 
 
           #update densities
@@ -2146,9 +2182,16 @@ tbart2np <- function(x.train,
           mu2_vec_train[i] <- mu2_vec_train[new_varind]
 
           phi1_vec_train[i] <- phi1_vec_train[new_varind]
+          logphi1_vec_train[i] <- logphi1_vec_train[new_varind]
           gamma1_vec_train[i] <- gamma1_vec_train[new_varind]
 
+          var1_vec_train[i] <- var1_vec_train[new_varind]
+
           # jointdens_mat[,i] <- jointdens_mat[,new_varind]
+
+          # there is probably a faster way of updating this
+          tempinds <- which(gamma1_vec_train == gamma1_vec_train[new_varind])
+          n_rho_i_vec[tempinds] <- length(tempinds)
 
         }
 
@@ -2173,8 +2216,10 @@ tbart2np <- function(x.train,
           #                              sd = 1)
 
           # temp_samp_probs <-exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
-          log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -
-            0.5*log(2*pi)
+          # log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -
+          #   0.5*log(2*pi)
+          log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) # -
+            # 0.5*log(2*pi)
 
           # jointdens_tilde <-  dnorm((z - offsetz)[i] ,
           #                           mean = mutemp_z[i] +  mutilde[1],
@@ -2193,13 +2238,29 @@ tbart2np <- function(x.train,
           #       (temp_ydiff^2 )
           #   ) )
 
-          log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train) -
-             (1/(2*phi1_vec_train))*(
-              (phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
+          # log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train) -
+          #    (1/(2*phi1_vec_train))*(
+          #     (phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
+          #       2*(gamma1_vec_train   )*
+          #       (temp_zdiff )*
+          #       temp_ydiff +
+          #       (temp_ydiff^2 ))
+
+          # log_temp_samp_probs <-   - 0.5*logphi1_vec_train -
+          #   (1/(2*phi1_vec_train))*(
+          #     (phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
+          #       2*(gamma1_vec_train   )*
+          #       (temp_zdiff )*
+          #       temp_ydiff +
+          #       (temp_ydiff^2 )) # -log(2*pi)
+
+          log_temp_samp_probs <-   - 0.5*logphi1_vec_train -
+            (1/(2*phi1_vec_train))*(
+              (var1_vec_train)*(temp_zdiff  )^2 -
                 2*(gamma1_vec_train   )*
                 (temp_zdiff )*
                 temp_ydiff +
-                (temp_ydiff^2 ))
+                (temp_ydiff^2 )) # -log(2*pi)
 
 
           # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
@@ -2217,18 +2278,22 @@ tbart2np <- function(x.train,
 
         log_temp_samp_probs[i] <- log(alpha)+log_temp_samp_probs[i]
 
-        maxll <- max(log_temp_samp_probs)
-
-        temp_samp_probs <- exp(log_temp_samp_probs- maxll)
-
-        temp_samp_probs <- temp_samp_probs/sum(temp_samp_probs) # this step is probably unnecessary
-
-        # print("temp_samp_probs= ")
-        # print(temp_samp_probs)
-
-        new_varind <- sample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
+        # maxll <- max(log_temp_samp_probs)
+        #
+        # temp_samp_probs <- exp(log_temp_samp_probs- maxll)
+        #
+        # temp_samp_probs <- temp_samp_probs/sum(temp_samp_probs) # this step is probably unnecessary
+        #
+        # # print("temp_samp_probs= ")
+        # # print(temp_samp_probs)
+        #
+        # new_varind <- dqsample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
 
         # new_vartheta <- NA
+
+        tempgumbsamps <- -log(-log(dqrunif(length(log_temp_samp_probs))))
+        new_varind <- which.max(log_temp_samp_probs + tempgumbsamps )
+
 
         if(new_varind == i){
 
@@ -2255,6 +2320,7 @@ tbart2np <- function(x.train,
 
           # jointdens_mat[,i] <- jointdens_mat[,new_varind]
 
+          n_rho_i_vec[which(gamma1_vec_train == gamma1_vec_train[new_varind])] <- sum(gamma1_vec_train == gamma1_vec_train[new_varind])
 
 
           # if(i %in% uncens_inds){
@@ -2557,8 +2623,11 @@ tbart2np <- function(x.train,
             tempsigma <- rinvwishart(nu = nu0,
                                      S = cding*diag(2))
 
-            transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-            tempomega <- (transmat %*% tempsigma) %*% transmat
+            # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+            # tempomega <- (transmat %*% tempsigma) %*% transmat
+
+            offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
+            tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
 
             temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
@@ -2579,6 +2648,11 @@ tbart2np <- function(x.train,
           mutilde[1] <- rnorm(n = 1,
                              mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
                              sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
+
+          if(mu1_tozero == TRUE){
+            mutilde[1] <- 0
+            mutildemat[,1] <- rep(0,n)
+          }
 
           mutilde[2] <- rnorm(n = 1,
                              mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
@@ -2625,7 +2699,10 @@ tbart2np <- function(x.train,
                                  c(sum(u_z[clust_uncens_boolvec]),sum(u_y[clust_uncens_for_y])),
                                sigma = tempsigmamat )
 
-
+            if(mu1_tozero == TRUE){
+              mutilde[1] <- 0
+              mutildemat[,1] <- rep(0,n)
+            }
 
             # print("clust_uncens_boolvec = ")
             # print(clust_uncens_boolvec)
@@ -2702,8 +2779,11 @@ tbart2np <- function(x.train,
                                        S = Stemp+cding*diag(2))
 
 
-              transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-              tempomega <- (transmat %*% tempsigma) %*% transmat
+              # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+              # tempomega <- (transmat %*% tempsigma) %*% transmat
+
+              offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
+              tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
 
               temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
@@ -2794,6 +2874,11 @@ tbart2np <- function(x.train,
                               mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
                               sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
 
+          if(mu1_tozero == TRUE){
+            mutilde[1] <- 0
+            mutildemat[,1] <- rep(0,n)
+          }
+
           # The other cluster parameters must be sampled in a Gibbs sampler
 
           M2bar <- 1/( ( M_mat[1,1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  + (num_uncens_temp/phitilde )  )
@@ -2867,8 +2952,11 @@ tbart2np <- function(x.train,
                                      S = Stemp+cding*diag(2))
 
 
-            transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-            tempomega <- (transmat %*% tempsigma) %*% transmat
+            # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+            # tempomega <- (transmat %*% tempsigma) %*% transmat
+
+            offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
+            tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
 
             temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
@@ -2963,9 +3051,17 @@ tbart2np <- function(x.train,
     }
 
     mu1_vec_train <- varthetamat[,1]
+    if(mu1_tozero == TRUE){
+      # mutilde[1] <- 0
+      mu1_vec_train <- rep(0,n)
+    }
     mu2_vec_train <- varthetamat[,2]
     phi1_vec_train <- varthetamat[,3]
+    logphi1_vec_train <- log(phi1_vec_train)
     gamma1_vec_train <- varthetamat[,4]
+
+    var1_vec_train <- phi1_vec_train + gamma1_vec_train^2
+
 
     if(any(phi1_vec_train <= 0)){
       stop("Line 1797 some phi1_vec_train values <= 0")
@@ -2980,27 +3076,33 @@ tbart2np <- function(x.train,
 
       temp_sample_probs <- c(rep(1/(alpha+n) , n), alpha/(alpha+n) )
 
+      temp_inds <- sample.int(n = (n+1), size = ntest, prob = temp_sample_probs, replace = TRUE)
 
 
       for(i in 1:ntest){
 
-        temp_ind <- sample.int(n = (n+1), size = 1, prob = temp_sample_probs, replace = TRUE)
 
-        if(temp_ind == n+1){
+        if(temp_inds[i] == n+1){
           # sample from the base distribution
+          mutilde <- Rfast::rmvnorm(n = 1,
+                                    mu = c(0, 0),
+                                    sigma = M_mat)
+
+          if(mu1_tozero == TRUE){
+            mutilde[1] <- 0
+            # mu1_vec_train <- rep(0,n)
+          }
 
           if(cov_prior == "Ding"){
-
-
-            mutilde <- Rfast::rmvnorm(n = 1,
-                               mu = c(0, 0),
-                               sigma = M_mat)
 
             tempsigma <- rinvwishart(nu = nu0,
                                      S = cding*diag(2))
 
-            transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
-            tempomega <- (transmat %*% tempsigma) %*% transmat
+            # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
+            # tempomega <- (transmat %*% tempsigma) %*% transmat
+
+            offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
+            tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
 
             temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
 
@@ -3048,7 +3150,7 @@ tbart2np <- function(x.train,
 
 
         }else{
-          varthetamat_test[i,] <- varthetamat[temp_ind,]
+          varthetamat_test[i,] <- varthetamat[temp_inds[i],]
 
           if( any(is.na(gammatilde)) | any(!is.finite(gammatilde))   ){
 
@@ -3058,8 +3160,8 @@ tbart2np <- function(x.train,
             print("i = ")
             print(i)
 
-            print("temp_ind = ")
-            print(temp_ind)
+            print("temp_inds[i] = ")
+            print(temp_inds[i])
 
           }
 
@@ -3288,8 +3390,8 @@ tbart2np <- function(x.train,
 
         # draw correlations
         draw$pearsoncorr_draws[iter_min_burnin] <- cor(utrain[,1],utrain[,2])
-        draw$kendalltau_draws[iter_min_burnin] <- cor(utrain[,1],utrain[,2], method = "kendall") #array(NA, dim = c(n, n.iter))
-        draw$spearmanrho_draws[iter_min_burnin] <-  cor(utrain[,1],utrain[,2], method = "spearman") #array(NA, dim = c(n, n.iter))
+        # draw$kendalltau_draws[iter_min_burnin] <- cor(utrain[,1],utrain[,2], method = "kendall") #array(NA, dim = c(n, n.iter))
+        # draw$spearmanrho_draws[iter_min_burnin] <-  cor(utrain[,1],utrain[,2], method = "spearman") #array(NA, dim = c(n, n.iter))
 
 
         # for(i in 1:ntest){
@@ -3445,16 +3547,16 @@ tbart2np <- function(x.train,
       # draw$Z.mat_test[,iter_min_burnin] <-  zytest[,1]
       # draw$Y.mat_train = array(NA, dim = c(n, n.iter)),
       # draw$Y.mat_test = array(NA, dim = c(ntest, n.iter)),
-      draw$mu_y_train[, iter_min_burnin] <- mutemp_y + varthetamat[uncens_inds,2]
-      draw$mu_y_test[, iter_min_burnin] <- mutemp_test_y + varthetamat_test[,2]
+      draw$mu_y_train[, iter_min_burnin] <- (mutemp_y + varthetamat[uncens_inds,2]) *tempsd+tempmean
+      draw$mu_y_test[, iter_min_burnin] <- (mutemp_test_y + varthetamat_test[,2]) *tempsd+tempmean
 
-      draw$mu_y_train_noerror[, iter_min_burnin] <- mutemp_y #+ varthetamat[uncens_inds,2]
-      draw$mu_y_test_noerror[, iter_min_burnin] <- mutemp_test_y #+ varthetamat_test[,2]
+      draw$mu_y_train_noerror[, iter_min_burnin] <- (mutemp_y) *tempsd+tempmean #+ varthetamat[uncens_inds,2]
+      draw$mu_y_test_noerror[, iter_min_burnin] <- (mutemp_test_y) *tempsd+tempmean #+ varthetamat_test[,2]
 
 
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
-      draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y+ varthetamat[uncens_inds,2]
+      draw$muuncens_y_train[, iter_min_burnin] <- (mutemp_y + varthetamat[uncens_inds,2]) *tempsd+tempmean
 
       draw$mu_z_train[, iter_min_burnin] <- mutemp_z + offsetz + varthetamat[,1]
       draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z + offsetz + varthetamat_test[,1]
@@ -3465,16 +3567,25 @@ tbart2np <- function(x.train,
       draw$cond_exp_train[, iter_min_burnin] <- condexptrain
       draw$cond_exp_test[, iter_min_burnin] <- condexptest
 
-      draw$ystar_train[, iter_min_burnin] <- ystar
-      draw$ystar_test[, iter_min_burnin] <- zytest[,2]
+      draw$ystar_train[, iter_min_burnin] <- (ystar) *tempsd+tempmean
+      draw$ystar_test[, iter_min_burnin] <- (zytest[,2]) *tempsd+tempmean
       draw$zstar_train[,iter_min_burnin] <- z
       draw$zstar_test[,iter_min_burnin] <-  zytest[,1]
 
-      draw$ycond_draws_train[[iter_min_burnin]] <-  ystar[z >=0]
-      draw$ycond_draws_test[[iter_min_burnin]] <-  zytest[,2][zytest[,1] >= 0]
+      draw$ycond_draws_train[[iter_min_burnin]] <-  (ystar[z >=0]) *tempsd+tempmean
+      draw$ycond_draws_test[[iter_min_burnin]] <-  (zytest[,2][zytest[,1] >= 0]) *tempsd+tempmean
 
-      draw$vartheta_draws[,, iter_min_burnin] <- varthetamat
-      draw$vartheta_test_draws[,, iter_min_burnin] <- varthetamat_test
+
+      varthetamat_scaled <- varthetamat
+      varthetamat_scaled[,1:3] <- varthetamat[,1:3]*tempsd
+      varthetamat_scaled[,4] <- varthetamat[,4]*(tempsd^2)
+
+      varthetamat_test_scaled <- varthetamat_test
+      varthetamat_test_scaled[,1:3] <- varthetamat_test[,1:3]*tempsd
+      varthetamat_test_scaled[,4] <- varthetamat_test[,4]*(tempsd^2)
+
+      draw$vartheta_draws[,, iter_min_burnin] <- varthetamat_scaled
+      draw$vartheta_test_draws[,, iter_min_burnin] <- varthetamat_test_scaled
 
 
       if(is.numeric(censored_value)){
@@ -3483,12 +3594,12 @@ tbart2np <- function(x.train,
         uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + varthetamat[uncens_inds,4]*dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
         uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + varthetamat_test[,4]*dnorm(- mutemp_test_z - offsetz -  varthetamat_test[,1])
 
-        draw$uncond_exp_train[, iter_min_burnin] <- uncondexptrain
-        draw$uncond_exp_test[, iter_min_burnin] <- uncondexptest
+        draw$uncond_exp_train[, iter_min_burnin] <- (uncondexptrain) *tempsd+tempmean
+        draw$uncond_exp_test[, iter_min_burnin] <- (uncondexptest) *tempsd+tempmean
 
 
         # draw$ydraws_train[, iter_min_burnin] <- ifelse(z < 0, censored_value, ystar )
-        draw$ydraws_test[, iter_min_burnin] <- ifelse(zytest[,1] < 0, censored_value, zytest[,2] )
+        draw$ydraws_test[, iter_min_burnin] <- (ifelse(zytest[,1] < 0, censored_value, zytest[,2] )) *tempsd+tempmean
       }
 
       draw$alpha[iter_min_burnin] <- alpha

@@ -59,7 +59,8 @@ tbart2np(
   alpha_b_y = 1,
   alpha_a_z = 0.5,
   alpha_b_z = 1,
-  alpha_split_prior = TRUE
+  alpha_split_prior = TRUE,
+  mu1_tozero = TRUE
 )
 }
 \arguments{

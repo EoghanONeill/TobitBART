@@ -257,7 +257,8 @@ tobit2linearnp <- function(x.train,
                     alpha_b_y = 1,
                     alpha_a_z = 0.5,
                     alpha_b_z = 1,
-                    alpha_split_prior = TRUE){
+                    alpha_split_prior = TRUE,
+                    mu1_tozero = TRUE){
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -678,7 +679,9 @@ tobit2linearnp <- function(x.train,
                                   sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
 
         mutilde[1] <- mu1_vec_train[i]
-
+        if(mu1_tozero == TRUE){
+          mutilde[1] <- 0
+        }
         mu2_vec_train[i] <- rnorm(n = 1,
                                   mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
                                   sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
@@ -697,7 +700,9 @@ tobit2linearnp <- function(x.train,
 
         # initialize (could even use draws from prior to initialize this)
         mutilde <- c(mu1_vec_train[i],mu2_vec_train[i])
-
+        if(mu1_tozero == TRUE){
+          mutilde[1] <- 0
+        }
         phitilde <- phi1_vec_train[i]
         gammatilde <- gamma1_vec_train[i]
 
@@ -720,7 +725,9 @@ tobit2linearnp <- function(x.train,
                              mu = (tempsigmamat%*%tempsigmainv) %*%
                                c((u_z[i]),(u_y[uncens_count])),
                              sigma = tempsigmamat )
-
+          if(mu1_tozero == TRUE){
+            mutilde[1] <- 0
+          }
           if(cov_prior == "Ding"){
 
             rhotilde <- gammatilde/sqrt(phitilde + gammatilde^2)
@@ -916,19 +923,21 @@ tobit2linearnp <- function(x.train,
 
   ########## Initialize dbarts #####################
 
-  control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                             keepTrees = TRUE,
-                             n.trees = n.trees_censoring,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
-                             rngKind = rngKind,
-                             rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
+  if(n.trees_censoring >0){
+    control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+                               keepTrees = TRUE,
+                               n.trees = n.trees_censoring,
+                               n.burn = n.burn,
+                               n.samples = n.samples,
+                               n.thin = n.thin,
+                               n.chains = n.chains,
+                               n.threads = n.threads,
+                               printEvery = printEvery,
+                               printCutoffs = printCutoffs,
+                               rngKind = rngKind,
+                               rngNormalKind = rngNormalKind,
+                               rngSeed = rngSeed)
+  }
 
   control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
@@ -974,19 +983,22 @@ tobit2linearnp <- function(x.train,
                         sigma = sigmadbarts
     )
 
-    xdf_z <- data.frame(y = z - offsetz, x = w.train)
+    if(n.trees_censoring >0){
 
-    sampler_z <- dbarts(y ~ .,
-                        data = xdf_z,
-                        #test = x.test,
-                        weights = weightstemp,
-                        control = control_z,
-                        tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = 1#sigmadbarts
-    )
+      xdf_z <- data.frame(y = z - offsetz, x = w.train)
+
+      sampler_z <- dbarts(y ~ .,
+                          data = xdf_z,
+                          #test = x.test,
+                          weights = weightstemp,
+                          control = control_z,
+                          tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
+                          node.prior = node.prior,
+                          resid.prior = resid.prior,
+                          proposal.probs = proposal.probs,
+                          sigma = 1#sigmadbarts
+      )
+    }
 
   }else{
 
@@ -1012,20 +1024,23 @@ tobit2linearnp <- function(x.train,
     # print("length(weightstemp) = ")
     # print(length(weightstemp))
 
-    xdf_z <- data.frame(y = z - offsetz, x = w.train)
-    xdf_z_test <- data.frame(x = w.test)
+    if(n.trees_censoring >0){
 
-    sampler_z <- dbarts(y ~ .,
-                        data = xdf_z,
-                        test = xdf_z_test,
-                        # weights = weightstemp,
-                        control = control_z,
-                        tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-                        node.prior = node.prior,
-                        resid.prior = resid.prior,
-                        proposal.probs = proposal.probs,
-                        sigma = 1#sigmadbarts
-    )
+      xdf_z <- data.frame(y = z - offsetz, x = w.train)
+      xdf_z_test <- data.frame(x = w.test)
+
+      sampler_z <- dbarts(y ~ .,
+                          data = xdf_z,
+                          test = xdf_z_test,
+                          # weights = weightstemp,
+                          control = control_z,
+                          tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
+                          node.prior = node.prior,
+                          resid.prior = resid.prior,
+                          proposal.probs = proposal.probs,
+                          sigma = 1#sigmadbarts
+      )
+    }
 
   }
 
@@ -2089,7 +2104,9 @@ tobit2linearnp <- function(x.train,
         mutilde <- Rfast::rmvnorm(n = 1,
                                   mu = c(0, 0),
                                   sigma = M_mat)
-
+        if(mu1_tozero == TRUE){
+          mutilde[1] <- 0
+        }
         if(cov_prior == "Ding"){
           tempsigma <- rinvwishart(nu = nu0,
                                    S = cding*diag(2))
@@ -2780,7 +2797,9 @@ tobit2linearnp <- function(x.train,
           mutilde[1] <- rnorm(n = 1,
                              mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
                              sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
-
+          if(mu1_tozero == TRUE){
+            mutilde[1] <- 0
+          }
           mutilde[2] <- rnorm(n = 1,
                              mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
                              sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
@@ -2825,7 +2844,9 @@ tobit2linearnp <- function(x.train,
                                mu = (tempsigmamat%*%tempsigmainv) %*%
                                  c(sum(u_z[clust_uncens_boolvec]),sum(u_y[clust_uncens_for_y])),
                                sigma = tempsigmamat )
-
+            if(mu1_tozero == TRUE){
+              mutilde[1] <- 0
+            }
 
 
             # print("clust_uncens_boolvec = ")
@@ -2994,7 +3015,9 @@ tobit2linearnp <- function(x.train,
           mutilde[1] <- rnorm(n = 1,
                               mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
                               sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
-
+          if(mu1_tozero == TRUE){
+            mutilde[1] <- 0
+          }
           # The other cluster parameters must be sampled in a Gibbs sampler
 
           M2bar <- 1/( ( M_mat[1,1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  + (num_uncens_temp/phitilde )  )
@@ -3189,13 +3212,15 @@ tobit2linearnp <- function(x.train,
 
         if(temp_ind == n+1){
           # sample from the base distribution
-
+          mutilde <- Rfast::rmvnorm(n = 1,
+                                    mu = c(0, 0),
+                                    sigma = M_mat)
+          if(mu1_tozero == TRUE){
+            mutilde[1] <- 0
+          }
           if(cov_prior == "Ding"){
 
 
-            mutilde <- Rfast::rmvnorm(n = 1,
-                               mu = c(0, 0),
-                               sigma = M_mat)
 
             tempsigma <- rinvwishart(nu = nu0,
                                      S = cding*diag(2))
@@ -3646,16 +3671,16 @@ tobit2linearnp <- function(x.train,
       # draw$Z.mat_test[,iter_min_burnin] <-  zytest[,1]
       # draw$Y.mat_train = array(NA, dim = c(n, n.iter)),
       # draw$Y.mat_test = array(NA, dim = c(ntest, n.iter)),
-      draw$mu_y_train[, iter_min_burnin] <- mutemp_y + varthetamat[uncens_inds,2]
-      draw$mu_y_test[, iter_min_burnin] <- mutemp_test_y + varthetamat_test[,2]
+      draw$mu_y_train[, iter_min_burnin] <- (mutemp_y + varthetamat[uncens_inds,2]) *tempsd+tempmean
+      draw$mu_y_test[, iter_min_burnin] <- (mutemp_test_y + varthetamat_test[,2]) *tempsd+tempmean
 
-      draw$mu_y_train_noerror[, iter_min_burnin] <- mutemp_y #+ varthetamat[uncens_inds,2]
-      draw$mu_y_test_noerror[, iter_min_burnin] <- mutemp_test_y #+ varthetamat_test[,2]
+      draw$mu_y_train_noerror[, iter_min_burnin] <- (mutemp_y) *tempsd+tempmean #+ varthetamat[uncens_inds,2]
+      draw$mu_y_test_noerror[, iter_min_burnin] <- (mutemp_test_y) *tempsd+tempmean #+ varthetamat_test[,2]
 
 
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
-      draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y+ varthetamat[uncens_inds,2]
+      draw$muuncens_y_train[, iter_min_burnin] <- (mutemp_y+ varthetamat[uncens_inds,2]) *tempsd+tempmean
 
       draw$mu_z_train[, iter_min_burnin] <- mutemp_z + offsetz + varthetamat[,1]
       draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z + offsetz + varthetamat_test[,1]
@@ -3663,16 +3688,16 @@ tobit2linearnp <- function(x.train,
       draw$train.probcens[, iter_min_burnin] <-  probcens_train
       draw$test.probcens[, iter_min_burnin] <-  probcens_test
 
-      draw$cond_exp_train[, iter_min_burnin] <- condexptrain
-      draw$cond_exp_test[, iter_min_burnin] <- condexptest
+      draw$cond_exp_train[, iter_min_burnin] <- (condexptrain) *tempsd+tempmean
+      draw$cond_exp_test[, iter_min_burnin] <- (condexptest) *tempsd+tempmean
 
-      draw$ystar_train[, iter_min_burnin] <- ystar
-      draw$ystar_test[, iter_min_burnin] <- zytest[,2]
+      draw$ystar_train[, iter_min_burnin] <- (ystar) *tempsd+tempmean
+      draw$ystar_test[, iter_min_burnin] <- (zytest[,2]) *tempsd+tempmean
       draw$zstar_train[,iter_min_burnin] <- z
       draw$zstar_test[,iter_min_burnin] <-  zytest[,1]
 
-      draw$ycond_draws_train[[iter_min_burnin]] <-  ystar[z >=0]
-      draw$ycond_draws_test[[iter_min_burnin]] <-  zytest[,2][zytest[,1] >= 0]
+      draw$ycond_draws_train[[iter_min_burnin]] <-  (ystar[z >=0]) *tempsd+tempmean
+      draw$ycond_draws_test[[iter_min_burnin]] <-  (zytest[,2][zytest[,1] >= 0]) *tempsd+tempmean
 
       draw$vartheta_draws[,, iter_min_burnin] <- varthetamat
       draw$vartheta_test_draws[,, iter_min_burnin] <- varthetamat_test
@@ -3684,12 +3709,12 @@ tobit2linearnp <- function(x.train,
         uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + varthetamat[uncens_inds,4]*dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
         uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + varthetamat_test[,4]*dnorm(- mutemp_test_z - offsetz -  varthetamat_test[,1])
 
-        draw$uncond_exp_train[, iter_min_burnin] <- uncondexptrain
-        draw$uncond_exp_test[, iter_min_burnin] <- uncondexptest
+        draw$uncond_exp_train[, iter_min_burnin] <- (uncondexptrain) *tempsd+tempmean
+        draw$uncond_exp_test[, iter_min_burnin] <- (uncondexptest) *tempsd+tempmean
 
 
         # draw$ydraws_train[, iter_min_burnin] <- ifelse(z < 0, censored_value, ystar )
-        draw$ydraws_test[, iter_min_burnin] <- ifelse(zytest[,1] < 0, censored_value, zytest[,2] )
+        draw$ydraws_test[, iter_min_burnin] <- (ifelse(zytest[,1] < 0, censored_value, zytest[,2] )) *tempsd+tempmean
       }
 
       draw$alpha[iter_min_burnin] <- alpha
