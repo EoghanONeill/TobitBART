@@ -330,3 +330,44 @@ update_sigma_mu_par <- function(trees, curr_sigmu2) {
   return(new_s_mu^2)
 }
 
+
+update_sigma_mu_par_norm <- function(trees, curr_sigmu2) {
+
+  num_trees <- length(trees)
+  mu_vec <- c()
+  for(m in 1:length(trees)){
+    mu_vec <- c(mu_vec,
+                trees[[m]]$tree_matrix[, 'mu'])
+
+  }
+
+  mu_vec <- na.omit(mu_vec)
+
+  # note Linero and Yang's sigma_mu_squared corresponds to
+  # num_trees times sigma_mu_squared as defined in this package
+  # curr_s_mu <- sqrt(curr_sigmu2)
+
+  prop_s_mu_minus2 <- rgamma(n = 1,
+                             shape = 1 + length(mu_vec)/2,
+                             rate = 1 + sum(mu_vec^2)/2)
+
+  prop_s_mu <- sqrt(1/prop_s_mu_minus2)
+
+  return(prop_s_mu^2)
+}
+
+
+get_gen2 <- function(tree) {
+  if (nrow(tree$tree_matrix) == 1) {
+    w <- 0
+  } else {
+    # indeces <- which(tree$tree_matrix[, "terminal"] == 1)
+    # Determine the parent for each terminal node and find the duplicated parents
+    # w <- as.numeric(sum(duplicated(tree$tree_matrix[indeces,'parent'])))
+    # parents <- tree$tree_matrix[indeces, "parent"]
+    parents <- tree$tree_matrix[tree$tree_matrix[, "terminal"] == 1, "parent"]
+    w <- parents[duplicated(parents)]
+  }
+  return(w)
+}
+

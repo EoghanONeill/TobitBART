@@ -192,7 +192,52 @@ tree_full_conditional_z_marg = function(tree, R, #sigma2,
   # log_post <- 0.5*(- ncol(BtB_z_u)*log(sigma2_mu) + determinant(tempmat, logarithm = TRUE) +
   #                    t(S_j)%*%solve(tempmat)%*% S_j)
 
-  U = chol ( tempmat)
+  # print("line 195")
+
+  # out <- tryCatch(chol(BtB_z_c + (1/sigma2_mu)*diag(ncol(BtB_z_u))), error = function(e) e)
+  # if(any(class(out) == "error")){
+  #   print("No inverse BtB_z_c + (1/sigma2_mu)*diag(ncol(BtB_z_u))")
+  # }
+  #
+  # out <- tryCatch(chol(BtB_z_u*weightz + (1/sigma2_mu)*diag(ncol(BtB_z_u))), error = function(e) e)
+  # if(any(class(out) == "error")){
+  #   print("No inverse BtB_z_u*weightz + (1/sigma2_mu)*diag(ncol(BtB_z_u))")
+  # }
+
+  # out <- tryCatch(chol(tempmat), error = function(e) e)
+  # if(any(class(out) == "error")){
+  #   print("(1/sigma2_mu)*diag(ncol(BtB_z_u)) = ")
+  #   print((1/sigma2_mu)*diag(ncol(BtB_z_u)))
+  #
+  #   print("BtB_z_u = ")
+  #   print(BtB_z_u)
+  #
+  #   print("tempmat = ")
+  #   print(tempmat)
+  #   print("det(tempmat) = ")
+  #   print(det(tempmat))
+  #   print("weightz = ")
+  #   print(weightz)
+  #   print("any(is.na(tempmat)) = ")
+  #   print(any(is.na(tempmat)))
+  #
+  #   print("dim(tempmat) = ")
+  #   print(dim(tempmat))
+  #
+  #   print("dim(BtB_z_u) = ")
+  #   print(dim(BtB_z_u))
+  #
+  #   print("dim(BtB_z_c) = ")
+  #   print(dim(BtB_z_c))
+  #
+  #   print("(1/sigma2_mu) = ")
+  #   print((1/sigma2_mu))
+  #
+  # }
+
+  U = chol(tempmat)
+  # U = chol ( (tempmat + t(tempmat))/2, tol = 0.01)
+  # print("line 197")
   IR = backsolve (U , diag ( ncol(BtB_z_u) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -201,6 +246,27 @@ tree_full_conditional_z_marg = function(tree, R, #sigma2,
 
   log_post <- 0.5*(- ncol(BtB_z_u)*log(sigma2_mu) + #determinant(tempmat, logarithm = TRUE) +
                      tSjtempmatinvSj) - sum(log(diag(U)))
+
+
+  if(is.na(log_post)){
+    print("ncol(BtB_z_u)*log(sigma2_mu) = ")
+    print(ncol(BtB_z_u)*log(sigma2_mu))
+    print("tSjtempmatinvSj = ")
+    print(tSjtempmatinvSj)
+    print("sum(log(diag(U))) = ")
+    print(sum(log(diag(U))))
+    print("det(tempmat) = ")
+    print(det(tempmat))
+
+    print("any(is.na(tempmat)) = ")
+    print(any(is.na(tempmat)))
+
+    print("any(is.na(BtB_z_u)) = ")
+    print(any(is.na(BtB_z_u)))
+
+    stop("tree_full_conditional_z_marg. is.na(log_post)")
+
+  }
 
   # Now calculate the log posterior
   # log_post = 0.5 * ( sum(log( sigma2 / (nj*sigma2_mu + sigma2))) +
@@ -221,7 +287,17 @@ tree_full_conditional_y_marg_nogamma = function(tree, R, #sigma2,
 
   S_j = crossprod(binmat_all_y, R)
   tempmat <- BtB_y*(1/phi)  + (1/sigma2_mu)*diag(ncol(BtB_y))
-  U = chol ( tempmat)
+  # print("line 235")
+  # out <- tryCatch(chol(tempmat), error = function(e) e)
+  # if(any(class(out) == "error")){
+  #   print("tempmat = ")
+  #   print(tempmat)
+  #   print("det(tempmat) = ")
+  #   print(det(tempmat))
+  # }
+  U = chol(tempmat)
+  # U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 245")
   IR = backsolve (U , diag ( ncol(BtB_y) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -274,7 +350,18 @@ tree_full_conditional_y_marg = function(trees, R, sigma2, priorgammavar, sigma2_
   tempmat <- (1/sigma2)*BtB_y
   diag(tempmat) <- diag(tempmat) + c(rep(1/sigma2_mu, ncol(BtB_y) -1 ), 1/priorgammavar)
 
-  U = chol ( tempmat)
+  # print("line 298")
+  # out <- tryCatch(chol(tempmat), error = function(e) e)
+  # if(any(class(out) == "error")){
+  #   print("tempmat = ")
+  #   print(tempmat)
+  #   print("det(tempmat) = ")
+  #   print(det(tempmat))
+  # }
+  U = chol(tempmat)
+  # U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 308")
+
   IR = backsolve (U , diag ( ncol(BtB_y) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -356,8 +443,17 @@ tree_full_conditional_z_marg_savechol = function(tree, R, #sigma2,
   # log_post <- 0.5*(- ncol(BtB_z_u)*log(sigma2_mu) + determinant(tempmat, logarithm = TRUE) +
   #                    t(S_j)%*%solve(tempmat)%*% S_j)
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-             )
+  # print("line 391")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 401")
   IR = backsolve (U , diag ( ncol(BtB_z_u) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -405,8 +501,17 @@ tree_full_conditional_z_marg_lin = function(tree, R, #sigma2,
                    cbind(t(offdiagblock), tempmat))
 
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 449")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 459")
   IR = backsolve (U , diag ( ncol(BtB_z_u) + ncol(wmat_train) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -452,8 +557,17 @@ tree_full_conditional_z_marg_lin_savechol = function(tree, R, #sigma2,
         cbind(t(offdiagblock), tempmat))
 
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 505")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 515")
   IR = backsolve (U , diag ( ncol(BtB_z_u) + ncol(wmat_train) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -491,8 +605,17 @@ tree_full_conditional_y_marg_nogamma_savechol = function(tree, R, #sigma2,
   tempmat <- BtB_y*(1/phi) + (1/sigma2_mu)*diag(ncol(BtB_y))
   # print("line 476")
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 526")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 536")
   IR = backsolve (U , diag ( ncol(BtB_y) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -649,9 +772,17 @@ tree_full_conditional_y_marg_savechol = function(trees, R, sigma2, priorgammavar
   # print(1/(priorgammavar))
   # print("1/(sigma2_mu) = ")
   # print(1/(sigma2_mu))
-
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-             )
+  print("line 693")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 703")
   IR = backsolve (U , diag ( ncol(BtB_y) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -741,8 +872,17 @@ tree_full_conditional_y_marg_nogamma_lin = function(tree, R, #sigma2,
   # print(solve(crossprod(Xmat_train) + invBvar_p))
 
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 820")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 830")
   IR = backsolve (U , diag ( ncol(XBmat) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -796,8 +936,17 @@ tree_full_conditional_y_marg_lin = function(trees, R, sigma2, priorgammavar, sig
   tempmat <- rbind(cbind(crossprod(Xmat_train)*(1/sigma2) + invBvar_p ,
                          offdiagblock),
                    cbind(t(offdiagblock), tempmat))
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 884")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 894")
   IR = backsolve (U , diag ( ncol(XBmat) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -862,8 +1011,17 @@ tree_full_conditional_y_marg_nogamma_savechol_lin = function(tree, R, #sigma2,
   # print(solve(crossprod(Xmat_train) + invBvar_p))
 
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 959")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 968")
   IR = backsolve (U , diag ( ncol(XBmat) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -917,8 +1075,17 @@ tree_full_conditional_y_marg_savechol_lin = function(trees, R, sigma2, priorgamm
   tempmat <- rbind(cbind(crossprod(Xmat_train)*(1/sigma2) + invBvar_p ,
                          offdiagblock),
                    cbind(t(offdiagblock), tempmat))
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 1023")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 1033")
   IR = backsolve (U , diag ( ncol(XBmat) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -1056,8 +1223,17 @@ simulate_mu_all_y = function(trees, R, sigma2,
   tempmat <- (1/sigma2)*BztBz_y
   diag(tempmat) <- diag(tempmat) + c(rep(1/sigma2_mu_y, ncol(BztBz_y) -1 ), 1/priorgammavar)
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-             )
+  # print("line 1171")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 1181")
   IR = backsolve (U , diag ( ncol(BztBz_y) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -1173,8 +1349,17 @@ simulate_mu_all_y_lin = function(trees, R, sigma2,
   tempmat <- rbind(cbind(crossprod(Xmat_train)*(1/sigma2) + invBvar_p ,
                          offdiagblock),
                    cbind(t(offdiagblock), tempmat))
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 1297")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 1307")
   IR = backsolve (U , diag ( ncol(XBmat) ))
 
 
@@ -1260,8 +1445,17 @@ simulate_mu_all_y_nogamma = function(trees,
 
   tempmat <- BtB_y*(1/phi) + (1/sigma2_mu)*diag(ncol(BtB_y))
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 1393")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 1403")
   IR = backsolve (U , diag ( ncol(BtB_y) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -1347,8 +1541,17 @@ simulate_mu_all_y_nogamma_lin = function(trees,
                          offdiagblock),
                    cbind(t(offdiagblock), tempmat))
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 1489")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 1499")
   IR = backsolve (U , diag ( ncol(XBmat) ))
 
   tempsj <- (1/phi)*S_j
@@ -1452,8 +1655,17 @@ simulate_mu_weighted_all_z = function(trees, R, # sigma2,
   # log_post <- 0.5*(- ncol(BtB_z_u)*log(sigma2_mu) + determinant(tempmat, logarithm = TRUE) +
   #                    t(S_j)%*%solve(tempmat)%*% S_j)
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-             )
+  # print("line 1603")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 1613")
   IR = backsolve (U , diag ( ncol(BtB_z_u) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
   # beta_hat = btilde + sqrt ( sigma2 )* IR %*% rnorm ( p )
@@ -1560,8 +1772,17 @@ simulate_mu_weighted_all_z_lin = function(trees, R, # sigma2,
                    cbind(t(offdiagblock), tempmat))
 
 
-  U = chol ( tempmat#, pivot = TRUE, tol = 0.0001
-  )
+  # print("line 1720")
+  out <- tryCatch(chol(tempmat), error = function(e) e)
+  if(any(class(out) == "error")){
+    print("tempmat = ")
+    print(tempmat)
+    print("det(tempmat) = ")
+    print(det(tempmat))
+  }
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
+  # print("line 1730")
   IR = backsolve (U , diag ( ncol(BtB_z_u) + ncol(wmat_train) ))
 
   mumean = tcrossprod (  IR , crossprod( S_j, IR ))
@@ -1779,3 +2000,72 @@ update_z = function(y, prediction){
     return(a)
   }
 
+  tau_prior= function(tau_value, tau_rate){
+    tau = dexp(tau_value,tau_rate)
+    return(tau)
+  }
+  log_tau_prior= function(tau_value, tau_rate){
+    tau = dexp(tau_value,tau_rate, log = TRUE)
+    return(tau)
+  }
+
+
+  gating_func_logistic = function(x){
+    return(ifelse(x>0,1/(1+exp(-x)),exp(x)/(1+exp(x))))
+  }
+
+  gating_func_logistic_ratio = function(x,y){
+    return(ifelse(x>0,
+                  ifelse(y>0, (1+exp(-y))/(1+exp(-x)), (1+exp(y))/(exp(y)*(1+exp(-x)))),
+                  ifelse(y>0, (exp(x)* (1+exp(y))  ) /(exp(y)* (1+exp(x)) ) , (exp(x)* (1+exp(-y))  ) /( (1+exp(x)) ))))
+  }
+  gating_func_logistic_plogis_ratio = function(x,y){
+    return(exp(plogis(x,log.p = TRUE) - plogis(y,log.p = TRUE)))
+  }
+
+  gating_func_logistic_plogis_ratio_logdiff = function(x,y){
+    return((plogis(x,log.p = TRUE) - plogis(y,log.p = TRUE)))
+  }
+
+  get_branch = function(tree){
+
+    save_ancestor = NULL
+
+    if(is.null(tree) | nrow(tree$tree_matrix) == 1) {
+      save_ancestor = cbind(terminal = NULL,
+                            split_value = NULL)
+    } else {
+      which_terminal = which(tree$tree_matrix[,'terminal'] == 1)
+      for (k in 1:length(which_terminal)){
+        get_parent = as.numeric(as.character(tree$tree_matrix[which_terminal[k], 'parent'])) # get the subsequent parent
+        get_split_val = as.numeric(as.character(tree$tree_matrix[get_parent, 'split_value'])) # then, get the split value from the associated parent
+        get_left = as.integer( tree$tree_matrix[get_parent, 'child_left'] == which_terminal[k] ) # then, determine whether it was a move to the left
+        get_split_var = as.numeric(as.character(tree$tree_matrix[get_parent, 'split_variable'])) # then, get the split variable from the associated parent
+
+
+        save_ancestor = rbind(save_ancestor,
+                              cbind(terminal = which_terminal[k],
+                                    parent   = get_parent,
+                                    split_value = get_split_val,
+                                    left     = get_left,
+                                    var      = get_split_var))
+        while (get_parent > 1){
+          get_parent = as.numeric(as.character(tree$tree_matrix[get_parent,'parent'])) # get the subsequent parent
+          get_split_val = as.numeric(as.character(tree$tree_matrix[get_parent, 'split_value'])) # then, get the split value from the associated parent
+          get_left = as.integer( tree$tree_matrix[get_parent, 'child_left'] == tree$tree_matrix[which_terminal[k], 'parent'] ) # then, determine whether it was a move to the left
+          get_split_var = as.numeric(as.character(tree$tree_matrix[get_parent, 'split_variable'])) # then, get the split variable from the associated parent
+
+          save_ancestor = rbind(save_ancestor,
+                                cbind(terminal = which_terminal[k],
+                                      parent   = get_parent,
+                                      split_value = get_split_val,
+                                      left     = get_left,
+                                      var      = get_split_var))
+        }
+      }
+      save_ancestor = unique(save_ancestor) # remove duplicates
+      save_ancestor = save_ancestor[order(save_ancestor[,1], save_ancestor[,2]),] # sort by terminal and ancestor
+    }
+
+    return(save_ancestor)
+  }

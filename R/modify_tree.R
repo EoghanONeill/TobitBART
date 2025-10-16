@@ -662,10 +662,13 @@ change_tree = function(X, y, curr_tree, node_min_size, splitting_rules, max_bad_
   internal_nodes = which(as.numeric(new_tree$tree_matrix[,'terminal']) == 0)
   terminal_nodes = which(as.numeric(new_tree$tree_matrix[,'terminal']) == 1)
 
+  gen2_nodes <- as.numeric(get_gen2(curr_tree))
 
   # Find terminal node sizes
   internal_node_size = as.numeric(new_tree$tree_matrix[internal_nodes,'node_size'])
-  # including this because z values can be updated
+  gen2_node_size = as.numeric(new_tree$tree_matrix[gen2_nodes,'node_size'])
+
+    # including this because z values can be updated
   if (all(internal_node_size < 2 * node_min_size)) {
     curr_tree$var <- c(0, 0)
     return(curr_tree)
@@ -683,8 +686,16 @@ change_tree = function(X, y, curr_tree, node_min_size, splitting_rules, max_bad_
 
     # choose an internal node to change
     # node_to_change = sample(internal_nodes, 1)
-    node_to_change = sample(internal_nodes, 1,
-                            prob = as.integer(internal_node_size >= 2* node_min_size)) # Choose which node to split, set prob to zero for any nodes that are too small
+    # node_to_change = sample(internal_nodes, 1,
+    #                         prob = as.integer(internal_node_size >= 2* node_min_size)) # Choose which node to split, set prob to zero for any nodes that are too small
+
+
+    if(length(gen2_nodes ==1)){
+      node_to_change <- gen2_nodes[1]
+    }else{
+      node_to_change <- sample(gen2_nodes, 1, as.integer(gen2_node_size >= 2* node_min_size))
+    }
+
 
     # Get the covariate that will be changed
     var_changed_node = as.numeric(new_tree$tree_matrix[node_to_change, 'split_variable'])
