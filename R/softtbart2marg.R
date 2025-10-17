@@ -1898,40 +1898,7 @@ softtbart2marg <- function(x.train,
           removednode_rowind <- terminal_nodes_old[removednode]
           addednodes_rowind <- terminal_nodes_new[addednodes]
 
-          # obtain new splitting variable and splitting point to calculate gating function
-          #
-          split_node_ind <- new_tree_z$tree_matrix[addednodes_rowind[1],'parent']
-          split_var <- new_tree_z$tree_matrix[split_node_ind, 'split_variable']
-          split_value <- new_tree_z$tree_matrix[split_node_ind, 'split_value']
-          # calculate the gating function for all observations
-          # gat_func_psi <- 1/(1 + exp(- (w.train[,split_var] - split_value)/tau_vec_censoring[j] ) )
-          # gat_func_psi <- gating_func_logistic((w.train[,split_var] - split_value)/tau_vec_censoring[j] )
-          gat_func_psi <- plogis((w.train[,split_var] - split_value)/tau_vec_censoring[j] )
 
-          if(any(is.na(gat_func_psi))){
-            print("gat_func_psi = ")
-            print(gat_func_psi)
-
-            print("w.train[,split_var] = ")
-            print(w.train[,split_var])
-
-            print("tau_vec_censoring[j] = ")
-            print(tau_vec_censoring[j])
-
-            print("split_var = ")
-            print(split_var)
-
-            print("split_value = ")
-            print(split_value)
-
-            print("addednodes_rowind = ")
-            print(addednodes_rowind)
-
-            print("new_tree_z$tree_matrix = ")
-            print(new_tree_z$tree_matrix)
-
-            stop("Line 1897 any(is.na(gat_func_psi))")
-          }
 
           firstcolindtrees_z_new <- firstcolindtrees_z
 
@@ -1943,6 +1910,41 @@ softtbart2marg <- function(x.train,
             # do not edit firstcolindtrees_z_new
           }else{
 
+
+            # obtain new splitting variable and splitting point to calculate gating function
+            #
+            split_node_ind <- new_tree_z$tree_matrix[addednodes_rowind[1],'parent']
+            split_var <- new_tree_z$tree_matrix[split_node_ind, 'split_variable']
+            split_value <- new_tree_z$tree_matrix[split_node_ind, 'split_value']
+            # calculate the gating function for all observations
+            # gat_func_psi <- 1/(1 + exp(- (w.train[,split_var] - split_value)/tau_vec_censoring[j] ) )
+            # gat_func_psi <- gating_func_logistic((w.train[,split_var] - split_value)/tau_vec_censoring[j] )
+            gat_func_psi <- plogis((w.train[,split_var] - split_value)/tau_vec_censoring[j] )
+
+            if(any(is.na(gat_func_psi))){
+              print("gat_func_psi = ")
+              print(gat_func_psi)
+
+              print("w.train[,split_var] = ")
+              print(w.train[,split_var])
+
+              print("tau_vec_censoring[j] = ")
+              print(tau_vec_censoring[j])
+
+              print("split_var = ")
+              print(split_var)
+
+              print("split_value = ")
+              print(split_value)
+
+              print("addednodes_rowind = ")
+              print(addednodes_rowind)
+
+              print("new_tree_z$tree_matrix = ")
+              print(new_tree_z$tree_matrix)
+
+              stop("Line 1897 any(is.na(gat_func_psi))")
+            }
             # create variables for new nodes
             # can either do this within a new grow_tree function or here
             # can just use node indices
@@ -2453,7 +2455,8 @@ softtbart2marg <- function(x.train,
           #   stop("(ncol(binmat_all_z_new) != ncol(binmat_all_z)+1 )")
           # }
 
-        } else if (type_z == "prune") {
+        } else{
+          if (type_z == "prune") {
           # var_count_z[curr_trees_z[[j]]$var] <- var_count_z[curr_trees_z[[j]]$var] - 1
           terminal_nodes_old = which(as.numeric(curr_tree_z$tree_matrix[,'terminal']) == 1)
           terminal_nodes_new = which(as.numeric(new_tree_z$tree_matrix[,'terminal']) == 1)
@@ -3050,6 +3053,7 @@ softtbart2marg <- function(x.train,
           #   stop("any(dim(binmat_all_z_new) != dim(binmat_all_z) )")
           # }
         }
+      }
 
 
         # BtB_z_c <- crossprod(binmat_all_z[cens_inds, ])
@@ -3933,15 +3937,6 @@ softtbart2marg <- function(x.train,
           addednodes_rowind <- terminal_nodes_new[addednodes]
 
 
-          # obtain new splitting variable and splitting point to calculate gating function
-          #
-          split_node_ind <- new_tree_y$tree_matrix[addednodes_rowind[1],'parent']
-          split_var <- new_tree_y$tree_matrix[split_node_ind, 'split_variable']
-          split_value <- new_tree_y$tree_matrix[split_node_ind, 'split_value']
-          # calculate the gating function for all observations
-          # gat_func_psi <- 1/(1 + exp(- (x.train[uncens_inds,split_var] - split_value)/tau_vec_outcome[j] ) )
-          # gat_func_psi <- gating_func_logistic((x.train[uncens_inds,split_var] - split_value)/tau_vec_outcome[j] )
-          gat_func_psi <- plogis((x.train[uncens_inds,split_var] - split_value)/tau_vec_outcome[j] )
 
 
           firstcolindtrees_y_new <- firstcolindtrees_y
@@ -3953,6 +3948,17 @@ softtbart2marg <- function(x.train,
             # BztBz_y_new <- BztBz_y
             # do not edit firstcolindtrees_y_new
           }else{
+
+            # obtain new splitting variable and splitting point to calculate gating function
+            #
+            split_node_ind <- new_tree_y$tree_matrix[addednodes_rowind[1],'parent']
+            split_var <- new_tree_y$tree_matrix[split_node_ind, 'split_variable']
+            split_value <- new_tree_y$tree_matrix[split_node_ind, 'split_value']
+            # calculate the gating function for all observations
+            # gat_func_psi <- 1/(1 + exp(- (x.train[uncens_inds,split_var] - split_value)/tau_vec_outcome[j] ) )
+            # gat_func_psi <- gating_func_logistic((x.train[uncens_inds,split_var] - split_value)/tau_vec_outcome[j] )
+            gat_func_psi <- plogis((x.train[uncens_inds,split_var] - split_value)/tau_vec_outcome[j] )
+
             # create binary variables for new nodes
             # can either do this within a new grow_tree function or here
             # can just use node indices
