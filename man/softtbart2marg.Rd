@@ -42,7 +42,7 @@ softtbart2marg(
   tau = 1/3,
   mixprob = 0.5,
   simultaneous_covmat = TRUE,
-  fast = TRUE,
+  fast = FALSE,
   nu0 = 3,
   offsetz = FALSE,
   quantsig = 0.9,

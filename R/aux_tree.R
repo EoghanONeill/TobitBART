@@ -318,20 +318,95 @@ update_sigma_mu_par <- function(trees, curr_sigmu2) {
 
   prop_s_mu <- sqrt(1/prop_s_mu_minus2)
 
-  acceptprob <- (dcauchy(prop_s_mu, 0, 0.25/sqrt(num_trees))/dcauchy(curr_s_mu, 0, 0.25/sqrt(num_trees)))*
-    (prop_s_mu/curr_s_mu)^3
+  log_acceptprob <- dcauchy(prop_s_mu, 0, 0.25/sqrt(num_trees), log = TRUE) -
+    dcauchy(curr_s_mu, 0, 0.25/sqrt(num_trees), log = TRUE) + 3*(log(prop_s_mu) - log(curr_s_mu))
+  # acceptprob <- (dcauchy(prop_s_mu, 0, 0.25/sqrt(num_trees))/dcauchy(curr_s_mu, 0, 0.25/sqrt(num_trees)))*
+  #   (prop_s_mu/curr_s_mu)^3
+
+  # cauchy_scale <- 0.25/sqrt(length(trees))
+  # cauchy_scale_sq <- 0.0625/(length(trees))
+  # orig_dens <- 1/(pi*cauchy_scale* (1 + length(trees)/(curr_sigmu2*cauchy_scale_sq  )))
+
+
+
+  # SSE <- sum(mu_vec^2)
+  # n_mu <- length(mu_vec)
+  # shape <- 0.5*n_mu + 1
+  # scale <- 2/SSE
+  # sigma_prop <- rgamma(n = 1,
+  #                      shape = shape,
+  #                      scale = scale)^(-0.5)
+  # tau_prop <- sigma_prop^(-2)
+  # tau_old <- curr_sigmu2^(-1)
+  # loglik_rat <- cauchy_jacobian(tau_prop, ) - cauchy_jacobian(tau_old, )
+  acceptprob <- exp(log_acceptprob)
+  if(is.na(acceptprob)| is.null(acceptprob)){stop("Line 343. is.na(acceptprob)| is.null(acceptprob)")}
 
   if(runif(1) < acceptprob){
-    new_s_mu <- prop_s_mu
+    new_s_mu <- sigma_prop
   }else{
-    new_s_mu <- curr_s_mu
+    new_s_mu <- sqrt(curr_sigmu2)
   }
 
   return(new_s_mu^2)
 }
 
 
-update_sigma_mu_par_norm <- function(trees, curr_sigmu2) {
+
+update_sigma_mu_par_Cauchy <- function(trees, curr_sigmu2, sigma_mu_hat) {
+
+  num_trees <- length(trees)
+  mu_vec <- c()
+  for(m in 1:length(trees)){
+    mu_vec <- c(mu_vec,
+                trees[[m]]$tree_matrix[, 'mu'])
+
+  }
+
+  mu_vec <- na.omit(mu_vec)
+
+  # SSE <- sum(mu_vec^2)
+  # n_mu <- length(mu_vec)
+  # shape <- 0.5*n_mu + 1
+  # scale <- 2/SSE
+  # sigma_prop <- rgamma(n = 1,
+  #                      shape = shape,
+  #                      scale = scale)^(-0.5)
+  # tau_prop <- sigma_prop^(-2)
+  # tau_old <- curr_sigmu2^(-1)
+  # loglik_rat <- cauchy_jacobian(tau_prop, sigma_mu_hat) - cauchy_jacobian(tau_old, sigma_mu_hat)
+  #
+  # acceptprob <- exp(loglik_rat)
+  # if(is.na(acceptprob)| is.null(acceptprob)){stop("Line 380. is.na(acceptprob)| is.null(acceptprob)")}
+  #
+  # # print("loglik_rat = ")
+  # # print(loglik_rat)
+  # # print("sigma_prop = ")
+  # # print(sigma_prop)
+  # # print("sqrt(curr_sigmu2) = ")
+  # # print(sqrt(curr_sigmu2))
+  # if(runif(1) < acceptprob){
+  #   # print("accept sigma_mu")
+  #   new_s_mu <- sigma_prop
+  # }else{
+  #   # print("reject sigma_mu")
+  #   new_s_mu <- sqrt(curr_sigmu2)
+  # }
+
+  new_s_mu <- UpdateSigmaMu1(mu_vec, sigma_mu_hat, sqrt(curr_sigmu2) )
+
+  return(new_s_mu^2)
+}
+
+cauchy_jacobian <- function(tau,sigma_hat) {
+  sigma = tau^(-0.5)
+  # give_log = 1;
+
+  out = dcauchy(sigma, 0.0, sigma_hat, log = TRUE);
+  out = out - log(2) - (3.0 / 2.0) * log(tau);
+  return(out)
+}
+update_sigma_mu_par_IG <- function(trees, curr_sigmu2) {
 
   num_trees <- length(trees)
   mu_vec <- c()

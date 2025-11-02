@@ -5,3 +5,7 @@ phi_app <- function(X_stand, anc, tau) {
     .Call(`_TobitBART_phi_app`, X_stand, anc, tau)
 }
 
+UpdateSigmaMu1 <- function(means, sigma_mu_hat, sigma_mu) {
+    .Call(`_TobitBART_UpdateSigmaMu1`, means, sigma_mu_hat, sigma_mu)
+}
+

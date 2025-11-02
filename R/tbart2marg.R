@@ -4353,6 +4353,7 @@ tbart2marg <- function(x.train,
     if(tau_hyperprior){
       tau <- 1/rgamma(n = 1,shape = alpha_tau + 1/2, rate = beta_tau + (1/(2*phi1))*(gamma1 - gamma0)^2)
     }
+    priorgammavar <- tau*phi1
 
     ###### Accelerated sampler  ###############################
 

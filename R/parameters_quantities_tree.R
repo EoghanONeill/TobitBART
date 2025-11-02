@@ -235,8 +235,8 @@ tree_full_conditional_z_marg = function(tree, R, #sigma2,
   #
   # }
 
-  U = chol(tempmat)
-  # U = chol ( (tempmat + t(tempmat))/2, tol = 0.01)
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2, tol = 0.01)
   # print("line 197")
   IR = backsolve (U , diag ( ncol(BtB_z_u) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
@@ -295,8 +295,8 @@ tree_full_conditional_y_marg_nogamma = function(tree, R, #sigma2,
   #   print("det(tempmat) = ")
   #   print(det(tempmat))
   # }
-  U = chol(tempmat)
-  # U = chol ( (tempmat + t(tempmat))/2)
+  # U = chol(tempmat)
+  U = chol ( (tempmat + t(tempmat))/2)
   # print("line 245")
   IR = backsolve (U , diag ( ncol(BtB_y) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
@@ -1224,13 +1224,13 @@ simulate_mu_all_y = function(trees, R, sigma2,
   diag(tempmat) <- diag(tempmat) + c(rep(1/sigma2_mu_y, ncol(BztBz_y) -1 ), 1/priorgammavar)
 
   # print("line 1171")
-  out <- tryCatch(chol(tempmat), error = function(e) e)
-  if(any(class(out) == "error")){
-    print("tempmat = ")
-    print(tempmat)
-    print("det(tempmat) = ")
-    print(det(tempmat))
-  }
+  # out <- tryCatch(chol(tempmat), error = function(e) e)
+  # if(any(class(out) == "error")){
+  #   print("tempmat = ")
+  #   print(tempmat)
+  #   print("det(tempmat) = ")
+  #   print(det(tempmat))
+  # }
   # U = chol(tempmat)
   U = chol ( (tempmat + t(tempmat))/2)
   # print("line 1181")
@@ -1656,13 +1656,13 @@ simulate_mu_weighted_all_z = function(trees, R, # sigma2,
   #                    t(S_j)%*%solve(tempmat)%*% S_j)
 
   # print("line 1603")
-  out <- tryCatch(chol(tempmat), error = function(e) e)
-  if(any(class(out) == "error")){
-    print("tempmat = ")
-    print(tempmat)
-    print("det(tempmat) = ")
-    print(det(tempmat))
-  }
+  # out <- tryCatch(chol(tempmat), error = function(e) e)
+  # if(any(class(out) == "error")){
+  #   print("tempmat = ")
+  #   print(tempmat)
+  #   print("det(tempmat) = ")
+  #   print(det(tempmat))
+  # }
   # U = chol(tempmat)
   U = chol ( (tempmat + t(tempmat))/2)
   # print("line 1613")

@@ -37,6 +37,8 @@ LazyData: true
 URL: https://github.com/EoghanONeill/TobitBART
 BugReports: https://github.com/EoghanONeill/TobitBART/issues
 LinkingTo: 
+    Rcpp,
+    RcppArmadillo,
     collapse,
     dbarts,
     truncnorm,
@@ -51,6 +53,5 @@ LinkingTo:
     wrswoR,
     SoftBart,
     sampleSelection,
-    CholWishart,
-    Rcpp,
-    RcppArmadillo
+    CholWishart
+    

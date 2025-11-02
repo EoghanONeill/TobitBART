@@ -12,21 +12,35 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // phi_app
-arma::mat phi_app(arma::mat X_stand, arma::mat anc, double tau);
+arma::mat phi_app(const arma::mat& X_stand, const arma::mat& anc, const double& tau);
 RcppExport SEXP _TobitBART_phi_app(SEXP X_standSEXP, SEXP ancSEXP, SEXP tauSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::mat >::type X_stand(X_standSEXP);
-    Rcpp::traits::input_parameter< arma::mat >::type anc(ancSEXP);
-    Rcpp::traits::input_parameter< double >::type tau(tauSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type X_stand(X_standSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type anc(ancSEXP);
+    Rcpp::traits::input_parameter< const double& >::type tau(tauSEXP);
     rcpp_result_gen = Rcpp::wrap(phi_app(X_stand, anc, tau));
+    return rcpp_result_gen;
+END_RCPP
+}
+// UpdateSigmaMu1
+double UpdateSigmaMu1(arma::vec means, double sigma_mu_hat, double sigma_mu);
+RcppExport SEXP _TobitBART_UpdateSigmaMu1(SEXP meansSEXP, SEXP sigma_mu_hatSEXP, SEXP sigma_muSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::vec >::type means(meansSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_mu_hat(sigma_mu_hatSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma_mu(sigma_muSEXP);
+    rcpp_result_gen = Rcpp::wrap(UpdateSigmaMu1(means, sigma_mu_hat, sigma_mu));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_TobitBART_phi_app", (DL_FUNC) &_TobitBART_phi_app, 3},
+    {"_TobitBART_UpdateSigmaMu1", (DL_FUNC) &_TobitBART_UpdateSigmaMu1, 3},
     {NULL, NULL, 0}
 };
 

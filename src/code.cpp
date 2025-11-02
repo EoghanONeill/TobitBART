@@ -4,7 +4,7 @@
 
 // [[Rcpp::depends(RcppArmadillo)]]
 // [[Rcpp::export]]
-arma::mat phi_app(arma::mat X_stand, arma::mat anc, double tau) {
+arma::mat phi_app(const arma::mat& X_stand, const arma::mat& anc, const double& tau) {
 
   arma::vec ancsplits = anc.col(2);
   arma::vec anclefts = anc.col(3);
@@ -78,4 +78,74 @@ arma::mat phi_app(arma::mat X_stand, arma::mat anc, double tau) {
   }
 
   return( phimat);
+}
+
+
+
+
+double cauchy_jacobian(double tau, double sigma_hat) {
+  double sigma = std::pow(tau, -0.5);
+  int give_log = 1;
+
+  double out = R::dcauchy(sigma, 0.0, sigma_hat, give_log);
+  out = out - M_LN2 - 3.0 / 2.0 * std::log(tau);
+
+  return out;
+
+}
+//
+// double update_sigma(const arma::vec& r,
+//                     double sigma_hat, double sigma_old) {
+//
+//   double SSE = arma::as_scalar(r.t()* r) ; //dot(r,r) ;
+//   double n = r.size() ;
+//
+//   double shape = 0.5 * n + 1.0;
+//   double scale = 2.0 / SSE;
+//   double sigma_prop = pow(R::rgamma(shape, scale), -0.5);
+//
+//   double tau_prop = pow(sigma_prop, -2.0);
+//   double tau_old = pow(sigma_old, -2.0);
+//
+//   double loglik_rat = cauchy_jacobian(tau_prop, sigma_hat) -
+//     cauchy_jacobian(tau_old, sigma_hat);
+//
+//   return log(unif_rand()) < loglik_rat ? sigma_prop : sigma_old;
+//
+// }
+
+double update_sigma(arma::vec r, double sigma_hat, double sigma_old) {
+
+  double SSE = arma::as_scalar(r.t() *r ) ;
+  double n = (double) r.n_elem ;
+
+  double shape = 0.5 * n + 1.0;
+  double scale = 2.0 / SSE;
+  double sigma_prop = std::pow(R::rgamma(shape, scale), -0.5);
+
+  double tau_prop = std::pow(sigma_prop, -2.0);
+  double tau_old = std::pow(sigma_old, -2.0);
+
+  double loglik_rat = cauchy_jacobian(tau_prop, sigma_hat) -
+    cauchy_jacobian(tau_old, sigma_hat);
+
+  if(log(R::unif_rand()) < loglik_rat ){
+    return(sigma_prop);
+  }else{
+    return(sigma_old);
+  }
+  // return log(unif_rand()) < loglik_rat ? sigma_prop : sigma_old;
+
+}
+
+// double UpdateSigma(arma::vec r,double sigma_hat, double sigma) {
+//   sigma = update_sigma(r, sigma_hat, sigma);
+//   return(sigma);
+// }
+
+// [[Rcpp::depends(RcppArmadillo)]]
+// [[Rcpp::export]]
+double UpdateSigmaMu1(arma::vec means, double sigma_mu_hat, double sigma_mu) {
+  sigma_mu = update_sigma(means, sigma_mu_hat, sigma_mu);
+  return(sigma_mu);
 }
