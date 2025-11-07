@@ -51,7 +51,7 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #' @param print.opt Print every print.opt number of Gibbs samples.
 #' @param lambda0 Lambda parameter for the base distribution for the error term.
 #' @param nu0 nu parameter for sigma prior in base distribution G_0
-#' @param sigest Estiamted standard deviation of outcome or error (used for setting base distirbution parameters).
+#' @param sigest Estimated standard deviation of outcome or error (used for setting base distribution parameters).
 #' @param sigquant Parameter for setting lambda0 (if NA). lambda0 set such that the sigquant quantile of the base distribution of sigma is the standard deviation of the outcome (as estimated by Maximum Likelihood assuming censored normal outcome).
 #' @param alpha_prior The prior for the alpha parameter of the Dirichlet Process mixture of normals. If "vh" then apply the Gamma(c1,c2) prior of van Hasselt (2011) and Escobar (1994). If "george", then apply the prior of George (2019), McCulloch (2021), Conley (2008), and Antoniak (1974).
 #' @param c1 If alpha_prior == "vh", then c1 is the shape parameter of the Gamma distribution.
@@ -60,12 +60,15 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #' @param mixstep If TRUE, includes a mixing step to speed up convergence of the Dirichlet Process Mixture draws. Default is TRUE.
 #' @param init.many.clust If TRUE, initialize the Dirichlet Process Mixture with many clusters instead of 1 cluster. Default is FALSE.
 #' @param k0_resids If FALSE (default) the maximum absolute value of the outcome determines k0 (with lambda0). If TRUE, the maximum residual from a linear regression determines k0.
+#' @param censsigprior If TRUE, calibrate sigma prior using linear tobit sigma estimate (without covariates if number of covariates is greater than the number of observations). Default is FALSE.
+#' @param nolinregforlambda If censsigprior == TRUE and nolinregforlambda == TRUE, then the sigma prior is calibrated using an estimate from a tobit regression without covariates.
 #' @param sparse If equal to TRUE, use Linero Dirichlet prior on splitting probabilities
 #' @param alpha_a_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_b_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_split_prior If true, set hyperprior for Linero alpha parameter
 #' @export
 #' @return The following objects are returned:
+#' \item{Z.mat}{Matrix of Z values, including observations and draws of latent (censored) outcomes for censored observations. Number of rows equals total number of training observations. Number of columns equals n.iter.}
 #' \item{Z.matcens}{Matrix of draws of latent (censored) outcomes for censored observations. Number of rows equals number of censored training observations. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data.}
 #' \item{Z.matcensbelow}{Matrix of draws of latent (censored) outcomes for observations censored from below. Number of rows equals number of training observations censored from below. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
 #' \item{Z.matcensabove}{Matrix of draws of latent (censored) outcomes for observations censored from above. Number of rows equals number of training observations censored from above. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
@@ -84,10 +87,16 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #' \item{test.y_withcensoring}{Matrix of test sample draws of the outcome assuming censored. Cannot take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{test.probcensbelow}{Matrix of draws of probabilities of test sample observations being censored from below. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{test.probcensabove}{Matrix of draws of probabilities of test sample observations being censored from above. Number of rows equals number of test observations. Number of columns equals n.iter .}
-#' \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
-#' \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
-#' \item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
-#' \item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+#' \item{cond_exp_train}{Matrix of training data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of training observations. Number of columns equals n.iter .}
+#' \item{cond_exp_test}{Matrix of test data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{sigmavecs_train}{Matrix of draws of individual-specific standard deviations of the error for training data. Number of rows equals number of training observations. Number of columns equals n.iter .}
+#' \item{sigmavecs_test}{Matrix of draws of individual-specific standard deviations of the error for test data. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{error_mu_train}{Matrix of draws of individual-specific means of the error distribution for training data. Number of rows equals number of training observations. Number of columns equals n.iter .}
+#' \item{error_mu_test}{Matrix of draws of individual-specific means of the error distribution for test data. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{alpha_s_y_store}{Output if sparse == TRUE, otherwise NULL. For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
+#' \item{var_count_y_store}{Output if sparse == TRUE, otherwise NULL. Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
+#' \item{s_prob_y_store}{Output if sparse == TRUE, otherwise NULL. Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+#' \item{alpha}{Vector of length n.iter of posterior samples of alpha parameter of Dirichlet Process Mixture distribution of error term.}
 #' @examples
 #'
 #'#example taken from https://stats.idre.ucla.edu/r/dae/tobit-models/
@@ -103,7 +112,7 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #'xtrain <- cbind(dat$read, dat$math)[train_inds,]
 #'xtest <- cbind(dat$read, dat$math)[test_inds,]
 #'
-#'tobart_res <- tbart1(xtrain,xtest,ytrain,
+#'tobart_res <- tbart1np(xtrain,xtest,ytrain,
 #'                     below_cens = -Inf,
 #'                     above_cens = 800,
 #'                     n.iter = 400,

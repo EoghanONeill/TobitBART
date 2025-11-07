@@ -99,7 +99,7 @@ tbart1np(
 
 \item{lambda0}{Lambda parameter for the base distribution for the error term.}
 
-\item{sigest}{Estiamted standard deviation of outcome or error (used for setting base distirbution parameters).}
+\item{sigest}{Estimated standard deviation of outcome or error (used for setting base distribution parameters).}
 
 \item{nu0}{nu parameter for sigma prior in base distribution G_0}
 
@@ -119,6 +119,10 @@ tbart1np(
 
 \item{k0_resids}{If FALSE (default) the maximum absolute value of the outcome determines k0 (with lambda0). If TRUE, the maximum residual from a linear regression determines k0.}
 
+\item{nolinregforlambda}{If censsigprior == TRUE and nolinregforlambda == TRUE, then the sigma prior is calibrated using an estimate from a tobit regression without covariates.}
+
+\item{censsigprior}{If TRUE, calibrate sigma prior using linear tobit sigma estimate (without covariates if number of covariates is greater than the number of observations). Default is FALSE.}
+
 \item{sparse}{If equal to TRUE, use Linero Dirichlet prior on splitting probabilities}
 
 \item{alpha_a_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
@@ -129,6 +133,7 @@ tbart1np(
 }
 \value{
 The following objects are returned:
+\item{Z.mat}{Matrix of Z values, including observations and draws of latent (censored) outcomes for censored observations. Number of rows equals total number of training observations. Number of columns equals n.iter.}
 \item{Z.matcens}{Matrix of draws of latent (censored) outcomes for censored observations. Number of rows equals number of censored training observations. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data.}
 \item{Z.matcensbelow}{Matrix of draws of latent (censored) outcomes for observations censored from below. Number of rows equals number of training observations censored from below. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
 \item{Z.matcensabove}{Matrix of draws of latent (censored) outcomes for observations censored from above. Number of rows equals number of training observations censored from above. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
@@ -147,10 +152,16 @@ The following objects are returned:
 \item{test.y_withcensoring}{Matrix of test sample draws of the outcome assuming censored. Cannot take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{test.probcensbelow}{Matrix of draws of probabilities of test sample observations being censored from below. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{test.probcensabove}{Matrix of draws of probabilities of test sample observations being censored from above. Number of rows equals number of test observations. Number of columns equals n.iter .}
-\item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
-\item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
-\item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
-\item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+\item{cond_exp_train}{Matrix of training data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{cond_exp_test}{Matrix of test data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of test observations. Number of columns equals n.iter .}
+\item{sigmavecs_train}{Matrix of draws of individual-specific standard deviations of the error for training data. Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{sigmavecs_test}{Matrix of draws of individual-specific standard deviations of the error for test data. Number of rows equals number of test observations. Number of columns equals n.iter .}
+\item{error_mu_train}{Matrix of draws of individual-specific means of the error distribution for training data. Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{error_mu_test}{Matrix of draws of individual-specific means of the error distribution for test data. Number of rows equals number of test observations. Number of columns equals n.iter .}
+\item{alpha_s_y_store}{Output if sparse == TRUE, otherwise NULL. For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
+\item{var_count_y_store}{Output if sparse == TRUE, otherwise NULL. Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
+\item{s_prob_y_store}{Output if sparse == TRUE, otherwise NULL. Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+\item{alpha}{Vector of length n.iter of posterior samples of alpha parameter of Dirichlet Process Mixture distribution of error term.}
 }
 \description{
 Type I Tobit Bayesian Additive Regression Trees implemented using MCMC with a Dirichlet Process Mixture of normal distributions for the error term
@@ -170,7 +181,7 @@ ytest <- dat$apt[test_inds]
 xtrain <- cbind(dat$read, dat$math)[train_inds,]
 xtest <- cbind(dat$read, dat$math)[test_inds,]
 
-tobart_res <- tbart1(xtrain,xtest,ytrain,
+tobart_res <- tbart1np(xtrain,xtest,ytrain,
                     below_cens = -Inf,
                     above_cens = 800,
                     n.iter = 400,

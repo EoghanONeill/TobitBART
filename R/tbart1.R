@@ -40,12 +40,19 @@
 #' @param sigmadbarts (dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.
 #' @param print.opt Print every print.opt number of Gibbs samples.
 #' @param fast If equal to TRUE, then implements faster truncated normal draws and approximates normal pdf.
+#' @param censsigprior If TRUE, calibrate sigma prior using linear tobit sigma estimate (without covariates if number of covariates is greater than the number of observations). Default is FALSE.
+#' @param lambda0 lambda parameter for sigma prior. Equivalent to sigest =  sqrt(lambda0*nu0/ qchisq(1.0-sigquant,nu0)).
+#' @param sigest If "naive", estimate of sigma for calibration of the sigma prior is set equal to the sample standard deviation of the observations. If numeric, the estimate is equal to sigest.
+#' @param nu0 nu parameter for sigma prior.
+#' @param sigquant Quantile of sigma prior distribution for calibration of sigma prior. Calibration sets the sigquant quantile equal to sigest.
+#' @param nolinregforlambda If censsigprior == TRUE and nolinregforlambda == TRUE, then the sigma prior is calibrated using an estimate from a tobit regression without covariates.
 #' @param sparse If equal to TRUE, use Linero Dirichlet prior on splitting probabilities
 #' @param alpha_a_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_b_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_split_prior If true, set hyperprior for Linero alpha parameter
 #' @export
 #' @return The following objects are returned:
+#' \item{Z.mat}{Matrix of Z values, including observations and draws of latent (censored) outcomes for censored observations. Number of rows equals total number of training observations. Number of columns equals n.iter.}
 #' \item{Z.matcens}{Matrix of draws of latent (censored) outcomes for censored observations. Number of rows equals number of censored training observations. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data.}
 #' \item{Z.matcensbelow}{Matrix of draws of latent (censored) outcomes for observations censored from below. Number of rows equals number of training observations censored from below. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
 #' \item{Z.matcensabove}{Matrix of draws of latent (censored) outcomes for observations censored from above. Number of rows equals number of training observations censored from above. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
@@ -64,10 +71,12 @@
 #' \item{test.y_withcensoring}{Matrix of test sample draws of the outcome assuming censored. Cannot take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{test.probcensbelow}{Matrix of draws of probabilities of test sample observations being censored from below. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{test.probcensabove}{Matrix of draws of probabilities of test sample observations being censored from above. Number of rows equals number of test observations. Number of columns equals n.iter .}
+#' \item{cond_exp_train}{Matrix of training data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of training observations. Number of columns equals n.iter .}
+#' \item{cond_exp_test}{Matrix of test data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
-#' \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
-#' \item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
-#' \item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+#' \item{alpha_s_y_store}{Output if sparse == TRUE, otherwise NULL. For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
+#' \item{var_count_y_store}{Output if sparse == TRUE, otherwise NULL. Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
+#' \item{s_prob_y_store}{Output if sparse == TRUE, otherwise NULL. Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
 #' @examples
 #'
 #'#example taken from https://stats.idre.ucla.edu/r/dae/tobit-models/
@@ -164,6 +173,10 @@ tbart1 <- function(x.train,
       censsigest <- sd(z)
       censsigprior <- TRUE
     }
+    if(is.numeric(sigest)){
+      censsigest <- sigest
+      censsigprior <- TRUE
+    }
   }
 
   n <- length(y)
@@ -246,7 +259,7 @@ tbart1 <- function(x.train,
       # qchi = qchisq(1.0-sigquant,nu0)
       # lambda0 = (censsigest *censsigest *qchi)/nu0 #lambda parameter for sigma prior
     } else {
-      censsigest =sqrt(lambda0)
+      censsigest =sqrt(lambda0*nu0/ qchisq(1.0-sigquant,nu0))
     }
 
   }

@@ -62,11 +62,43 @@ softtbart1np(
 
 \item{n.trees}{(dbarts control option) A positive integer giving the number of trees used in the sum-of-trees formulation.}
 
+\item{SB_group}{Parameter for SoftBART sampler. Allows for grouping of covariates with shared splitting proportions, which is useful for categorical dummy variables. For each column of \code{X}, \code{group} gives the associated group.}
+
+\item{SB_alpha}{Parameter for SoftBART sampler. Positive constant controlling the sparsity level.}
+
+\item{SB_beta}{Parameter for SoftBART sampler. Parameter penalizing tree depth in the branching process prior.}
+
+\item{SB_gamma}{Parameter for SoftBART sampler. Parameter penalizing new nodes in the branching process prior.}
+
+\item{SB_k}{Parameter for SoftBART sampler. Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.}
+
+\item{SB_sigma_hat}{Parameter for SoftBART sampler. A prior guess at the conditional variance of \code{Y} given \code{X}. If not provided, this is estimated empirically by linear regression.}
+
+\item{SB_shape}{Parameter for SoftBART sampler. A prior guess at the conditional variance of \code{Y} given \code{X}. If not provided, this is estimated empirically by linear regression.}
+
+\item{SB_width}{Parameter for SoftBART sampler. Bandwidth of gating probabilities.}
+
+\item{SB_alpha_scale}{Parameter for SoftBART sampler. Scale of the prior for \code{alpha}; if not provided, defaults to the number of predictors.}
+
+\item{SB_alpha_shape_1}{Parameter for SoftBART sampler. Scale of the prior for \code{alpha}; if not provided, defaults to the number of predictors.}
+
+\item{SB_alpha_shape_2}{Parameter for SoftBART sampler. Shape parameter for prior on \code{alpha}; if not provided, defaults to 1.0.}
+
+\item{SB_tau_rate}{Parameter for SoftBART sampler. parameter for the bandwidths of the trees with an exponential prior; defaults to 10.}
+
+\item{SB_num_tree_prob}{Parameter for SoftBART sampler. Parameter for geometric prior on number of tree.}
+
+\item{SB_temperature}{Parameter for SoftBART sampler. The temperature applied to the posterior distribution; set to 1 unless you know what you are doing.}
+
+\item{SB_weights}{Parameter for SoftBART sampler. Only used by the function \code{softbart}, this is a vector of weights to be used in heteroskedastic regression models, with the variance of an observation given by \code{sigma_sq / weight}.}
+
+\item{SB_normalize_Y}{Parameter for SoftBART sampler. Do you want to compute \code{sigma_hat} after applying the standard BART max/min normalization to \eqn{(-0.5, 0.5)} for the outcome? If \code{FALSE}, no normalization is applied. This might be useful for fitting custom models where the outcome is normalized by hand.}
+
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
 
 \item{lambda0}{Lambda parameter for the base distribution for the error term.}
 
-\item{sigest}{Estiamted standard deviation of outcome or error (used for setting base distirbution parameters).}
+\item{sigest}{Estimated standard deviation of outcome or error (used for setting base distirbution parameters).}
 
 \item{nu0}{nu parameter for sigma prior in base distribution G_0}
 
@@ -86,34 +118,13 @@ softtbart1np(
 
 \item{k0_resids}{If FALSE (default) the maximum absolute value of the outcome determines k0 (with lambda0). If TRUE, the maximum residual from a linear regression determines k0.}
 
-\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
+\item{nolinregforlambda}{If censsigprior == TRUE and nolinregforlambda == TRUE, then the sigma prior is calibrated using an estimate from a tobit regression without covariates.}
 
-\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
-
-\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
-
-\item{printCutoffs}{(dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
-
-\item{rngKind}{(dbarts control option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.}
-
-\item{rngNormalKind}{(dbarts control option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind}
-
-\item{rngSeed}{(dbarts control option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.}
-
-\item{updateState}{(dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
-
-\item{tree.prior}{(dbarts option) An expression of the form dbarts:::cgm or dbarts:::cgm(power,base) setting the tree prior used in fitting.}
-
-\item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
-
-\item{resid.prior}{(dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance}
-
-\item{proposal.probs}{(dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.}
-
-\item{sigmadbarts}{(dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.}
+\item{censsigprior}{If TRUE, calibrate sigma prior using linear tobit sigma estimate (without covariates if number of covariates is greater than the number of observations). Default is FALSE.}
 }
 \value{
 The following objects are returned:
+\item{Z.mat}{Matrix of Z values, including observations and draws of latent (censored) outcomes for censored observations. Number of rows equals total number of training observations. Number of columns equals n.iter.}
 \item{Z.matcens}{Matrix of draws of latent (censored) outcomes for censored observations. Number of rows equals number of censored training observations. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data.}
 \item{Z.matcensbelow}{Matrix of draws of latent (censored) outcomes for observations censored from below. Number of rows equals number of training observations censored from below. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
 \item{Z.matcensabove}{Matrix of draws of latent (censored) outcomes for observations censored from above. Number of rows equals number of training observations censored from above. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
@@ -132,7 +143,13 @@ The following objects are returned:
 \item{test.y_withcensoring}{Matrix of test sample draws of the outcome assuming censored. Cannot take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{test.probcensbelow}{Matrix of draws of probabilities of test sample observations being censored from below. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{test.probcensabove}{Matrix of draws of probabilities of test sample observations being censored from above. Number of rows equals number of test observations. Number of columns equals n.iter .}
-\item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
+\item{cond_exp_train}{Matrix of training data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{cond_exp_test}{Matrix of test data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of test observations. Number of columns equals n.iter .}
+\item{sigmavecs_train}{Matrix of draws of individual-specific standard deviations of the error for training data. Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{sigmavecs_test}{Matrix of draws of individual-specific standard deviations of the error for test data. Number of rows equals number of test observations. Number of columns equals n.iter .}
+\item{error_mu_train}{Matrix of draws of individual-specific means of the error distribution for training data. Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{error_mu_test}{Matrix of draws of individual-specific means of the error distribution for test data. Number of rows equals number of test observations. Number of columns equals n.iter .}
+\item{alpha}{Vector of length n.iter of posterior samples of alpha parameter of Dirichlet Process Mixture distribution of error term.}
 }
 \description{
 Type I Tobit Bayesian Additive Regression Trees implemented using MCMC with sparsity-inducing splitting hyperprior and a Dirichlet Process Mixture of normal distributions for the error term
@@ -152,7 +169,7 @@ ytest <- dat$apt[test_inds]
 xtrain <- cbind(dat$read, dat$math)[train_inds,]
 xtest <- cbind(dat$read, dat$math)[test_inds,]
 
-tobart_res <- tbart1(xtrain,xtest,ytrain,
+tobart_res <- softtbart1np(xtrain,xtest,ytrain,
                     below_cens = -Inf,
                     above_cens = 800,
                     n.iter = 400,

@@ -54,12 +54,53 @@ softtbart1(
 
 \item{n.trees}{A positive integer giving the number of trees used in the sum-of-trees formulation.}
 
+\item{SB_group}{Parameter for SoftBART sampler. Allows for grouping of covariates with shared splitting proportions, which is useful for categorical dummy variables. For each column of \code{X}, \code{group} gives the associated group.}
+
+\item{SB_alpha}{Parameter for SoftBART sampler. Positive constant controlling the sparsity level.}
+
+\item{SB_beta}{Parameter for SoftBART sampler. Parameter penalizing tree depth in the branching process prior.}
+
+\item{SB_gamma}{Parameter for SoftBART sampler. Parameter penalizing new nodes in the branching process prior.}
+
+\item{SB_k}{Parameter for SoftBART sampler. Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.}
+
+\item{SB_sigma_hat}{Parameter for SoftBART sampler. A prior guess at the conditional variance of \code{Y} given \code{X}. If not provided, this is estimated empirically by linear regression.}
+
+\item{SB_shape}{Parameter for SoftBART sampler. A prior guess at the conditional variance of \code{Y} given \code{X}. If not provided, this is estimated empirically by linear regression.}
+
+\item{SB_width}{Parameter for SoftBART sampler. Bandwidth of gating probabilities.}
+
+\item{SB_alpha_scale}{Parameter for SoftBART sampler. Scale of the prior for \code{alpha}; if not provided, defaults to the number of predictors.}
+
+\item{SB_alpha_shape_1}{Parameter for SoftBART sampler. Scale of the prior for \code{alpha}; if not provided, defaults to the number of predictors.}
+
+\item{SB_alpha_shape_2}{Parameter for SoftBART sampler. Shape parameter for prior on \code{alpha}; if not provided, defaults to 1.0.}
+
+\item{SB_tau_rate}{Parameter for SoftBART sampler. parameter for the bandwidths of the trees with an exponential prior; defaults to 10.}
+
+\item{SB_num_tree_prob}{Parameter for SoftBART sampler. Parameter for geometric prior on number of tree.}
+
+\item{SB_temperature}{Parameter for SoftBART sampler. The temperature applied to the posterior distribution; set to 1 unless you know what you are doing.}
+
+\item{SB_weights}{Parameter for SoftBART sampler. Only used by the function \code{softbart}, this is a vector of weights to be used in heteroskedastic regression models, with the variance of an observation given by \code{sigma_sq / weight}.}
+
+\item{SB_normalize_Y}{Parameter for SoftBART sampler. Do you want to compute \code{sigma_hat} after applying the standard BART max/min normalization to \eqn{(-0.5, 0.5)} for the outcome? If \code{FALSE}, no normalization is applied. This might be useful for fitting custom models where the outcome is normalized by hand.}
+
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
 
 \item{fast}{If equal to TRUE, then implements faster truncated normal draws and approximates normal pdf.}
+
+\item{censsigprior}{If TRUE, calibrate sigma prior using linear tobit sigma estimate (without covaraites if number of covariates is greater than the number of observations). Default is FALSE.}
+
+\item{lambda0}{lambda parameter for sigma prior. Equivalent to sigest =  sqrt(lambda0*nu0/ qchisq(1.0-sigquant,nu0)).}
+
+\item{sigest}{If "naive", estimate of sigma for calibration of the sigma prior is set equal to the sample standard deviation of the observations. If numeric, the estimate is equal to sigest.}
+
+\item{nolinregforlambda}{If censsigprior == TRUE and nolinregforlambda == TRUE, then the sigma prior is calibrated using an estimate from a tobit regresison without covariates.}
 }
 \value{
 The following objects are returned:
+\item{Z.mat}{Matrix of Z values, including observations and draws of latent (censored) outcomes for censored observations. Number of rows equals total number of training observations. Number of columns equals n.iter.}
 \item{Z.matcens}{Matrix of draws of latent (censored) outcomes for censored observations. Number of rows equals number of censored training observations. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data.}
 \item{Z.matcensbelow}{Matrix of draws of latent (censored) outcomes for observations censored from below. Number of rows equals number of training observations censored from below. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
 \item{Z.matcensabove}{Matrix of draws of latent (censored) outcomes for observations censored from above. Number of rows equals number of training observations censored from above. Number of columns equals n.iter . Rows are ordered in order of censored observations in the training data. }
@@ -78,6 +119,8 @@ The following objects are returned:
 \item{test.y_withcensoring}{Matrix of test sample draws of the outcome assuming censored. Cannot take values below below_cens and above above_cens. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{test.probcensbelow}{Matrix of draws of probabilities of test sample observations being censored from below. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{test.probcensabove}{Matrix of draws of probabilities of test sample observations being censored from above. Number of rows equals number of test observations. Number of columns equals n.iter .}
+\item{cond_exp_train}{Matrix of training data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{cond_exp_test}{Matrix of test data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
 }
 \description{
@@ -98,7 +141,7 @@ ytest <- dat$apt[test_inds]
 xtrain <- cbind(dat$read, dat$math)[train_inds,]
 xtest <- cbind(dat$read, dat$math)[test_inds,]
 
-tobart_res <- tbart1(xtrain,xtest,ytrain,
+tobart_res <- softtbart1(xtrain,xtest,ytrain,
                     below_cens = -Inf,
                     above_cens = 800,
                     n.iter = 400,
