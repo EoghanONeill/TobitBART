@@ -13,12 +13,6 @@ tbart1(
   below_cens = 0,
   above_cens = Inf,
   n.trees = 50L,
-  n.burn = 0L,
-  n.samples = 1L,
-  n.thin = 1L,
-  n.chains = 1,
-  n.threads = 1L,
-  printEvery = 100L,
   printCutoffs = 0L,
   rngKind = "default",
   rngNormalKind = "default",
@@ -27,7 +21,6 @@ tbart1(
   tree_power = 2,
   tree_base = 0.95,
   node.prior = dbarts:::normal,
-  resid.prior = dbarts:::chisq,
   proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
   sigmadbarts = NA_real_,
   print.opt = 100,
@@ -41,7 +34,8 @@ tbart1(
   sparse = FALSE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
-  alpha_split_prior = TRUE
+  alpha_split_prior = TRUE,
+  fixed_resp_update = TRUE
 )
 }
 \arguments{
@@ -61,12 +55,6 @@ tbart1(
 
 \item{n.trees}{(dbarts control option) A positive integer giving the number of trees used in the sum-of-trees formulation.}
 
-\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
-
-\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
-
-\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
-
 \item{printCutoffs}{(dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
 
 \item{rngKind}{(dbarts control option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.}
@@ -82,8 +70,6 @@ tbart1(
 \item{tree_base}{Tree prior parameter for outcome model.}
 
 \item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
-
-\item{resid.prior}{(dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance}
 
 \item{proposal.probs}{(dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.}
 
@@ -112,6 +98,14 @@ tbart1(
 \item{alpha_b_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
 
 \item{alpha_split_prior}{If true, set hyperprior for Linero alpha parameter}
+
+\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
+
+\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
+
+\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
+
+\item{resid.prior}{(dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance}
 }
 \value{
 The following objects are returned:
@@ -138,7 +132,7 @@ The following objects are returned:
 \item{cond_exp_test}{Matrix of test data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
 \item{alpha_s_y_store}{Output if sparse == TRUE, otherwise NULL. For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
-\item{var_count_y_store}{Output if sparse == TRUE, otherwise NULL. Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
+\item{var_count_y_store}{Output if sparse == TRUE, otherwise NULL. Matrix of counts of splits on each variable in outcome observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations.}
 \item{s_prob_y_store}{Output if sparse == TRUE, otherwise NULL. Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
 }
 \description{

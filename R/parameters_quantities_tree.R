@@ -11,6 +11,34 @@
 # 5. tree_full_conditional: computes the marginalised likelihood for all nodes for a given tree
 # 6. get_number_distinct_cov: counts the number of distinct covariates that are used in a tree to create the splitting rules
 # Compute the full conditionals -------------------------------------------------
+tree_full_conditional_HBART = function(tree, Esqvec, nu_leaf, lambda_leaf) {
+
+  which_terminal = which(tree$tree_matrix[,'terminal'] == 1)
+  nj = tree$tree_matrix[which_terminal,'node_size']
+  Sj = fsum(Esqvec,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
+
+  #obtain LOG likelihood
+  # constant term to be multiplied by number of leaves
+  # const_term <- 0.5*nu_leaf*log(nu_leaf*lambda_leaf/2) - lgamma(0.5*nu_leaf)
+  const_term <- 0.5*nu_leaf*log(nu_leaf*lambda_leaf) - lgamma(0.5*nu_leaf)
+
+  # the rest is vectorized
+  # leaf_log_marg_liks_vec_no_const <- lgamma(0.5*(nu_leaf  + nj)) -
+  #   0.5*(nu_leaf + nj)*log(0.5*nu_leaf*lambda_leaf+ 0.5*Sj)# - 0.5*nj*log(2*pi)
+  leaf_log_marg_liks_vec_no_const <- lgamma(0.5*(nu_leaf  + nj)) -
+    0.5*(nu_leaf + nj)*log(nu_leaf*lambda_leaf + Sj)# - 0.5*nj*log(2*pi)
+
+  # the 0.5*nj*log(2*pi) will add up to 0.5*n*log(2*pi), which is unaffected by the tree structure
+  # and therefore cancels out in the difference in likelihood ratios
+  # similarly the product of other tree predictions is constant with respect to the current tree
+  # However, these terms matter if this function is later edited to just take the
+  # product of the likelihoods pertaining to the edited nodes.
+
+  overll_log_marg_lik <- length(nj)*const_term + sum(leaf_log_marg_liks_vec_no_const)
+
+  return(overll_log_marg_lik)
+}
+
 
 tree_full_conditional = function(tree, R, sigma2, sigma2_mu) {
 
@@ -91,20 +119,14 @@ tree_full_conditional_weighted = function(tree, R, #sigma2,
 
 
   if(length(wbyS_j) != length(nj)){
-    print("S_j = ")
-    print(S_j)
-
+    print("wbyS_j = ")
+    print(wbyS_j)
     print("nj = ")
     print(nj)
-
     print("tree$node_indices = ")
     print(tree$node_indices)
-
     print("tree$tree_matrix = ")
     print(tree$tree_matrix)
-
-    # print("n_j = ")
-    # print(n_j)
   }
 
   # # Now calculate the log posterior
@@ -236,7 +258,13 @@ tree_full_conditional_z_marg = function(tree, R, #sigma2,
   # }
 
   # U = chol(tempmat)
-  U = chol ( (tempmat + t(tempmat))/2, tol = 0.01)
+  # U = chol ( (tempmat + t(tempmat))/2, tol = 0.01)
+  Q <- (tempmat + t(tempmat)) / 2
+
+  if (any(!is.finite(Q))) {stop("Nonfinite marginalized precision matrix.")}
+  jitter <- 1e-10 *max(1, mean(diag(Q)))
+  U <- tryCatch(chol(Q),error = function(e) {chol(Q +diag(jitter, nrow(Q)))})
+
   # print("line 197")
   IR = backsolve (U , diag ( ncol(BtB_z_u) ))
   # btilde = crossprod ( t ( IR ))%*%( crossprod (X_node , r_node ) )
@@ -1111,6 +1139,52 @@ tree_full_conditional_y_marg_savechol_lin = function(trees, R, sigma2, priorgamm
 
 
 # Simulate_par -------------------------------------------------------------
+
+simulate_S_HBART = function(tree,  Esqvec, nu_leaf, lambda_leaf) {
+  # Simulate mu values for a given tree
+  # First find which rows are terminal nodes
+  which_terminal = which(tree$tree_matrix[,'terminal'] == 1)
+
+  # Get node sizes for each terminal node
+  nj = tree$tree_matrix[which_terminal,'node_size']
+  # nj <- nj[nj!=0]
+  # Get sum of residuals in each terminal node
+  # sumR = aggregate(R, by = list(tree$node_indices), sum)[,2]
+  # sumR = fsum(R, tree$node_indices)
+  # sumR = fsum(R,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
+  Sj = fsum(Esqvec,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
+
+  # WRITE SAMPLER HERE
+  # Double check Pratola's sampler
+
+  # vectors of parameters (corresponding to leaves)
+  shape_s <- (nu_leaf + nj)/2
+  # rate_leaf <- ((nu_leaf * lambda_leaf)*2 + Sj)/2 #/(nu_leaf + nj)
+  rate_leaf <- (nu_leaf*lambda_leaf + Sj)/2 #/(nu_leaf + nj)
+
+  if (any(!is.finite(shape_s)) ||any(shape_s <= 0) ||any(!is.finite(rate_leaf)) ||any(rate_leaf <= 0)) {
+    stop("Invalid HBART leaf posterior parameters.")
+  }
+  gamma_draws <- rgamma(n = length(nj), shape = shape_s, rate = rate_leaf)
+  if (any(!is.finite(gamma_draws)) ||any(gamma_draws <= 0)) {stop("Invalid gamma draws in simulate_S_HBART().")}
+  s_samples <- 1 / gamma_draws
+  if (any(!is.finite(s_samples)) ||any(s_samples <= 0)) {stop("Invalid variance-multiplier draws.")}
+
+  # s_samples <- 1/rgamma(n = length(nj), shape = shape_s, rate = rate_leaf)
+
+  # equivalently, defining the scaled chi-square distribution parameters
+  # nu_pars <- (nu_leaf + nj)
+  # lambda_pars <- (nu_leaf*lambda_leaf + Sj)/(nu_leaf + nj)
+  # s_samples <- 1/rgamma(shape = nu_pars/2, rate = nu_pars*lambda_pars/2)
+
+  # Wipe all the old mus out for other nodes
+  tree$tree_matrix[,'mu'] = NA
+  # Put in just the ones that are useful
+  tree$tree_matrix[which_terminal,'mu'] = log(s_samples)
+  return(tree)
+}
+
+
 
 simulate_mu = function(tree, R, sigma2, sigma2_mu) {
 

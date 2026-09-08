@@ -39,7 +39,6 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #' @param SB_beta Parameter for SoftBART sampler. Parameter penalizing tree depth in the branching process prior.
 #' @param SB_gamma Parameter for SoftBART sampler. Parameter penalizing new nodes in the branching process prior.
 #' @param SB_k Parameter for SoftBART sampler. Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.
-#' @param SB_sigma_hat Parameter for SoftBART sampler. A prior guess at the conditional variance of \code{Y} given \code{X}. If not provided, this is estimated empirically by linear regression.
 #' @param SB_shape Parameter for SoftBART sampler. A prior guess at the conditional variance of \code{Y} given \code{X}. If not provided, this is estimated empirically by linear regression.
 #' @param SB_width Parameter for SoftBART sampler. Bandwidth of gating probabilities.
 #' @param SB_alpha_scale Parameter for SoftBART sampler. Scale of the prior for \code{alpha}; if not provided, defaults to the number of predictors.
@@ -128,7 +127,6 @@ softtbart1np <- function(x.train,
                      SB_beta = 2,
                      SB_gamma = 0.95,
                      SB_k = 2,
-                     SB_sigma_hat = NULL,
                      SB_shape = 1,
                      SB_width = 0.1,
                      # SB_num_tree = 20,

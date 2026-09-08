@@ -85,13 +85,15 @@ get_predictions = function(trees, X, single_tree = FALSE) {
     } else {
       # Loop through the node indices to get predictions
       predictions = rep(NA, nrow(X))
-      unique_node_indices = unique(trees$node_indices)
+      # unique_node_indices = unique(trees$node_indices)
+      terminal_rows <- which(trees$tree_matrix[, "terminal"] == 1)
+
       # Get the node indices for the current X matrix
       curr_X_node_indices = fill_tree_details(trees, X)$node_indices
       # Now loop through all node indices to fill in details
-      for(i in 1:length(unique_node_indices)) {
-        predictions[curr_X_node_indices == unique_node_indices[i]] =
-          trees$tree_matrix[unique_node_indices[i], 'mu']
+      for(i in 1:length(terminal_rows)) {
+        predictions[curr_X_node_indices == terminal_rows[i]] =
+          trees$tree_matrix[terminal_rows[i], 'mu']
       }
     }
     # More here to deal with more complicated trees - i.e. multiple trees
@@ -106,7 +108,55 @@ get_predictions = function(trees, X, single_tree = FALSE) {
     # The above only sets single_tree to if the names of the object is not null (i.e. is a list of lists)
   }
 
-  return(predictions)
+  return(unname(as.numeric(predictions)))
+}
+
+get_predictions_HBART = function(trees, X, single_tree = FALSE) {
+
+  # product of terminal node parameters
+  # equal to exponential of sum of logs
+  # predictions saves the observation-specific sums of logs
+  # then return the exponential
+
+  # perhaps it is not very efficient to take many logarithms
+  # therefore the tree matrix contains logs of the s samples
+  # in this case, can just use the original get_predictions function
+  # and take the exponential of the output
+
+  # Stop nesting problems in case of multiple trees
+  if(is.null(names(trees)) & (length(trees) == 1)) trees = trees[[1]]
+
+  # Normally trees will be a list of lists but just in case
+  if(single_tree) {
+    # Deal with just a single tree
+    if(nrow(trees$tree_matrix) == 1) {
+      predictions = rep(trees$tree_matrix[1, 'mu'], nrow(X))
+    } else {
+      # Loop through the node indices to get predictions
+      predictions = rep(NA, nrow(X))
+      # unique_node_indices = unique(trees$node_indices)
+      terminal_rows <- which(trees$tree_matrix[, "terminal"] == 1)
+      # Get the node indices for the current X matrix
+      curr_X_node_indices = fill_tree_details(trees, X)$node_indices
+      # Now loop through all node indices to fill in details
+      for(i in 1:length(terminal_rows)) {
+        predictions[curr_X_node_indices == terminal_rows[i]] =
+          trees$tree_matrix[terminal_rows[i], 'mu']
+      }
+    }
+    # More here to deal with more complicated trees - i.e. multiple trees
+  } else {
+    # Do a recursive call to the function
+    partial_trees = trees
+    partial_trees[[1]] = NULL # Blank out that element of the list
+    predictions = get_predictions(trees[[1]], X, single_tree = TRUE)  +
+      get_predictions(partial_trees, X,
+                      single_tree = length(partial_trees) == 1)
+    #single_tree = !is.null(names(partial_trees)))
+    # The above only sets single_tree to if the names of the object is not null (i.e. is a list of lists)
+  }
+
+  return(exp(predictions))
 }
 
 # get_children ------------------------------------------------------------
@@ -339,13 +389,16 @@ update_sigma_mu_par <- function(trees, curr_sigmu2) {
   # tau_prop <- sigma_prop^(-2)
   # tau_old <- curr_sigmu2^(-1)
   # loglik_rat <- cauchy_jacobian(tau_prop, ) - cauchy_jacobian(tau_old, )
-  acceptprob <- exp(log_acceptprob)
-  if(is.na(acceptprob)| is.null(acceptprob)){stop("Line 343. is.na(acceptprob)| is.null(acceptprob)")}
 
-  if(runif(1) < acceptprob){
-    new_s_mu <- sigma_prop
+  # acceptprob <- exp(log_acceptprob)
+  # if(is.na(acceptprob)| is.null(acceptprob)){stop("Line 343. is.na(acceptprob)| is.null(acceptprob)")}
+  if (length(log_acceptprob) != 1L || is.na(log_acceptprob)) {
+    stop("Invalid log acceptance probability in update_sigma_mu_par().")
+  }
+  if (log(runif(1)) < min(0, log_acceptprob)) {
+    new_s_mu <- prop_s_mu
   }else{
-    new_s_mu <- sqrt(curr_sigmu2)
+    new_s_mu <- curr_s_mu # sqrt(curr_sigmu2)
   }
 
   return(new_s_mu^2)
@@ -446,3 +499,35 @@ get_gen2 <- function(tree) {
   return(w)
 }
 
+count_tree_splits <- function(trees,p) {
+  out <- integer(p)
+  for (tree in trees) {
+    vars <- tree$tree_matrix[tree$tree_matrix[, "terminal"] == 0,"split_variable"]
+    vars <- as.integer(vars[!is.na(vars)])
+    if (length(vars) > 0L) {out <- out +tabulate(vars, nbins = p)}
+  }
+  out
+}
+
+
+tree_col_range <- function(j,firstcolindtrees,n_trees,n_total_cols
+) {
+  first <- firstcolindtrees[j]
+  last <- if (j < n_trees) {
+    firstcolindtrees[j + 1L] - 1L
+  } else {
+    n_total_cols
+  }
+  first:last
+}
+
+check_soft_partition <- function(B,firstcolindtrees,n_trees,tolerance = 1e-10) {
+  if (any(!is.finite(B))) {stop("Soft terminal matrix contains nonfinite values.")}
+  if (any(B < -tolerance) ||any(B > 1 + tolerance)) {stop("Soft terminal probabilities lie outside [0, 1].")}
+  for (j in seq_len(n_trees)) {
+    cols <- tree_col_range(j,firstcolindtrees,n_trees,ncol(B))
+    row_mass <- rowSums(B[, cols, drop = FALSE])
+    if (max(abs(row_mass - 1)) >tolerance) {stop(sprintf(paste0("Terminal probabilities for tree %d do not sum to one; max error %.3e."),j,max(abs(row_mass - 1))))}
+  }
+  invisible(TRUE)
+}

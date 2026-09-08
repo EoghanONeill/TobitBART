@@ -270,7 +270,7 @@ noempty_update_tree = function(y, # Target variable
                     grow = grow_tree(X, y, curr_tree, node_min_size, s,
                                      splitting_rules, max_bad_trees),
                     prune = prune_tree(X, y, curr_tree),
-                    change = change_tree(X, y, curr_tree, node_min_size,
+                    change = change_tree(X, y, curr_tree, node_min_size, s,
                                          splitting_rules, max_bad_trees),
                     swap = swap_tree(X, y, curr_tree, node_min_size))
 
@@ -300,7 +300,7 @@ update_tree = function(y, # Target variable
   new_tree = switch(type,
                     grow = grow_tree(X, y, curr_tree, node_min_size, s, splitting_rules, max_bad_trees),
                     prune = prune_tree(X, y, curr_tree),
-                    change = change_tree(X, y, curr_tree, node_min_size, splitting_rules, max_bad_trees),
+                    change = change_tree(X, y, curr_tree, node_min_size, s, splitting_rules, max_bad_trees),
                     swap = swap_tree(X, y, curr_tree, node_min_size))
 
   # Return the new tree
@@ -645,7 +645,7 @@ prune_tree = function(X, y, curr_tree) {
 
 # change_tree function ----------------------------------------------------
 
-change_tree = function(X, y, curr_tree, node_min_size, splitting_rules, max_bad_trees) {
+change_tree = function(X, y, curr_tree, node_min_size, s, splitting_rules, max_bad_trees) {
 
   # Change a node means change out the split value and split variable of an internal node. Need to make sure that this does now produce a bad tree (i.e. zero terminal nodes)
 
@@ -689,13 +689,16 @@ change_tree = function(X, y, curr_tree, node_min_size, splitting_rules, max_bad_
     # node_to_change = sample(internal_nodes, 1,
     #                         prob = as.integer(internal_node_size >= 2* node_min_size)) # Choose which node to split, set prob to zero for any nodes that are too small
 
-
-    if(length(gen2_nodes ==1)){
-      node_to_change <- gen2_nodes[1]
-    }else{
-      node_to_change <- sample(gen2_nodes, 1, as.integer(gen2_node_size >= 2* node_min_size))
+    if (length(gen2_nodes) == 1L) {
+      node_to_change <- gen2_nodes[1L]
+    } else {
+      eligible <- gen2_node_size >=2L * node_min_size
+      if (!any(eligible)) {
+        curr_tree$var <- c(0L, 0L)
+        return(curr_tree)
+      }
+      node_to_change <- sample(gen2_nodes, size = 1L, prob = as.numeric(eligible))
     }
-
 
     # Get the covariate that will be changed
     var_changed_node = as.numeric(new_tree$tree_matrix[node_to_change, 'split_variable'])
@@ -711,7 +714,7 @@ change_tree = function(X, y, curr_tree, node_min_size, splitting_rules, max_bad_
 
     available_values = NULL
 
-    new_split_variable = sample(1:ncol(X), 1)
+    new_split_variable <- sample.int(ncol(X),size = 1L, prob = s)
 
     # available_values = sort(unique(X[use_node_indices,
     #                                  new_split_variable]))

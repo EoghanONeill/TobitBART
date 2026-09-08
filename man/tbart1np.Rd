@@ -13,12 +13,6 @@ tbart1np(
   below_cens = 0,
   above_cens = Inf,
   n.trees = 50L,
-  n.burn = 0L,
-  n.samples = 1L,
-  n.thin = 1L,
-  n.chains = 1,
-  n.threads = 1L,
-  printEvery = 100L,
   printCutoffs = 0L,
   rngKind = "default",
   rngNormalKind = "default",
@@ -47,7 +41,8 @@ tbart1np(
   sparse = FALSE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
-  alpha_split_prior = TRUE
+  alpha_split_prior = TRUE,
+  fixed_resp_update = TRUE
 )
 }
 \arguments{
@@ -66,12 +61,6 @@ tbart1np(
 \item{above_cens}{Number at or above which observations are censored.}
 
 \item{n.trees}{(dbarts control option) A positive integer giving the number of trees used in the sum-of-trees formulation.}
-
-\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
-
-\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
-
-\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
 
 \item{printCutoffs}{(dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
 
@@ -130,6 +119,12 @@ tbart1np(
 \item{alpha_b_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
 
 \item{alpha_split_prior}{If true, set hyperprior for Linero alpha parameter}
+
+\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
+
+\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
+
+\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
 }
 \value{
 The following objects are returned:

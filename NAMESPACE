@@ -3,6 +3,7 @@
 export(dbarts_marginal_prediction)
 export(fastcountuniq)
 export(fastnormdens)
+export(htbart2)
 export(marginal_predict_mybart)
 export(marginal_predict_mybart_class)
 export(predict_mybart)

@@ -13,20 +13,13 @@ tobit2linear(
   n.iter = 1000,
   n.burnin = 100,
   censored_value = NA,
-  gamma0 = 0,
-  G0 = 1,
+  gamma0_prior = NA,
   nzero = 6,
-  S0 = 12,
+  S0 = NA,
+  SGratio = 9,
   sigest = NA,
   n.trees_outcome = 200L,
   n.trees_censoring = 200L,
-  n.burn = 0L,
-  n.samples = 1L,
-  n.thin = 1L,
-  n.chains = 1L,
-  n.threads = 1L,
-  printEvery = 100L,
-  printCutoffs = 0L,
   rngKind = "default",
   rngNormalKind = "default",
   rngSeed = NA_integer_,
@@ -36,14 +29,12 @@ tobit2linear(
   tree_base_z = 0.95,
   tree_base_y = 0.95,
   node.prior = dbarts:::normal,
-  resid.prior = dbarts:::chisq,
   proposal.probs = c(birth_death = 0.5, swap = 0, change = 0.5, birth = 0.5),
-  sigmadbarts = NA_real_,
   print.opt = 100,
   cov_prior = "Ding",
   tau = 5,
   mixprob = 0.5,
-  simultaneous_covmat = TRUE,
+  simultaneous_covmat = FALSE,
   fast = TRUE,
   nu0 = 3,
   offsetz = FALSE,
@@ -77,27 +68,17 @@ tobit2linear(
 
 \item{censored_value}{The value taken by censored observations}
 
-\item{gamma0}{The mean of the normal prior on the covariance of the errors in the censoring and outcome models.}
+\item{gamma0_prior}{The mean of the normal prior on the covariance of the errors in the censoring and outcome models.}
 
-\item{G0}{The variance of the normal prior on the covariance of the errors in the censoring and outcome models (only if cov_prior equals Omori).}
+\item{nzero}{A prior parameter which when divided by 2 gives the shape parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.}
 
-\item{nzero}{A prior parameter which when divided by 2 gives the mean of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.}
+\item{S0}{A prior parameter which when divided by 2 gives the scale parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.}
 
-\item{S0}{A prior parameter which when divided by 2 gives the variance of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.}
-
-\item{sigest}{Estimate of variance of hte error term.}
+\item{sigest}{Estimate of standard deviation of the error term.}
 
 \item{n.trees_outcome}{(dbarts control option) A positive integer giving the number of trees used in the outcome model sum-of-trees formulation.}
 
 \item{n.trees_censoring}{(dbarts control option) A positive integer giving the number of trees used in the censoring model sum-of-trees formulation.}
-
-\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
-
-\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
-
-\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
-
-\item{printCutoffs}{(dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
 
 \item{rngKind}{(dbarts control option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.}
 
@@ -117,11 +98,7 @@ tobit2linear(
 
 \item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
 
-\item{resid.prior}{(dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance}
-
 \item{proposal.probs}{(dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.}
-
-\item{sigmadbarts}{(dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.}
 
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
 
@@ -151,7 +128,13 @@ tobit2linear(
 
 \item{alpha_split_prior}{If true, set hyperprior for Linero alpha parameter}
 
-\item{accelerate}{If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).}
+\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
+
+\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
+
+\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
+
+\item{printCutoffs}{(dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
 }
 \value{
 The following objects are returned:
@@ -171,7 +154,7 @@ The following objects are returned:
 \item{cond_exp_test}{Matrix of draws of the conditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{uncond_exp_train}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all training observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{uncond_exp_test}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
-\item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Fixed at true values for selected/uncensored observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{ystar_test}{Matrix of test sample draws of the outcome assuming uncensored . Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{zstar_train}{Matrix of training sample draws of the censoring model latent outcome. Number of rows equals number of training observations. Number of columns equals n.iter.}
 \item{zstar_test}{Matrix of test sample draws of the censoring model latent outcome. Number of rows equals number of test observations. Number of columns equals n.iter.}
@@ -182,10 +165,10 @@ The following objects are returned:
 \item{Sigma_draws}{3 dimensional array of MCMC draws of the covariance matrix for the censoring and outcome error terms. The numbers of rows and columns equal are equal to 2. The first row and column correspond to the censoring model. The second row and column correspond to the outcome model. The number of slices equals n.iter . }
 \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
 \item{alpha_s_z_store}{For Dirichlet prior on splitting probabilities in selection equation, vector of alpha hyperparameter draws for each iteration }
-\item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
-\item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
-\item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
-\item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+\item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations.}
+\item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
+\item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
+\item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
 }
 \description{
 Type II Tobit Bayesian Additive Regression Trees implemented using MCMC

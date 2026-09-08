@@ -24,11 +24,10 @@ make_01_norm <- function(x) {
 #' @param n.iter Number of iterations excluding burnin.
 #' @param n.burnin Number of burnin iterations.
 #' @param censored_value The value taken by censored observations
-#' @param gamma0 The mean of the normal prior on the covariance of the errors in the censoring and outcome models.
-#' @param G0 The variance of the normal prior on the covariance of the errors in the censoring and outcome models (only if cov_prior equals Omori).
-#' @param nzero A prior parameter which when divided by 2 gives the mean of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.
-#' @param S0 A prior parameter which when divided by 2 gives the variance of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.
-#' @param sigest Estimate of variance of hte error term.
+#' @param gamma0_prior The mean of the normal prior on the covariance of the errors in the censoring and outcome models.
+#' @param nzero A prior parameter which when divided by 2 gives the shape parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.
+#' @param S0 A prior parameter which when divided by 2 gives the scale parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.
+#' @param sigest Estimate of standard deviation of the error term.
 #' @param n.trees_outcome (dbarts control option) A positive integer giving the number of trees used in the outcome model sum-of-trees formulation.
 #' @param n.trees_censoring (dbarts control option) A positive integer giving the number of trees used in the censoring model sum-of-trees formulation.
 #' @param n.chains (dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
@@ -44,11 +43,8 @@ make_01_norm <- function(x) {
 #' @param tree_power_z Tree prior parameter for selection model.
 #' @param tree_base_z Tree prior parameter for selection model.
 #' @param node.prior (dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.
-#' @param resid.prior (dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance
 #' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
-#' @param sigmadbarts (dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.
 #' @param print.opt Print every print.opt number of Gibbs samples.
-#' @param accelerate If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).
 #' @param cov_prior Prior for the covariance of the error terms. If VH, apply the prior of van Hasselt (2011), N(gamma0, tau*phi), imposing dependence between gamma and phi. If Omori, apply the prior N(gamma0,G0). If mixture, then a mixture of the VH and Omori priors with probability mixprob applied to the VH prior.
 #' @param mixprob If cov_prior equals Mixture, then mixprob is the probability applied to the Van Hasselt covariance prior, and one minus mixprob is the probability applied to the Omori prior.
 #' @param tau Parameter for the prior of van Hasselt (2011) on the covariance of the error terms.
@@ -80,7 +76,7 @@ make_01_norm <- function(x) {
 #' \item{cond_exp_test}{Matrix of draws of the conditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{uncond_exp_train}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all training observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{uncond_exp_test}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
-#' \item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Number of rows equals number of training observations. Number of columns equals n.iter .}
+#' \item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Fixed at true values for selected/uncensored observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{ystar_test}{Matrix of test sample draws of the outcome assuming uncensored . Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{zstar_train}{Matrix of training sample draws of the censoring model latent outcome. Number of rows equals number of training observations. Number of columns equals n.iter.}
 #' \item{zstar_test}{Matrix of test sample draws of the censoring model latent outcome. Number of rows equals number of test observations. Number of columns equals n.iter.}
@@ -91,10 +87,10 @@ make_01_norm <- function(x) {
 #' \item{Sigma_draws}{3 dimensional array of MCMC draws of the covariance matrix for the censoring and outcome error terms. The numbers of rows and columns equal are equal to 2. The first row and column correspond to the censoring model. The second row and column correspond to the outcome model. The number of slices equals n.iter . }
 #' \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
 #' \item{alpha_s_z_store}{For Dirichlet prior on splitting probabilities in selection equation, vector of alpha hyperparameter draws for each iteration }
-#' \item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
-#' \item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
-#' \item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
-#' \item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+#' \item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations.}
+#' \item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
+#' \item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
+#' \item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
 #' @examples
 #'
 #'#example taken from Zhang, J., Li, Z., Song, X., & Ning, H. (2021). Deep Tobit networks: A novel machine learning approach to microeconometrics. Neural Networks, 144, 279-296.
@@ -217,20 +213,21 @@ tobit2linear <- function(x.train,
                     n.iter=1000,
                     n.burnin=100,
                     censored_value = NA,
-                    gamma0 = 0,
-                    G0=1,
+                    gamma0_prior = NA,
+                    # G0=1,
                     nzero = 6,#0.002,
-                    S0= 12,#0.002,
+                    S0 = NA,# 12 #0.002,
+                    SGratio = 9,
                     sigest = NA,
                     n.trees_outcome = 200L,
                     n.trees_censoring = 200L,
-                    n.burn = 0L,
-                    n.samples = 1L,
-                    n.thin = 1L,
-                    n.chains = 1L,
-                    n.threads = 1L, #guessNumCores(),
-                    printEvery = 100L,
-                    printCutoffs = 0L,
+                    # n.burn = 0L,
+                    # n.samples = 1L,
+                    # n.thin = 1L,
+                    # n.chains = 1L,
+                    # n.threads = 1L, #guessNumCores(),
+                    # printEvery = 100L,
+                    # printCutoffs = 0L,
                     rngKind = "default",
                     rngNormalKind = "default",
                     rngSeed = NA_integer_,
@@ -240,15 +237,15 @@ tobit2linear <- function(x.train,
                     tree_base_z = 0.95,
                     tree_base_y = 0.95,
                     node.prior = dbarts:::normal,
-                    resid.prior = dbarts:::chisq,
+                    # resid.prior = dbarts:::chisq,
                     proposal.probs = c(birth_death = 0.5, swap = 0, change = 0.5, birth = 0.5),
-                    sigmadbarts = NA_real_,
+                    # sigmadbarts = NA_real_,
                     print.opt = 100,
                     # accelerate = FALSE,
                     cov_prior = "Ding",
                     tau = 5,
                     mixprob = 0.5,
-                    simultaneous_covmat = TRUE,
+                    simultaneous_covmat = FALSE,
                     fast = TRUE,
                     nu0 = 3, offsetz = FALSE,
                     quantsig = 0.9,
@@ -264,6 +261,7 @@ tobit2linear <- function(x.train,
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
     stop("cov_prior must equal VH, Omori, Mixture, or Ding")
   }
+  if(cov_prior == "Mixture"){stop("Experimental option for Mixture cov_prior not currently supported.")}
   if((mixprob < 0)| (mixprob > 1) ){
     stop("mixprob must be between zero and one.")
   }
@@ -281,7 +279,10 @@ tobit2linear <- function(x.train,
 
   if((nrow(w.test)!=nrow(x.test))) stop("input w.test must have the same number of rows as x.test")
   if((nrow(w.train)!=nrow(x.train))) stop("input w.train must have the same number of rows as x.train")
-
+  if (length(gamma0_prior) != 1L) {stop("gamma0_prior must be a numeric scalar or NA.")}
+  if (length(sigest) != 1L) {stop("sigest must be a numeric scalar or NA.")}
+  if (length(S0) != 1L) {stop("S0 must be a numeric scalar or NA.")}
+  if (length(censored_value) != 1L) {stop("censored_value must be a scalar or NA.")}
 
   #indexes of censored observations
   if(is.na(censored_value)){
@@ -295,45 +296,54 @@ tobit2linear <- function(x.train,
   if(length(cens_inds)==0) stop("No censored observations")
 
 
+  if (sd(y[uncens_inds]) <= 0 || !is.finite(sd(y[uncens_inds]))) {
+    stop("Uncensored outcomes must have positive finite standard deviation.")
+  }
 
   # normalize the outcome
   tempmean <- mean(y[uncens_inds])
   tempsd <- sd(y[uncens_inds])
   originaly <- y
   y <- (y-tempmean)/tempsd
-
+  if (!is.na(sigest)) { sigest <- sigest / tempsd}
+  if (!is.na(gamma0_prior)) {gamma0_prior <- gamma0_prior / tempsd}
+  if (!is.na(S0)) {S0 <- S0 / tempsd^2}
   if(is.numeric(censored_value)){
     censored_value <- (censored_value- tempmean)/tempsd
   }
 
 
+  rank_transform <- FALSE
 
-  ecdfsx   <- list()
-  for(i in 1:ncol(x.train)) {
-    ecdfsx[[i]] <- ecdf(x.train[,i])
-    if(length(unique(x.train[,i])) == 1) ecdfsx[[i]] <- identity
-    if(length(unique(x.train[,i])) == 2) ecdfsx[[i]] <- make_01_norm(x.train[,i])
+
+  if (rank_transform) {
+
+    ecdfsx   <- list()
+    for(i in 1:ncol(x.train)) {
+      ecdfsx[[i]] <- ecdf(x.train[,i])
+      if(length(unique(x.train[,i])) == 1) ecdfsx[[i]] <- identity
+      if(length(unique(x.train[,i])) == 2) ecdfsx[[i]] <- make_01_norm(x.train[,i])
+    }
+    for(i in 1:ncol(x.train)) {
+      x.train[,i] <- ecdfsx[[i]](x.train[,i])
+      x.test[,i] <- ecdfsx[[i]](x.test[,i])
+    }
+
+    rm(ecdfsx)
+
+    ecdfsw   <- list()
+    for(i in 1:ncol(w.train)) {
+      ecdfsw[[i]] <- ecdf(w.train[,i])
+      if(length(unique(w.train[,i])) == 1) ecdfsw[[i]] <- identity
+      if(length(unique(w.train[,i])) == 2) ecdfsw[[i]] <- make_01_norm(w.train[,i])
+    }
+    for(i in 1:ncol(w.train)) {
+      w.train[,i] <- ecdfsw[[i]](w.train[,i])
+      w.test[,i] <- ecdfsw[[i]](w.test[,i])
+    }
+
+    rm(ecdfsw)
   }
-  for(i in 1:ncol(x.train)) {
-    x.train[,i] <- ecdfsx[[i]](x.train[,i])
-    x.test[,i] <- ecdfsx[[i]](x.test[,i])
-  }
-
-  rm(ecdfsx)
-
-  ecdfsw   <- list()
-  for(i in 1:ncol(w.train)) {
-    ecdfsw[[i]] <- ecdf(w.train[,i])
-    if(length(unique(w.train[,i])) == 1) ecdfsw[[i]] <- identity
-    if(length(unique(w.train[,i])) == 2) ecdfsw[[i]] <- make_01_norm(w.train[,i])
-  }
-  for(i in 1:ncol(w.train)) {
-    w.train[,i] <- ecdfsw[[i]](w.train[,i])
-    w.test[,i] <- ecdfsw[[i]](w.test[,i])
-  }
-
-  rm(ecdfsw)
-
   #create z vector
 
   #create ystar vector
@@ -482,7 +492,7 @@ tobit2linear <- function(x.train,
       # print(correst)
       # print("correst = ")
       # print(correst)
-      gamma0 <- correst*sigest
+      gamma0 <- 0 # correst*sigest
 
     } else {
       sigest = sd(y[uncens_inds])
@@ -499,6 +509,15 @@ tobit2linear <- function(x.train,
   #   nzero <- 2*(sigest^2)
   #
   # }
+
+  # set prior mean for gamma
+  if (cov_prior == "Ding") {
+    if (!is.na(gamma0_prior) && gamma0_prior != 0) {
+      print("Ding prior selected, therefore setting gamma0 prior mean to 0 instead of user-specified gamma0_prior.")
+    }
+    gamma0 <- 0
+  }else{if(!is.na(gamma0_prior)) {gamma0 <- gamma0_prior}}
+
 
   #set initial sigma
 
@@ -533,7 +552,54 @@ tobit2linear <- function(x.train,
 
   # S0 <- (sigest^2)*(nzero-2)/(1+tau)
 
-  S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+  # S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+
+  if(!is.na(S0)){
+    # keep S0 as user-specified value
+    G0 <- S0/SGratio
+  }else{
+    if(cov_prior == "Omori"){
+      # S0 <- (sigest^2)/( 1/(nzero-2) +  (1 + gamma0^2)/SGratio)
+      if(sigest^2 > gamma0^2){
+        S0 <- (sigest^2 - gamma0^2)/( 1/(nzero-2) +  1/SGratio)
+      }else{
+        S0 <- (sigest^2)/( 1/(nzero-2) +  1/SGratio)
+      }
+      G0 <- S0/SGratio
+      # # alternative based on moment matching with van Hasselt prior
+      # S0 <- (sigest^2 - gamma0^2)*(nzero-2)/(1+tau)
+      # G0 <-  tau*(sigest^2 - gamma0^2)/(1+tau) # (  (sigest^2 - gamma0^2)*tau/(1+tau) + gamma0^2) /(1 + gamma0^2)
+    }else{
+      if(cov_prior == "VH"){
+        # S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+        if(sigest^2 > gamma0^2){
+          S0 <- (sigest^2 - gamma0^2)*(nzero-2)/(1+tau)
+        }else{
+          S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+        }
+        # relying on user-specified tau.
+        # alternative would be estimated tau, either from moment matching with Omori prior given SGratio
+        # tau <- ((S0/SGratio)*(1+gamma0)-gamma0^2)*(nzero-2)/S0
+        # or from linear Heckman model estimates
+        # if(exists("heckit.ml")){
+        #   if(heckit.ml$method == "ml"){
+        #     # delta method to obtain estiamted variance of gamma hat
+        #     vargammahat <- model1$estimate["rho"]*model1$hessian["sigma", "sigma"] +
+        #       model1$hessian["rho", "rho"]*model1$estimate["sigma"]^2 +
+        #       2*model1$estimate["rho"]*model1$estimate["sigma"]*model1$hessian["rho", "sigma"]
+        #     tau <- vargammahat/(model1$hessian["sigma", "sigma"] - vargammahat - gamma0)
+        #   }else{
+        #     tau <- ((S0/SGratio)*(1+gamma0)-gamma0^2)*(nzero-2)/S0
+        #   }
+        # }else{
+        #   tau <- ((S0/SGratio)*(1+gamma0)-gamma0^2)*(nzero-2)/S0
+        # }
+      }else{
+        S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+        G0 <- S0/SGratio
+      }
+    }
+  }
   # S0 <- 0.5*(sigest^2 - gamma0^2)*(nzero-2)/(2+tau)
 
   # print("S0 = ")
@@ -577,9 +643,9 @@ tobit2linear <- function(x.train,
   if(cov_prior == "Ding"){
     # gamma0 <- 0
     # sigquant <- 0.9
-    qchi <- qchisq(1.0-quantsig,nu0-1)
-    cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
-    cding <- cdivnu*(nu0-1)
+    # qchi <- qchisq(1.0-quantsig,nu0-1)
+    # cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
+    # cding <- cdivnu*(nu0-1)
     # rhoinit <- 0
     # siginit <- sigest
 
@@ -599,21 +665,28 @@ tobit2linear <- function(x.train,
     # print(sigest^2)
     # # rhoinit <- 0
     # # siginit <- sigest
-    Sigma_mat <- cbind(c(1,gamma1),c(gamma1,sigest^2))
-
-    Sigma_mat <- cbind(c(1,gamma1),c(gamma1,sigest^2))
-
+    # Sigma_mat <- cbind(c(1,gamma1),c(gamma1,sigest^2))
+    #
+    # Sigma_mat <- cbind(c(1,gamma1),c(gamma1,sigest^2))
+    gamma1 <- correst*sigest  #0#cov(ystar,z)
+    phi1 <- sigest^2 - gamma1^2
+    if (!is.finite(phi1) || phi1 <= 0) {
+      stop("Invalid Ding initialization: phi1 must be positive.")
+    }
+    # rhoinit <- 0
+    # siginit <- sigest
+    Sigma_mat <- cbind(c(1,gamma1),c(gamma1,phi1 + gamma1^2))
   }
 
-  if(cov_prior == "Omori"){
-    # S0 <- (sigest^2 - G0*(1 + gamma0^2))*(nzero-2)
-
-    # can be negative if G0 not chosen appropriately
-    S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
-    G0 <- tau*S0/(nzero-2) # tau*E[phi]
-    # print("S0 = ")
-    # print(S0)
-  }
+  # if(cov_prior == "Omori"){
+  #   # S0 <- (sigest^2 - G0*(1 + gamma0^2))*(nzero-2)
+  #
+  #   # can be negative if G0 not chosen appropriately
+  #   S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+  #   G0 <- tau*S0/(nzero-2) # tau*E[phi]
+  #   # print("S0 = ")
+  #   # print(S0)
+  # }
 
 
 
@@ -640,6 +713,7 @@ tobit2linear <- function(x.train,
     zstar_test = array(NA, dim = c(ntest, n.iter)),
     ycond_draws_train = list(),
     ycond_draws_test = list(),
+    ycond_test_matrix =  array(NA, dim = c(ntest, n.iter)),
     Sigma_draws = array(NA, dim = c(2, 2, n.iter))
   )
 
@@ -671,13 +745,13 @@ tobit2linear <- function(x.train,
   control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
                              n.trees = n.trees_censoring,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
+                             n.burn = 0L, #n.burn,
+                             n.samples = 1L, #n.samples,
+                             n.thin = 1L, # n.thin,
+                             n.chains = 1L, # n.chains,
+                             n.threads = 1L, # n.threads,
+                             printEvery = print.opt, # printEvery,
+                             printCutoffs = 0L, # printCutoffs,
                              rngKind = rngKind,
                              rngNormalKind = rngNormalKind,
                              rngSeed = rngSeed)
@@ -685,13 +759,13 @@ tobit2linear <- function(x.train,
   control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
                              n.trees = n.trees_outcome,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
+                             n.burn = 0L, # n.burn,
+                             n.samples = 1L, # n.samples,
+                             n.thin = 1L, # n.thin,
+                             n.chains = 1L, # n.chains,
+                             n.threads = 1L, # n.threads,
+                             printEvery = print.opt, # printEvery,
+                             printCutoffs = 0L, # printCutoffs,
                              rngKind = rngKind,
                              rngNormalKind = rngNormalKind,
                              rngSeed = rngSeed)
@@ -722,9 +796,9 @@ tobit2linear <- function(x.train,
                         control = control_y,
                         tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
+                        sigma = 1 # sigmadbarts
     )
 
     # print("Line 425")
@@ -738,7 +812,7 @@ tobit2linear <- function(x.train,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1
     )
@@ -754,9 +828,9 @@ tobit2linear <- function(x.train,
                         control = control_y,
                         tree.prior = dbarts:::cgm(power = tree_power_y, base = tree_base_y,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
+                        sigma = 1 # sigmadbarts
     )
 
     # print("Line 425")
@@ -771,9 +845,9 @@ tobit2linear <- function(x.train,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = 1#sigmadbarts
+                        sigma = 1 # sigmadbarts
     )
   }
 
@@ -795,25 +869,40 @@ tobit2linear <- function(x.train,
 
 
   # print("line 788 = ")
-
+  # print("cens_inds = ")
+  # print(cens_inds)
+  # print("uncens_inds = ")
+  # print(uncens_inds)
+  # print("wmat_train[cens_inds,] = ")
+  # print(wmat_train[cens_inds,])
 
   alpha_var <- solve(solve(Avar_p) +
-    crossprod(wmat_train[cens_inds,]) +
-      ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]))
+    crossprod(wmat_train[cens_inds,, drop = FALSE]) +
+      ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,, drop = FALSE]))
 
   # print("line 795 = ")
 
-  alpha0hat <- solve(crossprod(wmat_train[cens_inds,])) %*% crossprod(wmat_train[cens_inds,], z[cens_inds] - offsetz)
-  # print("line 798 = ")
-  alpha1hat <- solve(crossprod(wmat_train[uncens_inds,])) %*% crossprod(wmat_train[uncens_inds,],
-                                                                       z[uncens_inds] - offsetz -
-                                                                         (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2))
-  # print("line 800 = ")
+  # alpha0hat <- solve(crossprod(wmat_train[cens_inds,, drop = FALSE])) %*% crossprod(wmat_train[cens_inds,, drop = FALSE], z[cens_inds] - offsetz)
+  # # print("line 798 = ")
+  # alpha1hat <- solve(crossprod(wmat_train[uncens_inds,, drop = FALSE])) %*% crossprod(wmat_train[uncens_inds,, drop = FALSE],
+  #                                                                      z[uncens_inds] - offsetz -
+  #                                                                        (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2))
+  # # print("line 800 = ")
+  #
+  # alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
+  #                                crossprod(wmat_train[cens_inds,, drop = FALSE]) %*%  alpha0hat+
+  #                                ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,, drop = FALSE]) %*% alpha1hat  )
 
-  alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
-                                 crossprod(wmat_train[cens_inds,]) %*%  alpha0hat+
-                                 ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]) %*% alpha1hat  )
 
+  alpha_mean <- alpha_var %*% (
+    solve(Avar_p) %*% Amean_p +
+      crossprod(wmat_train[cens_inds, , drop = FALSE],
+                z[cens_inds] - offsetz) +
+      ((gamma1^2 + phi1) / phi1) *
+      crossprod(wmat_train[uncens_inds, , drop = FALSE],
+                z[uncens_inds] - offsetz -
+                  (ystar[uncens_inds] - mutemp_y) * gamma1 / (phi1 + gamma1^2))
+  )
 
   alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
   # print("line 808 = ")
@@ -832,22 +921,27 @@ tobit2linear <- function(x.train,
   if(jointbetagamma){
     # print("line 815 = ")
     y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
-    Xresmat <- cbind(xmat_train[uncens_inds,] ,z[uncens_inds] - offsetz - mutemp_z[uncens_inds] )
+    Xresmat <- cbind(xmat_train[uncens_inds,, drop = FALSE] ,z[uncens_inds] - offsetz - mutemp_z[uncens_inds] )
 
     gamma0res <- c(Bmean_p,gamma0)
     G0res <- rbind(cbind(Bvar_p, rep(0, nrow(Bvar_p))),
                    t(c(rep(0,ncol(Bvar_p)),  tau*phi1)))
 
     Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
-    ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds])
-    g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+    # ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds])
+    # g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+
+    g_bar <- Gbar %*% (
+      solve(G0res) %*% gamma0res +
+        (1 / phi1) * crossprod(Xresmat, ystar[uncens_inds])
+    )
 
     # sample beta vector and gamma simulataneously
     betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
 
     gamma1 <- betagamma_vec[length(betagamma_vec)]
     beta_vec <- betagamma_vec[- length(betagamma_vec)]
-    mutemp_y <- xmat_train[uncens_inds,] %*% beta_vec
+    mutemp_y <- xmat_train[uncens_inds,, drop = FALSE] %*% beta_vec
     mutemp_test_y <- xmat_test %*% beta_vec
 
   }else{
@@ -862,7 +956,7 @@ tobit2linear <- function(x.train,
 
     # print("line 849 = ")
 
-    Xuncensmat <- xmat_train[uncens_inds,]
+    Xuncensmat <- xmat_train[uncens_inds,, drop = FALSE]
 
     Bvar <- solve(solve(Bvar_p) + (1/phi1)*crossprod(Xuncensmat)  )
     Bhat <- solve((1/phi1)*crossprod(Xuncensmat))%*% ((1/phi1)*crossprod(Xuncensmat,  y_resids) )
@@ -872,7 +966,7 @@ tobit2linear <- function(x.train,
     # sample beta vector and gamma simulataneously
     beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
 
-    mutemp_y <- xmat_train[uncens_inds,] %*% beta_vec
+    mutemp_y <- xmat_train[uncens_inds,, drop = FALSE] %*% beta_vec
     mutemp_test_y <- xmat_test %*% beta_vec
 
   }
@@ -1148,20 +1242,37 @@ tobit2linear <- function(x.train,
     # print(z)
     # print("line 1059 = ")
 
+    # print("line 1155 = ")
+    # print("cens_inds = ")
+    # print(cens_inds)
+    #
+    # print("wmat_train[cens_inds,] = ")
+    # print(wmat_train[cens_inds,])
     alpha_var <- solve(solve(Avar_p) +
-                         crossprod(wmat_train[cens_inds,]) +
-                         ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]))
+                         crossprod(wmat_train[cens_inds,, drop = FALSE]) +
+                         ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,, drop = FALSE]))
 
 
-    alpha0hat <- solve(crossprod(wmat_train[cens_inds,])) %*% crossprod(wmat_train[cens_inds,], z[cens_inds] - offsetz)
-    alpha1hat <- solve(crossprod(wmat_train[uncens_inds,])) %*% crossprod(wmat_train[uncens_inds,],
-                                                                         z[uncens_inds] - offsetz -
-                                                                           (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2))
-    # print("line 1070 = ")
+    # alpha0hat <- solve(crossprod(wmat_train[cens_inds,, drop = FALSE])) %*% crossprod(wmat_train[cens_inds,, drop = FALSE], z[cens_inds] - offsetz)
+    # alpha1hat <- solve(crossprod(wmat_train[uncens_inds,, drop = FALSE])) %*% crossprod(wmat_train[uncens_inds,, drop = FALSE],
+    #                                                                      z[uncens_inds] - offsetz -
+    #                                                                        (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2))
+    # # print("line 1070 = ")
+    #
+    # alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
+    #                                crossprod(wmat_train[cens_inds,, drop = FALSE]) %*%  alpha0hat+
+    #                                ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,, drop = FALSE]) %*% alpha1hat  )
 
-    alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
-                                   crossprod(wmat_train[cens_inds,]) %*%  alpha0hat+
-                                   ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]) %*% alpha1hat  )
+    alpha_mean <- alpha_var %*% (
+      solve(Avar_p) %*% Amean_p +
+        crossprod(wmat_train[cens_inds, , drop = FALSE],
+                  z[cens_inds] - offsetz) +
+        ((gamma1^2 + phi1) / phi1) *
+        crossprod(wmat_train[uncens_inds, , drop = FALSE],
+                  z[uncens_inds] - offsetz -
+                    (ystar[uncens_inds] - mutemp_y) * gamma1 / (phi1 + gamma1^2))
+    )
+
 
     # print("line 1076 = ")
 
@@ -1179,22 +1290,27 @@ tobit2linear <- function(x.train,
 
       # print("line 1084 = ")
 
-      Xresmat <- cbind(xmat_train[uncens_inds,] ,z[uncens_inds] - mutemp_z[uncens_inds] )
+      Xresmat <- cbind(xmat_train[uncens_inds,, drop = FALSE] ,z[uncens_inds] - mutemp_z[uncens_inds] )
 
       gamma0res <- c(Bmean_p,gamma0)
       G0res <- rbind(cbind(Bvar_p, rep(0, nrow(Bvar_p))),
                      t(c(rep(0,ncol(Bvar_p)), tau*phi1)))
 
       Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
-      ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds])
-      g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+      # ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds])
+      # g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+
+      g_bar <- Gbar %*% (
+        solve(G0res) %*% gamma0res +
+          (1 / phi1) * crossprod(Xresmat, ystar[uncens_inds])
+      )
 
       # sample beta vector and gamma simulataneously
       betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
 
       gamma1 <- betagamma_vec[length(betagamma_vec)]
       beta_vec <- betagamma_vec[- length(betagamma_vec)]
-      mutemp_y <- xmat_train[uncens_inds,] %*% beta_vec
+      mutemp_y <- xmat_train[uncens_inds,, drop = FALSE] %*% beta_vec
       mutemp_test_y <- xmat_test %*% beta_vec
 
     }else{
@@ -1209,7 +1325,7 @@ tobit2linear <- function(x.train,
       y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
 
 
-      Xuncensmat <- xmat_train[uncens_inds,]
+      Xuncensmat <- xmat_train[uncens_inds,, drop = FALSE]
 
       Bvar <- solve(solve(Bvar_p) + (1/phi1)*crossprod(Xuncensmat)  )
       Bhat <- solve((1/phi1)*crossprod(Xuncensmat))%*% ((1/phi1)*crossprod(Xuncensmat,  y_resids) )
@@ -1217,7 +1333,7 @@ tobit2linear <- function(x.train,
 
       # sample beta vector and gamma simulataneously
       beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
-      mutemp_y <- xmat_train[uncens_inds,] %*% beta_vec
+      mutemp_y <- xmat_train[uncens_inds,, drop = FALSE] %*% beta_vec
       mutemp_test_y <- xmat_test %*% beta_vec
 
     }
@@ -1610,7 +1726,9 @@ tobit2linear <- function(x.train,
         #########  set parameters for phi draw  ######################################################
 
         n_one <- nzero + n1 + 1
-
+        if(cov_prior == "Omori"){
+          n_one <- nzero + n1
+        }
         # print("S0 = ")
         # print(S0)
         # print("(gamma1^2)*crossprod(z_epsilon) = ")
@@ -1869,10 +1987,10 @@ tobit2linear <- function(x.train,
       # }
 
       if(fast == TRUE){
-        probcens_train <- fastpnorm(- mutemp_z[uncens_inds] - offsetz )
+        probcens_train <- fastpnorm(- mutemp_z - offsetz )
         probcens_test <- fastpnorm(- mutemp_test_z - offsetz)
       }else{
-        probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz )
+        probcens_train <- pnorm(- mutemp_z - offsetz )
         probcens_test <- pnorm(- mutemp_test_z - offsetz)
       }
 
@@ -1882,7 +2000,7 @@ tobit2linear <- function(x.train,
       # condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z[uncens_inds] - offsetz ))/(1-probcens_train)
       # condexptest <- mutemp_test_y + gamma1*(dnorm(- mutemp_test_z - offsetz ))/(1-probcens_test)
 
-      temp_ztrain <- mutemp_z[uncens_inds] + offsetz
+      temp_ztrain <- mutemp_z + offsetz
       temp_ztest <- mutemp_test_z + offsetz
       #
       #       if(fast == TRUE){
@@ -1923,12 +2041,13 @@ tobit2linear <- function(x.train,
       draw$cond_exp_train[, iter_min_burnin] <- condexptrain*tempsd+tempmean
       draw$cond_exp_test[, iter_min_burnin] <- condexptest*tempsd+tempmean
 
-      draw$ystar_train[, ] <- ystar*tempsd+tempmean
+      draw$ystar_train[, iter_min_burnin] <- ystar*tempsd+tempmean
       draw$ystar_test[, iter_min_burnin] <- zytest[,2]*tempsd+tempmean
       draw$zstar_train[,iter_min_burnin] <- z
       draw$zstar_test[,iter_min_burnin] <-  zytest[,1]
+      draw$ycond_test_matrix[, iter_min_burnin] <- ifelse( draw$zstar_test[,iter_min_burnin] >= 0, draw$ystar_test[, iter_min_burnin], NA_real_ )
 
-      draw$ycond_draws_train[[iter_min_burnin]] <-  ystar[z >=0]*tempsd+tempmean
+      draw$ycond_draws_train[[iter_min_burnin]] <-  ystar[uncens_inds]*tempsd+tempmean
       draw$ycond_draws_test[[iter_min_burnin]] <-  zytest[,2][zytest[,1] >= 0]*tempsd+tempmean
 
       draw$Sigma_draws[,, iter_min_burnin] <- Sigma_orig_scale#Sigma_mat

@@ -18,11 +18,10 @@
 #' @param n.iter Number of iterations excluding burnin.
 #' @param n.burnin Number of burnin iterations.
 #' @param censored_value The value taken by censored observations
-#' @param gamma0 The mean of the normal prior on the covariance of the errors in the censoring and outcome models.
-#' @param G0 The variance of the normal prior on the covariance of the errors in the censoring and outcome models.
-#' @param nzero A prior parameter which when divided by 2 gives the mean of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.
-#' @param S0 A prior parameter which when divided by 2 gives the variance of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.
-#' @param sigest If variance of the error term is the
+#' @param gamma0_prior The mean of the normal prior on the covariance of the errors in the censoring and outcome models.
+#' @param nzero A prior parameter which when divided by 2 gives the shape parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.
+#' @param S0 A prior parameter which when divided by 2 gives the scale parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.
+#' @param sigest Estimate of standard deviation of the error term.
 #' @param n.trees_outcome (dbarts control option) A positive integer giving the number of trees used in the outcome model sum-of-trees formulation.
 #' @param n.trees_censoring (dbarts control option) A positive integer giving the number of trees used in the censoring model sum-of-trees formulation.
 #' @param n.chains (dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
@@ -38,11 +37,8 @@
 #' @param tree_power_z Tree prior parameter for selection model.
 #' @param tree_base_z Tree prior parameter for selection model.
 #' @param node.prior (dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.
-#' @param resid.prior (dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance
 #' @param proposal.probs (dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.
-#' @param sigmadbarts (dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.
 #' @param print.opt Print every print.opt number of Gibbs samples.
-#' @param accelerate If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).
 #' @param cov_prior Prior for the covariance of the error terms. If VH, apply the prior of van Hasselt (2011), N(gamma0, tau*phi), imposing dependence between gamma and phi. If Omori, apply the prior N(gamma0,G0). If mixture, then a mixture of the VH and Omori priors with probability mixprob applied to the VH prior.
 #' @param tau Parameter for the prior of van Hasselt (2011) on the covariance of the error terms.
 #' @param M_mat Base distribution covariace for errors in outcome and selection equation for Dirichlet Process mixture.
@@ -57,6 +53,8 @@
 #' @param alpha_a_z Linero alpha prior parameter for selection equation splitting probabilities
 #' @param alpha_b_z Linero alpha prior parameter for selection equation splitting probabilities
 #' @param alpha_split_prior If true, set hyperprior for Linero alpha parameter
+#' @param yinit_resid If TRUE initialize outcome equation trees with linear tobit-2 residualized outcome (for better prior calibration of terminal node parameters)
+#' @param draw_censored_predictions If TRUE, draw ystar and posterior conditional mean samples for censored observations. Not possible if missing predictors in x.train for outcome-censored (i.e. unselected) observations.
 #' @export
 #' @return The following objects are returned:
 #' \item{Z.mat_train}{Matrix of draws of censoring model latent outcomes for training observations. Number of rows equals number of training observations. Number of columns equals n.iter . Rows are ordered in order of observations in the training data.}
@@ -75,7 +73,7 @@
 #' \item{cond_exp_test}{Matrix of draws of the conditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{uncond_exp_train}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all training observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{uncond_exp_test}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
-#' \item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Number of rows equals number of training observations. Number of columns equals n.iter .}
+#' \item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Fixed at true values for selected/uncensored observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 #' \item{ystar_test}{Matrix of test sample draws of the outcome assuming uncensored . Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{zstar_train}{Matrix of training sample draws of the censoring model latent outcome. Number of rows equals number of training observations. Number of columns equals n.iter.}
 #' \item{zstar_test}{Matrix of test sample draws of the censoring model latent outcome. Number of rows equals number of test observations. Number of columns equals n.iter.}
@@ -86,10 +84,10 @@
 #' \item{Sigma_draws}{3 dimensional array of MCMC draws of the covariance matrix for the censoring and outcome error terms. The numbers of rows and columns equal are equal to 2. The first row and column correspond to the censoring model. The second row and column correspond to the outcome model. The number of slices equals n.iter . }
 #' \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
 #' \item{alpha_s_z_store}{For Dirichlet prior on splitting probabilities in selection equation, vector of alpha hyperparameter draws for each iteration }
-#' \item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
-#' \item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
-#' \item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
-#' \item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+#' \item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations.}
+#' \item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
+#' \item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
+#' \item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
 #' @examples
 #'
 #'#example taken from Zhang, J., Li, Z., Song, X., & Ning, H. (2021). Deep Tobit networks: A novel machine learning approach to microeconometrics. Neural Networks, 144, 279-296.
@@ -212,20 +210,21 @@ tbart2np <- function(x.train,
                     n.iter=1000,
                     n.burnin=100,
                     censored_value = NA,
-                    gamma0 = 0,
-                    G0=10,
+                    gamma0_prior = NA,
+                    # G0=10,
                     nzero = 6,#0.002,
-                    S0= 12,#0.002,
+                    S0 = NA,# 12 #0.002,
+                    SGratio = 9,
                     sigest = NA,
                     n.trees_outcome = 50L,
                     n.trees_censoring = 50L,
-                    n.burn = 0L,
-                    n.samples = 1L,
-                    n.thin = 1L,
-                    n.chains = 1L,
-                    n.threads = guessNumCores(),
-                    printEvery = 100L,
-                    printCutoffs = 0L,
+                    # n.burn = 0L,
+                    # n.samples = 1L,
+                    # n.thin = 1L,
+                    # n.chains = 1L,
+                    # n.threads = guessNumCores(),
+                    # printEvery = 100L,
+                    # printCutoffs = 0L,
                     rngKind = "default",
                     rngNormalKind = "default",
                     rngSeed = NA_integer_,
@@ -235,14 +234,14 @@ tbart2np <- function(x.train,
                     tree_base_z = 0.95,
                     tree_base_y = 0.95,
                     node.prior = dbarts:::normal,
-                    resid.prior = dbarts:::chisq,
+                    # resid.prior = dbarts:::chisq,
                     proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
-                    sigmadbarts = NA_real_,
+                    # sigmadbarts = NA_real_,
                     print.opt = 100,
-                    accelerate = FALSE,
+                    # accelerate = FALSE,
                     cov_prior = "VH",
                     tau = 0.5,
-                    M_mat = 2*diag(2),#matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
+                    M_mat = NULL, # 2*diag(2),#matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE),
                     alpha_prior = "vh",
                     c1 = 2,
                     c2 = 2,
@@ -259,61 +258,100 @@ tbart2np <- function(x.train,
                     alpha_a_z = 0.5,
                     alpha_b_z = 1,
                     alpha_split_prior = TRUE,
-                    mu1_tozero = TRUE){
+                    mu1_tozero = TRUE,
+                    yinit_resid = FALSE,
+                    draw_censored_predictions = TRUE,
+                    fixed_resp_update = TRUE){
 
-
-  if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
-    stop("cov_prior must equal VH, Omori, Mixture, or Ding")
+  if (nrow(x.test) == 0L) {
+    stop("x.test with zero rows is currently not supported; pass training rows if no test set is needed.")
   }
 
-  if(!(is.integer(alpha_gridsize))){
-    stop("alpha_gridsize must be an integer")
+  # if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
+  #   stop("cov_prior must equal VH, Omori, Mixture, or Ding")
+  # }
+  if(!(cov_prior %in% c("VH", "Ding"))){
+    stop("cov_prior must equal VH or Ding")
   }
+  if(cov_prior == "Mixture"){stop("Experimental option for Mixture cov_prior not currently supported.")}
+
+  if (length(alpha_gridsize) != 1L ||!is.finite(alpha_gridsize) ||alpha_gridsize < 2 ||alpha_gridsize != floor(alpha_gridsize)) {
+    stop("alpha_gridsize must be an integer-valued scalar >= 2.")
+  }
+  alpha_gridsize <- as.integer(alpha_gridsize)
 
   # if(is.vector(x.train) | is.factor(x.train)| is.data.frame(x.train)) x.train = as.matrix(x.train)
   # if(is.vector(x.test) | is.factor(x.test)| is.data.frame(x.test)) x.test = as.matrix(x.test)
+  if(is.vector(x.train) | is.factor(x.train)| is.data.frame(x.train)) x.train = as.matrix(x.train)
+  if(is.vector(x.test) | is.factor(x.test)| is.data.frame(x.test)) x.test = as.matrix(x.test)
+  if (length(gamma0_prior) != 1L) {stop("gamma0_prior must be a numeric scalar or NA.")}
+  if (length(sigest) != 1L) {stop("sigest must be a numeric scalar or NA.")}
+  if (length(S0) != 1L) {stop("S0 must be a numeric scalar or NA.")}
+  if (length(censored_value) != 1L) {stop("censored_value must be a scalar or NA.")}
+  x.train <- as.matrix(x.train)
+  x.test  <- as.matrix(x.test)
+  w.train <- as.matrix(w.train)
+  w.test  <- as.matrix(w.test)
+  y <- as.numeric(y)
+  storage.mode(x.train) <- "double"
+  storage.mode(x.test)  <- "double"
+  storage.mode(w.train) <- "double"
+  storage.mode(w.test)  <- "double"
 
   # if((!is.matrix(x.train))) stop("argument x.train must be a double matrix")
   # if((!is.matrix(x.test)) ) stop("argument x.test must be a double matrix")
 
   if(nrow(x.train) != length(y)) stop("number of rows in x.train must equal length of y.train")
   if((ncol(x.test)!=ncol(x.train))) stop("input x.test must have the same number of columns as x.train")
-
   if((ncol(w.test)!=ncol(w.train))) stop("input w.test must have the same number of columns as w.train")
-
   if((nrow(w.test)!=nrow(x.test))) stop("input w.test must have the same number of rows as x.test")
   if((nrow(w.train)!=nrow(x.train))) stop("input w.train must have the same number of rows as x.train")
-
 
   #indexes of censored observations
   if(is.na(censored_value)){
     cens_boolvec <- is.na(y)
     uncens_boolvec <- !(is.na(y))
-
     cens_inds <- which(is.na(y))
     uncens_inds <- which(!(is.na(y)))
   }else{
     cens_boolvec <- (y == censored_value)
     uncens_boolvec <- (y != censored_value)
-
     cens_inds <- which(y == censored_value)
     uncens_inds <- which(y != censored_value)
   }
 
   if(length(cens_inds)==0) stop("No censored observations")
 
-
+  if (sd(y[uncens_inds]) <= 0 || !is.finite(sd(y[uncens_inds]))) {
+    stop("Uncensored outcomes must have positive finite standard deviation.")
+  }
   # normalize the outcome
   tempmean <- mean(y[uncens_inds])
   tempsd <- sd(y[uncens_inds])
   originaly <- y
   y <- (y - tempmean)/tempsd
+  if (!is.na(sigest)) { sigest <- sigest / tempsd}
+  if (!is.na(gamma0_prior)) {gamma0_prior <- gamma0_prior / tempsd}
+  if (!is.na(S0)) {S0 <- S0 / tempsd^2}
+  has_numeric_censor <- length(censored_value) == 1L &&
+    !is.na(censored_value) &&
+    is.numeric(censored_value)
 
-  if(is.numeric(censored_value)){
+  if(has_numeric_censor){
     censored_value <- (censored_value - tempmean)/tempsd
   }
-
-
+  if ( anyNA(w.train)|| anyNA(w.test) ) {
+    stop("Missing covariate values in w.train or w.test.")
+  }
+  if(draw_censored_predictions){
+    if (anyNA(x.train)  || anyNA(x.test) ) {
+      stop("There are missing covariate values in x.train or x.test. This is not allowed with draw_censored_predictions == TRUE. If draw_censored_predictions == FALSE, Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.")
+    }
+  }else{
+    if (anyNA(x.train[uncens_inds,])  || anyNA(x.test) ) {
+      stop("There are missing covariate values in uncensored x.train or any of x.test. Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.")
+    }
+  }
 
   ecdfs   <- list()
   for(i in 1:ncol(x.train)) {
@@ -325,9 +363,7 @@ tbart2np <- function(x.train,
     x.train[,i] <- ecdfs[[i]](x.train[,i])
     x.test[,i] <- ecdfs[[i]](x.test[,i])
   }
-
   rm(ecdfs)
-
   ecdfs   <- list()
   for(i in 1:ncol(w.train)) {
     ecdfs[[i]] <- ecdf(w.train[,i])
@@ -338,77 +374,55 @@ tbart2np <- function(x.train,
     w.train[,i] <- ecdfs[[i]](w.train[,i])
     w.test[,i] <- ecdfs[[i]](w.test[,i])
   }
-
   rm(ecdfs)
 
-
+  xdf_y_all <- data.frame(x = x.train)
   #create z vector
-
 
   #create ystar vector
   ystar <- rep(mean(y[uncens_inds]), length(y))
   ystar[uncens_inds] <- y[uncens_inds]
-
-
   n <- length(y)
   n0 <- length(cens_inds)
   n1 <- length(uncens_inds)
-
   ntest = nrow(x.test)
-
-
   p_y <- ncol(x.train)
   p_z <- ncol(w.train)
 
   if(sparse){
     s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
     rho_y <- p_y # For DART
-
     if(alpha_split_prior){
       alpha_s_y <- p_y
     }else{
       alpha_s_y <- 1
     }
     alpha_scale_y <- p_y
-
-
     s_z <- rep(1 / p_z, p_z) # probability vector to be used during the growing process for DART feature weighting
     rho_z <- p_z # For DART
-
     if(alpha_split_prior){
       alpha_s_z <- p_z
     }else{
       alpha_s_z <- 1
     }
     alpha_scale_z <- p_z
-
   }
 
-
-
-
-
   offsetz <- 0 #qnorm(n1/n)
-
   z <- rep(offsetz, length(y))
 
   # z[cens_inds] <- qnorm(0.001) #rtruncnorm(n0, a= -Inf, b = 0, mean = offsetz, sd = 1)
-  #
   # z[uncens_inds] <- qnorm(0.999) #rtruncnorm(n1, a= 0, b = Inf, mean = offsetz, sd = 1)
 
   z[cens_inds] <- rtruncnorm(n0, a= -Inf, b = 0, mean = offsetz, sd = 1)
   z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = offsetz, sd = 1)
 
   # z <- rnorm(n = length(y), mean = offsetz, sd =1)
-
-
   # meanmu_z <- (min(z - offsetz) +max(z- offsetz))/(2*n.trees_censoring)
   # sigmu_z <- (max(z- offsetz) - min(z- offsetz))/(2*2*sqrt(n.trees_censoring))
   #set prior parameter values
 
-
   # if(is.null(S0)){
-  #
   #   #use uncensored observations
   #   if(is.na(sigest)) {
   #     if(ncol(x.train) < n1) {
@@ -419,13 +433,9 @@ tbart2np <- function(x.train,
   #       sigest = sd(y[uncens_inds])
   #     }
   #   }
-  #
   #   S0 <- 2*(sigest^2 -   (1/(8*(G0^2))) - 4*(gamma0^2)*G0   )
-  #
   #   # S0 <- 2*(sigest^2)# -   (1/(8*(G0^2))) - 4*(gamma0^2)*G0   )
-  #
   #   # S0 <- 0.002
-  #
   # }
 
   # #use uncensored observations
@@ -440,9 +450,7 @@ tbart2np <- function(x.train,
   # }
   #
   # if(is.null(nzero)){
-  #
   #   nzero <- 2*(sigest^2)
-  #
   # }
 
   #use uncensored observations
@@ -453,12 +461,9 @@ tbart2np <- function(x.train,
       # sigest = summary(lmf)$sigma
       if(is.na(censored_value)){
         dtemp <-  1*(!(is.na(y)))
-
       }else{
         dtemp <-  1*(y != censored_value)
-
       }
-
       df = data.frame(x = cbind(x.train,w.train)  , y = y, d = dtemp )
 
       # seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
@@ -470,90 +475,150 @@ tbart2np <- function(x.train,
       # seleq <- paste0("d ~ " , paste(paste("x",(ncol(x.train)+1):(ncol(x.train) + ncol(w.train)),sep = "."),collapse = " + "))
       # outeq <- paste0("y ~ " , paste(paste("x",1:ncol(x.train),sep = "."),collapse = " + "))
 
-      seleq <- paste0("d ~ " , paste(colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))],
-                                     collapse = " + "))
-      outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)],
-                                     collapse = " + "))
+      seleq <- paste0("d ~ " , paste(colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))], collapse = " + "))
+      outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)], collapse = " + "))
 
-      heckit.ml <- heckit(selection = as.formula(seleq),
-                             outcome = as.formula(outeq),
-                             data = df,
-                             method = "ml")
+      # heckit.ml <- heckit(selection = as.formula(seleq), outcome = as.formula(outeq), data = df, method = "ml")
 
-
-      # heckit.ml$estimate["rho"]
-
-      correst <- heckit.ml$estimate["rho"]
-      sigest <- heckit.ml$estimate["sigma"]
-
+      fit_ok <- FALSE
+      if (is.na(sigest) && ncol(x.train) < n1) {
+        heckit.ml <- tryCatch(
+          sampleSelection::heckit(
+            selection = as.formula(seleq),
+            outcome   = as.formula(outeq),
+            data = df,
+            method = "ml"
+          ),
+          error = function(e) NULL
+        )
+        if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+          rho_hat <- heckit.ml$estimate["rho"]
+          sigma_hat <- heckit.ml$estimate["sigma"]
+          if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+            zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+            if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+              correst <- max(min(rho_hat, 0.99), -0.99)
+              sigest <- sigma_hat
+              gamma0 <- correst * sigest
+              zhat_heckman <- zhat_candidate
+              fit_ok <- TRUE
+            }
+          }
+        }
+      }
+      if (!fit_ok) {
+        sigest <- sd(y[uncens_inds])
+        correst <- 0
+        gamma0 <- 0
+        zhat_heckman <- rep(0, nrow(df))
+      }
+      # correst <- heckit.ml$estimate["rho"]
+      # sigest <- heckit.ml$estimate["sigma"]
       # correst <- heckit.2step$coefficients["rho"]
       # sigest <- heckit.2step$coefficients["sigma"]
-
-      # print("heckit.2step$coefficients = ")
-      # print(heckit.2step$coefficients)
-      # print("heckit.2step$lm$coefficients = ")
-      # print(heckit.2step$lm$coefficients)
-      # print("correst = ")
-      # print(correst)
-      # print("correst = ")
-      # print(correst)
-      # print("correst = ")
-      # print(correst)
       gamma0 <- correst*sigest
-
     } else {
       sigest = sd(y[uncens_inds])
       correst <- 0
       gamma0 <- 0
+      zhat_heckman <- rep(0, nrow(w.train))
     }
   }else{
     correst <- 0
     gamma0 <- 0
+    zhat_heckman <- rep(0, nrow(w.train))
   }
 
+  # set prior mean for gamma
+  if (cov_prior == "Ding") {
+    if (!is.na(gamma0_prior) && gamma0_prior != 0) {
+      print("Ding prior selected, therefore setting gamma0 prior mean to 0 instead of user-specified gamma0_prior.")
+    }
+    gamma0 <- 0
+  }else{if(!is.na(gamma0_prior)) {gamma0 <- gamma0_prior}}
 
   # set the prior based on sigest
-
-  #
   # M_mat = 10*matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
-
-  M_mat = ((sigest^2))*diag(2)#matrix(c(1, 0,0, 1),nrow = 2, ncol = 2, byrow = TRUE)
-
-  # print("((sigest^2))*diag(2) = ")
-  # print(((sigest^2))*diag(2))
-
+  if (is.null(M_mat)) {
+    M_mat <- matrix(c(1, 0,0, sigest^2),nrow = 2, ncol = 2, byrow = TRUE) # sigest^2 * diag(2)
+  }else{
+    scale_mat <- diag(c(1, tempsd))
+    M_mat <- solve(scale_mat) %*% M_mat %*% solve(scale_mat)
+  }
+  if (!is.matrix(M_mat) || !identical(dim(M_mat), c(2L, 2L)) || any(!is.finite(M_mat)) || !isSymmetric(M_mat)) {stop( "M_mat must be a finite symmetric 2 by 2 matrix.") }
+  M_eigen <- eigen(M_mat,symmetric = TRUE,only.values = TRUE)$values
+  if (any(M_eigen <= 0)) {stop("M_mat must be positive definite.")}
   M_inv <- solve(M_mat)
 
-  S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+  # S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
   # S0 <- 0.5*(sigest^2 - gamma0^2)*(nzero-2)/(2+tau)
-
+  if(!is.na(S0)){
+    # keep S0 as user-specified value
+    G0 <- S0/SGratio
+  }else{
+    if(cov_prior == "Omori"){
+      # S0 <- (sigest^2)/( 1/(nzero-2) +  (1 + gamma0^2)/SGratio)
+      if(sigest^2 > gamma0^2){
+        S0 <- (sigest^2 - gamma0^2)/( 1/(nzero-2) +  1/SGratio)
+      }else{
+        S0 <- (sigest^2)/( 1/(nzero-2) +  1/SGratio)
+      }
+      G0 <- S0/SGratio
+      # # alternative based on moment matching with van Hasselt prior
+      # S0 <- (sigest^2 - gamma0^2)*(nzero-2)/(1+tau)
+      # G0 <-  tau*(sigest^2 - gamma0^2)/(1+tau) # (  (sigest^2 - gamma0^2)*tau/(1+tau) + gamma0^2) /(1 + gamma0^2)
+    }else{
+      if(cov_prior == "VH"){
+        # S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+        if(sigest^2 > gamma0^2){
+          S0 <- (sigest^2 - gamma0^2)*(nzero-2)/(1+tau)
+        }else{
+          S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+        }
+        # relying on user-specified tau.
+        # alternative would be estimated tau, either from moment matching with Omori prior given SGratio
+        # tau <- ((S0/SGratio)*(1+gamma0)-gamma0^2)*(nzero-2)/S0
+        # or from linear Heckman model estimates
+        # if(exists("heckit.ml")){
+        #   if(heckit.ml$method == "ml"){
+        #     # delta method to obtain estiamted variance of gamma hat
+        #     vargammahat <- model1$estimate["rho"]*model1$hessian["sigma", "sigma"] +
+        #       model1$hessian["rho", "rho"]*model1$estimate["sigma"]^2 +
+        #       2*model1$estimate["rho"]*model1$estimate["sigma"]*model1$hessian["rho", "sigma"]
+        #     tau <- vargammahat/(model1$hessian["sigma", "sigma"] - vargammahat - gamma0)
+        #   }else{
+        #     tau <- ((S0/SGratio)*(1+gamma0)-gamma0^2)*(nzero-2)/S0
+        #   }
+        # }else{
+        #   tau <- ((S0/SGratio)*(1+gamma0)-gamma0^2)*(nzero-2)/S0
+        # }
+      }else{
+        S0 <- (sigest^2)*(1 - correst^2)*(nzero-2)/(1+tau)
+        G0 <- S0/SGratio
+      }
+    }
+  }
 
   if(cov_prior == "Ding"){
     gamma0 <- 0
-
-
     # sigquant <- 0.9
     qchi <- qchisq(1.0-quantsig,nu0-1)
     cdivnu <- (sigest*sigest*qchi)/(nu0-1) #lambda parameter for sigma prior
     cding <- cdivnu*(nu0-1)
-
     rhoinit <- 0
     siginit <- sigest
-
   }
 
-  if(cov_prior == "Omori"){
-    S0 <- (sigest^2 - G0*(1 + gamma0^2))*(nzero-2)
-  }
+  # if(cov_prior == "Omori"){
+  #   S0 <- (sigest^2 - G0*(1 + gamma0^2))*(nzero-2)
+  # }
 
   #set initial sigma
-
   #alternatively, draw this from the prior
   Sigma_mat <- cbind(c(1,0),c(0,sigest^2))
 
   #set initial gamma
   #gamma1 <- 0 # cov(ystar,z)
-
   # gamma1_vec_train <- rep(0,n)
   # gamma1_vec_test <- rep(0,ntest)
   gamma1_vec_train <- rep(gamma0,n)
@@ -571,92 +636,57 @@ tbart2np <- function(x.train,
   phi1_vec_train <- rep(phi1, n)
   logphi1_vec_train <- rep(log(phi1), n)
   phi1_vec_test <- rep(phi1, ntest)
-
   var1_vec_train <- rep(phi1+ gamma0^2, n)
-
   mu1_vec_train <- rep(0,n)
   mu1_vec_test <- rep(0,ntest)
-
   mu2_vec_train <- rep(0,n)
   mu2_vec_test <- rep(0,ntest)
-
   varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
   varthetamat_test <- cbind(mu1_vec_test, mu2_vec_test, phi1_vec_test, gamma1_vec_test)
 
   #########  Initialize mixture vartheta values ######################################################
 
   varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
-
   # essentially assuming predictions all equal to zero initially
-
   u_z <- z - offsetz #- mutemp_z
-
   u_y <- ystar[uncens_inds] #- mutemp_y[uncens_inds]
-
   if(init.many.clust == TRUE){
     uncens_count <- 0
-
     for(i in 1:n){
-
       if(i %in% cens_inds){
         #censored observation
-
         if(cov_prior == "Ding"){
-          tempsigma <- rinvwishart(nu = nu0,
-                                   S = cding*diag(2))
-
+          tempsigma <- rinvwishart(nu = nu0, S = cding*diag(2))
           # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
           # tempomega <- (transmat %*% tempsigma) %*% transmat
-
           offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
           tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
-
           temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
-
           # gamma1 <- tempomega[1,2]
           # phi1 <- tempomega[1,1] - (gamma1^2)
-
           gamma1_vec_train[i] <- tempomega[1,2]
           phi1_vec_train[i] <- tempomega[1,1] - (gamma1_vec_train[i]^2)
-
         }else{
-
           phi1_vec_train[i] <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
-
           phitilde <- phi1_vec_train[i]
-
-          gamma1_vec_train[i] <- rnorm(1,
-                                       mean = gamma0,
-                                       sd = sqrt(tau*phitilde))
+          gamma1_vec_train[i] <- rnorm(1, mean = gamma0, sd = sqrt(tau*phitilde))
         }
-
-
         mutilde <- c(NA,NA)
-
-        mu1_vec_train[i] <- rnorm(n = 1,
-                                  mean = u_z[i]/( (1/M_mat[1,1]) + 1  ),
-                                  sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
-
+        mu1_vec_train[i] <- rnorm(n = 1, mean = u_z[i]/( (1/M_mat[1,1]) + 1  ), sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
         mutilde[1] <- mu1_vec_train[i]
         if(mu1_tozero == TRUE){
           mutilde[1] <- 0
+          mu1_vec_train[i] <- 0
         }
-        mu2_vec_train[i] <- rnorm(n = 1,
-                                  mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
-                                  sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
-
+        mu2_vec_train[i] <- rnorm(n = 1, mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1], sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
         mutilde[2] <- mu2_vec_train[i]
-
-
       }else{
         # uncensored observation, must use Gibbs sampler to obtain initial value
         # Maybe it would be more efficient to just sample from the prior?
 
         #increase count of uncensored observation index
         uncens_count <- uncens_count + 1
-
         num_sample <- 1
-
         # initialize (could even use draws from prior to initialize this)
         mutilde <- c(mu1_vec_train[i],mu2_vec_train[i])
         if(mu1_tozero == TRUE){
@@ -669,174 +699,97 @@ tbart2np <- function(x.train,
         for(samp_ind in 1:num_sample){
           # print("samp_ind = ")
           # print(samp_ind)
-
-          Sigma_mat_temp_j <- cbind(c(1,
-                                      gammatilde),
-                                    c(gammatilde,
-                                      phitilde+gammatilde^2))
-
-          # print("Sigma_mat_temp_j = ")
-          # print(Sigma_mat_temp_j)
-
+          Sigma_mat_temp_j <- cbind(c(1, gammatilde), c(gammatilde, phitilde+gammatilde^2))
           tempsigmainv <- solve(Sigma_mat_temp_j, tol = NULL)
           tempsigmamat <- solve(M_inv + tempsigmainv, tol = NULL )
-
-          mutilde <- Rfast::rmvnorm(n = 1,
-                             mu = (tempsigmamat%*%tempsigmainv) %*%
-                               c((u_z[i]),(u_y[uncens_count])),
-                             sigma = tempsigmamat )
+          mutilde <- Rfast::rmvnorm(n = 1, mu = (tempsigmamat%*%tempsigmainv) %*% c((u_z[i]),(u_y[uncens_count])), sigma = tempsigmamat )
 
           if(mu1_tozero == TRUE){
             mutilde[1] <- 0
           }
 
           if(cov_prior == "Ding"){
-
             rhotilde <- gammatilde/sqrt(phitilde + gammatilde^2)
-
-
-            # print( "nu0 = " )
-            # print(nu0)
-            #
-            # print( "cding = " )
-            # print(cding)
-            #
-            # print( "rhotilde = " )
-            # print(rhotilde)
-
-
-            sigz2 <- 1/rgamma(n = 1,
-                              shape = nu0/2,
-                              rate = cding/(2*(1- (rhotilde^2))))
-
-
+            sigz2 <- 1/rgamma(n = 1, shape = nu0/2, rate = cding/(2*(1- (rhotilde^2))))
             u_z2 <- sqrt(sigz2)*(u_z[i] - mutilde[1])
             u_y2 <- u_y[uncens_count] - mutilde[2]#- mutemp_y[uncens_inds]
-
             zsquares <- crossprod(u_z2, u_z2)[1]
             ysquares <- crossprod(u_y2, u_y2)[1]
             zycross <- crossprod(u_z2, u_y2)[1]
-
-            Stemp <- cbind(c(ysquares,zycross),
-                           c(zycross, zsquares))
-
-            tempsigma <- rinvwishart(nu = 1 + nu0,
-                                     S = Stemp+cding*diag(2))
+            Stemp <- cbind(c(ysquares,zycross), c(zycross, zsquares))
+            tempsigma <- rinvwishart(nu = 1 + nu0, S = Stemp+cding*diag(2))
 
             # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
             # tempomega <- (transmat %*% tempsigma) %*% transmat
-
             offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
             tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
-
             temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
-
             gammatilde <- tempomega[1,2]
             phitilde <- tempomega[1,1] - (gammatilde^2)
 
           }else{ # if VH prior, use VH full conditional
-
-            dbar_temp <- (S0/2) + ((gammatilde-gamma0)^2/tau) +
+            dbar_temp <- (S0/2) + ((gammatilde-gamma0)^2/(2*tau)) +
               (1/2)*( (u_y[uncens_count] - mutilde[2] - gammatilde*(u_z[i] - mutilde[1]) )^2 )
-
             phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  1, rate = dbar_temp)
-
-            gammabar_temp <- ( (u_z[i] - mutilde[1])*(u_y[uncens_count] - mutilde[2]) ) /
-              ((1/tau) + ( (u_z[i] - mutilde[1])^2 ) )
-
-
-            gammatilde <- rnorm(1,
-                                mean = gammabar_temp,
-                                sd = sqrt( phitilde / ((1/tau) + ( (u_z[i] - mutilde[1])^2 ) )   ))
+            gammabar_temp <- (gamma0 / tau + (u_z[i] - mutilde[1])*(u_y[uncens_count] - mutilde[2]) ) / ((1/tau) + ( (u_z[i] - mutilde[1])^2 ) )
+            gammatilde <- rnorm(1, mean = gammabar_temp, sd = sqrt( phitilde / ((1/tau) + ( (u_z[i] - mutilde[1])^2 ) )   ))
 
           }
-
         } # end of Gibbs sampler loop
-
         mu1_vec_train[i] <- mutilde[1]
         mu2_vec_train[i] <- mutilde[2]
-
         phi1_vec_train[i] <- phitilde
         gamma1_vec_train[i] <- gammatilde
-
       } # end else statement for uncensrored observations
-
     } # end loop over i
     logphi1_vec_train <- log(phi1_vec_train)
     var1_vec_train <- phi1_vec_train + gamma1_vec_train^2
 
   }else{ #just one cluster for initial values
         # for both selected and unselected observations?
-
     # phi1_vec_train <- phi1 #sigest #  1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
     phi1_vec_train <- rep(phi1, n)
     logphi1_vec_train <- rep(log(phi1), n)
-
     phitilde <- phi1_vec_train[1]
-
     # gamma1_vec_train <- gamma0 # rnorm(1, mean = gamma0, sd = sqrt(tau*phitilde))
     gamma1_vec_train <- rep(gamma0,n)
-
     var1_vec_train <- rep(phi1 + gamma0^2,n)
-
     # mutilde <- c(NA,NA)
-    #
-    # mu1_vec_train[i] <- rnorm(n = 1,
-    #                           mean = u_z[i]/( (1/M_mat[1,1]) + 1  ),
-    #                           sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
-    #
+    # mu1_vec_train[i] <- rnorm(n = 1, mean = u_z[i]/( (1/M_mat[1,1]) + 1  ), sd = sqrt(1/( (1/M_mat[1,1]) + 1  )) )
     # mutilde[1] <- mu1_vec_train[i]
-    # mu2_vec_train[i] <- rnorm(n = 1,
-    #                           mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
-    #                           sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
-    #
+    # mu2_vec_train[i] <- rnorm(n = 1, mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1], sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
     # mutilde[2] <- mu2_vec_train[i]
 
     mutilde <- c(0,0)
-
     # mu1_vec_train[i] <- 0
-    #
     # mu2_vec_train[i] <- 0
-
     mu1_vec_train <- rep(0,n)
     mu2_vec_train <- rep(0,n)
-
-
-
     # mutilde[2] <- 0
-
   }
 
-
   varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
-
-
-
   #intiailize alpha
-
   #can take a draw form the prior, or set equal to mode
-
-  alpha <- rgamma(n = 1, shape = c1, rate = c2)
-
+  # alpha <- rgamma(n = 1, shape = c1, rate = c2)
   alpha <- c1/c2
-
 
   draw = list(
     # Z.mat_train = array(NA, dim = c(n, n.iter)),
     # Z.mat_test = array(NA, dim = c(ntest, n.iter)),
     # Y.mat_train = array(NA, dim = c(n, n.iter)),
     # Y.mat_test = array(NA, dim = c(ntest, n.iter)),
-    mu_y_train = array(NA, dim = c(n1, n.iter)),# array(NA, dim = c(n, n.iter)),
+    mu_y_train = array(NA, dim = c(n, n.iter)),# array(NA, dim = c(n, n.iter)),
     mu_y_test = array(NA, dim = c(ntest, n.iter)),
-    mu_y_train_noerror = array(NA, dim = c(n1, n.iter)),# array(NA, dim = c(n, n.iter)),
+    mu_y_train_noerror = array(NA, dim = c(n, n.iter)),# array(NA, dim = c(n, n.iter)),
     mu_y_test_noerror = array(NA, dim = c(ntest, n.iter)),
     # mucens_y_train = array(NA, dim = c(n0, n.iter)),
     muuncens_y_train = array(NA, dim = c(n1, n.iter)),
     mu_z_train = array(NA, dim = c(n, n.iter)),
     mu_z_test = array(NA, dim = c(ntest, n.iter)),
-    train.probcens =  array(NA, dim = c(n1, n.iter)),#array(NA, dim = c(n, n.iter)),#,
+    train.probcens =  array(NA, dim = c(n, n.iter)),#array(NA, dim = c(n, n.iter)),#,
     test.probcens =  array(NA, dim = c(ntest, n.iter)),#,
-    cond_exp_train = array(NA, dim = c(n1, n.iter)),#cond_exp_train = array(NA, dim = c(n, n.iter)),
+    cond_exp_train_uncens = array(NA, dim = c(n1, n.iter)),#cond_exp_train = array(NA, dim = c(n, n.iter)),
     cond_exp_test = array(NA, dim = c(ntest, n.iter)),
     ystar_train = array(NA, dim = c(n, n.iter)),
     ystar_test = array(NA, dim = c(ntest, n.iter)),
@@ -844,14 +797,26 @@ tbart2np <- function(x.train,
     zstar_test = array(NA, dim = c(ntest, n.iter)),
     ycond_draws_train = list(),
     ycond_draws_test = list(),
+    ycond_test_matrix =  array(NA, dim = c(ntest, n.iter)),
     vartheta_draws = array(NA, dim = c(n, 4, n.iter)),
     vartheta_test_draws = array(NA, dim = c(ntest, 4, n.iter)),
     alpha = rep(NA,n.iter)
     # Sigma_draws = array(NA, dim = c(2, 2, n.iter))
   )
 
-  if(is.numeric(censored_value)){
-    draw$uncond_exp_train <- array(NA, dim = c(n1, n.iter)) #array(NA, dim = c(n, n.iter))
+  # if(is.numeric(censored_value)){
+  #   draw$uncond_exp_train <- array(NA, dim = c(n1, n.iter)) #array(NA, dim = c(n, n.iter))
+  if(draw_censored_predictions){
+    draw$ystar_train = array(NA, dim = c(n, n.iter))
+    draw$mu_y_train = array(NA, dim = c(n, n.iter))# array(NA, dim = c(n, n.iter)),
+    draw$cond_exp_train = array(NA, dim = c(n, n.iter))#cond_exp_train = array(NA, dim = c(n, n.iter)),
+  }
+
+  if(has_numeric_censor){
+    if(draw_censored_predictions){
+      draw$uncond_exp_train <- array(NA, dim = c(n, n.iter)) #array(NA, dim = c(n, n.iter))
+    }
+    draw$uncond_exp_train_uncens <- array(NA, dim = c(n1, n.iter)) #array(NA, dim = c(n, n.iter))
     draw$uncond_exp_test <- array(NA, dim = c(ntest, n.iter))
     # draw$ydraws_train <- array(NA, dim = c(n, n.iter))
     draw$ydraws_test <- array(NA, dim = c(ntest, n.iter))
@@ -862,84 +827,97 @@ tbart2np <- function(x.train,
   draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
   draw$var_count_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
   if(sparse){
-
     draw$alpha_s_y_store <- rep(NA, n.iter)
     draw$alpha_s_z_store <- rep(NA, n.iter)
-
     draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = n.iter)
     draw$s_prob_z_store <- matrix(0, ncol = p_z, nrow = n.iter)
-
   }
 
-
   if(selection_test == 1){
-
     #error draws
     # save in array
     #first slice is selection equation error
     #second slice is outcome equation error
     draw$error_draws <- array(NA, dim = c(n, n.iter,2))
     draw$error_draws_test <- array(NA, dim = c(n.iter,2))
-
     # draw correlations and other dependence measures
     # just one value per iteration, so it is a vector
     draw$pearsoncorr_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
     # draw$kendalltau_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
     # draw$spearmanrho_draws <- array(NA, dim = c(n.iter)) #array(NA, dim = c(n, n.iter))
-
-
   }
 
-
-
   ########## Initialize dbarts #####################
+  rngSeed_z <- rngSeed
+  rngSeed_y <- if (is.na(rngSeed)) NA_integer_ else as.integer(rngSeed + 104729L)
 
   control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
                              n.trees = n.trees_censoring,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
+                             n.burn = 0L, # n.burn,
+                             n.samples = 1L, # n.samples,
+                             n.thin = 1L, # n.thin,
+                             n.chains = 1L, # n.chains,
+                             n.threads = 1L, # n.threads,
+                             printEvery = print.opt, # printEvery,
+                             printCutoffs = 0L, # printCutoffs,
                              rngKind = rngKind,
                              rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
+                             rngSeed = rngSeed_z)
 
   control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
                              n.trees = n.trees_outcome,
-                             n.burn = n.burn,
-                             n.samples = n.samples,
-                             n.thin = n.thin,
-                             n.chains = n.chains,
-                             n.threads = n.threads,
-                             printEvery = printEvery,
-                             printCutoffs = printCutoffs,
+                             n.burn = 0L, # n.burn,
+                             n.samples = 1L, # n.samples,
+                             n.thin = 1L, # n.thin,
+                             n.chains = 1L, # n.chains,
+                             n.threads = 1L, # n.threads,
+                             printEvery = print.opt, # printEvery,
+                             printCutoffs = 0L, # printCutoffs,
                              rngKind = rngKind,
                              rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
-  # print(colnames(Xmat.train))
+                             rngSeed = rngSeed_y)
 
   # print("begin dbarts")
-
-
   # not clear how to set this in initial step
   # maybe should actually sample vartheta first?
 
-  weightstemp <- rep(1,n)
-
-  weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
-
+  weightstemp_z <- rep(1,n)
+  weightstemp_z[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
   weightstemp_y  <- 1/phi1_vec_train[uncens_inds]
+
+  yinit_vec <- ystar[uncens_inds]
+  if(yinit_resid == TRUE){
+    yinit_vec <- ystar[uncens_inds] - gamma0*(z[uncens_inds] - offsetz - zhat_heckman[uncens_inds])
+    # node.prior_y = dbarts:::normal
+  }
+  y_reference <- yinit_vec
+
+  Z_initial <-  z - offsetz
+  reference_half_range <- 3.0
+  # Z_reference <- z - offsetz
+  if(fixed_resp_update){
+    Z_reference <- ifelse(Z_initial== max(Z_initial), reference_half_range,
+                          ifelse(Z_initial==min(Z_initial), -reference_half_range,
+                                 -reference_half_range +
+                                   (Z_initial- min(Z_initial))*(2*reference_half_range)/(max(Z_initial)-min(Z_initial)) ) )
+
+    # mid-point of range of Z_reference defined above is 0 by construction
+    # but want it to be equal to mid-point of z - offsetz to avoid impacting the prior mean?
+    Z_reference <- Z_reference + (max(Z_initial) + min(Z_initial))/2
+
+    probit_k <- 2.0
+    # k_sig_mu <- probit_k # reference_half_range*probit_k/3.0
+    k_sig_mu <- reference_half_range*probit_k/3.0
+  }else{
+    Z_reference <- z - offsetz
+  }
 
 
   if(nrow(x.test )==0){
-
-
-    xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
+    # xdf_y <- data.frame(y =yinit_vec, x = x.train[uncens_inds,])
+    xdf_y <- data.frame(y = y_reference, x = x.train[uncens_inds,])
     sampler_y <- dbarts(y ~ .,
                         data = xdf_y,
                         #test = x.test,
@@ -947,28 +925,29 @@ tbart2np <- function(x.train,
                         control = control_y,
                         tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
+                        sigma = 1 #sigmadbarts
     )
 
-    xdf_z <- data.frame(y = z - offsetz, x = w.train)
+    # xdf_z <- data.frame(y = z - offsetz, x = w.train)
+    xdf_z <- data.frame(y = Z_reference, x = w.train)
 
     sampler_z <- dbarts(y ~ .,
                         data = xdf_z,
                         #test = x.test,
-                        weights = weightstemp,
+                        weights = weightstemp_z,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = 1#sigmadbarts
+                        sigma = 1 #sigmadbarts
     )
 
   }else{
-
-    xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
+    # xdf_y <- data.frame(y = yinit_vec, x = x.train[uncens_inds,])
+    xdf_y <- data.frame(y = y_reference, x = x.train[uncens_inds,])
     xdf_y_test <- data.frame(x = x.test)
 
     sampler_y <- dbarts(y ~ .,
@@ -978,19 +957,13 @@ tbart2np <- function(x.train,
                         control = control_y,
                         tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = sigmadbarts
+                        sigma = 1 # sigmadbarts
     )
 
-
-    # print("length(z - offsetz) = ")
-    # print(length(z - offsetz))
-    #
-    # print("length(weightstemp) = ")
-    # print(length(weightstemp))
-
-    xdf_z <- data.frame(y = z - offsetz, x = w.train)
+    # xdf_z <- data.frame(y = z - offsetz, x = w.train)
+    xdf_z <- data.frame(y = Z_reference, x = w.train)
     xdf_z_test <- data.frame(x = w.test)
 
     sampler_z <- dbarts(y ~ .,
@@ -1000,40 +973,38 @@ tbart2np <- function(x.train,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
                         node.prior = node.prior,
-                        resid.prior = resid.prior,
+                        resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = 1#sigmadbarts
+                        sigma = 1 # sigmadbarts
     )
-
   }
-
 
   preds.train_ystar <- matrix(NA, n, 1)
   preds.train_z <- matrix(NA, n, 1)
-
   preds.test_ystar <- matrix(NA, ntest, 1)
   preds.test_z <- matrix(NA, ntest, 1)
 
-
   #initialize sum-of-tree sampler
-
-
   z_resids <- z - offsetz - mu1_vec_train #z_epsilon
   z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
     (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - 0)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
 
   #set the response for draws of z trees
-  sampler_z$setResponse(y = z_resids)
+  if(fixed_resp_update){
+    computational_offset <- Z_reference - z_resids
+    # dbarts_offset <- computational_offset + offsetz_vec # genuine_offset_vec
+    sampler_z$setOffset(offset = computational_offset, updateScale = FALSE)
+  }else{
+    sampler_z$setResponse(y = z_resids)
+  }
   #set the standard deivation
   sampler_z$setSigma(sigma = 1)
 
   # weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
-
-  # print("weightstemp = ")
-  # print(weightstemp)
+  weightstemp_z[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
 
   # sampler_z$setSigma(sigma = 1)
-  sampler_z$setWeights(weights = weightstemp)
+  sampler_z$setWeights(weights = weightstemp_z)
 
 
   if(sparse){
@@ -1043,9 +1014,7 @@ tbart2np <- function(x.train,
   }
 
   # sampler_z$sampleTreesFromPrior()
-
   # priormean_z <- sampler_z$predict(xdf_z)[1,]
-
   # sampler_z$sampleNodeParametersFromPrior()
 
   samplestemp_z <- sampler_z$run()
@@ -1053,8 +1022,11 @@ tbart2np <- function(x.train,
   # mutemp_z <- rep(0,n) # samplestemp_z$train[,1]
   # mutemp_test_z <- rep(0,ntest) #samplestemp_z$test[,1]
 
-  mutemp_z <- samplestemp_z$train[,1]
-  mutemp_test_z <- samplestemp_z$test[,1]
+  # mutemp_z <- samplestemp_z$train[,1]
+  # mutemp_test_z <- samplestemp_z$test[,1]
+
+  mutemp_z <- as.numeric(sampler_z$predict(xdf_z)[, 1] )
+  mutemp_test_z <- as.numeric(sampler_z$predict(xdf_z_test)[, 1])
 
   # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
   # if(sparse){
@@ -1064,36 +1036,19 @@ tbart2np <- function(x.train,
     var_count_z[tempcounts$x] <- tempcounts$N
   # }
 
-
-
-  # print("length(mutemp_test_z) = ")
-  # print(length(mutemp_test_z))
-  #
-  # print("mutemp_test_z[1000:1010] = ")
-  # print(mutemp_test_z[1000:1010])
-  #
-  # print("mutemp_test_z[1:10] = ")
-  # print(mutemp_test_z[1:10])
-  #
-  # print("nrow(xdf_z_test) = ")
-  # print(nrow(xdf_z_test))
-
-  # print("weightstemp_y = ")
-  # print(weightstemp_y)
-
-
-
   y_resids <- ystar[uncens_inds] - mu2_vec_train[uncens_inds] -
     gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds]- mutemp_z[uncens_inds])
   # sd_ydraw <- sqrt(phi1_vec_train[uncens_inds])
 
 
-  # print("y_resids = ")
-  #
-  # print(y_resids)
-
   #set the response for draws of z trees
-  sampler_y$setResponse(y = y_resids)
+  if(fixed_resp_update){
+    computational_offset_y <- y_reference - y_resids
+    # dbarts_offset <- computational_offset + offsetz_vec # genuine_offset_vec
+    sampler_y$setOffset(offset = computational_offset_y, updateScale = FALSE)
+  }else{
+    sampler_y$setResponse(y = y_resids)
+  }
   sampler_y$setSigma(sigma = 1)
 
   # sampler_y$setSigma(sigma = sigest)
@@ -1105,11 +1060,8 @@ tbart2np <- function(x.train,
     sampler_y$setModel(newModel = tempmodel)
   }
 
-
   # sampler_y$sampleTreesFromPrior()
-
   # priormean_y <- sampler_y$predict(xdf_y)[1,]
-
   # sampler_y$sampleNodeParametersFromPrior()
 
   samplestemp_y <- sampler_y$run()
@@ -1117,8 +1069,14 @@ tbart2np <- function(x.train,
   # mutemp_y <- rep(mean(y),n) #samplestemp_y$train[,1]
   # mutemp_test_y <- rep(mean(y),ntest) # samplestemp_y$test[,1]
 
-  mutemp_y <- samplestemp_y$train[,1]
-  mutemp_test_y <- samplestemp_y$test[,1]
+  # mutemp_y <- samplestemp_y$train[,1]
+  # mutemp_test_y <- samplestemp_y$test[,1]
+  mutemp_y <- as.numeric(sampler_y$predict(xdf_y)[, 1])
+  mutemp_test_y <- as.numeric( sampler_y$predict(xdf_y_test)[, 1])
+
+  if(draw_censored_predictions){
+    mutemp_y_all <- as.numeric(sampler_y$predict(xdf_y_all)[, 1])
+  }
 
   # if(sparse){
     tempcounts <- fcount(sampler_y$getTrees()$var)
@@ -1135,30 +1093,22 @@ tbart2np <- function(x.train,
   #   print(sigest)
   #   print("dbarts sigma estimate =")
   #   print(samplestemp_y$sigma)
-  #
   #   df = data.frame(x.train,y)
   #   lmf = lm(y~.,df)
   #   sigest2 = summary(lmf)$sigma
-  #
   #   print("sigest2 = ")
   #   print(sigest2)
-  #
   #   # stop("sigest != samplestemp_y$sigma")
-  #
   # }
 
   # sigest <-  samplestemp_y$sigma
   # S0 <- 2*(sigest^2 -   (1/(8*(G0^2))) - 4*(gamma0^2)*G0   )
 
 
-
-
   #COMMENTING OUT INITIALIZATION FOR FIRST ITERATION
   #MIGHT NEED TO EDIT THIS
-
   # sampler$setResponse(y = z)
   # sampler$setSigma(sigma = 1)
-
   #sampler$setPredictor(x= Xmat.train$x, column = 1, forceUpdate = TRUE)
 
   #mu = as.vector( alpha + X.mat %*% beta )
@@ -1171,15 +1121,11 @@ tbart2np <- function(x.train,
 
   # print("sigma = ")
   # sigma <- samplestemp$sigma
-  #
   # mu <- samplestemp$train[,1]
   # mutest <- samplestemp$test[,1]
-  #
   # ystar <- rnorm(n,mean = mu, sd = sigma)
   # ystartest <- rnorm(ntest,mean = mutest, sd = sigma)
-  #
   # ystartestcens <-rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
-  #
   # probcensbelow <- pnorm(below_cens, mean = mutest, sd = sigma)
   # probcensabove <- 1 - pnorm(above_cens, mean = mutest, sd = sigma)
 
@@ -1210,159 +1156,101 @@ tbart2np <- function(x.train,
   #   draw$sigma[1] <- sigma
   # }
 
-
   if(any(phi1_vec_train <= 0)){
     stop("Line 801. some phi1_vec_train values <= 0")
   }
 
   #########  Begin Gibbs sampler ######################################################
 
-
   #loop through the Gibbs sampler iterations
   for(iter in 1:(n.iter+n.burnin)){
-
-
     # if( (iter %% 100) == 0){
     #   print("iteration number = ")
-    #
     #   print(iter)
     # }
-
-
     ###### sample Z #################
-
-
     temp_sd_z <- sqrt( phi1_vec_train/(phi1_vec_train+gamma1_vec_train^2)   )
 
     if(any(phi1_vec_train <= 0)){
-
       print("phi1_vec_train[phi1_vec_train <= 0] = ")
       print(phi1_vec_train[phi1_vec_train <= 0])
       stop("any(phi1_vec_train <= 0)")
     }else{
       # print("phi1_vec_train = ")
       # print(phi1_vec_train)
-      #
       # print("gamma1_vec_train = ")
       # print(gamma1_vec_train)
     }
 
     if(any(is.nan(temp_sd_z))){
-
       print("temp_sd_z = ")
       print(temp_sd_z)
       stop("temp_sd_z contains NaNs")
     }
 
-
-
     #draw the latent outcome
     # z[cens_inds] <- rtruncnorm(n0, a= below_cens, b = above_cens, mean = mu[cens_inds], sd = sigma)
     if(length(cens_inds)>0){
       # temp_sd_y <- sqrt(phi1 + gamma1^2)
-
-      # print("mutemp_y[cens_inds] = ")
-      # print(mutemp_y[cens_inds])
-      # print("temp_sd_y = ")
-      # print(temp_sd_y)
-      #
-      # print("cens_inds = ")
-      # print(cens_inds)
-
       # ystar[cens_inds] <- rnorm(n0,  mean = mutemp_y[cens_inds], sd = temp_sd_y)
 
       # temp_zmean_cens <- offsetz + mutemp_z[cens_inds] + (ystar[cens_inds]  - mutemp_y[cens_inds])*gamma1/(phi1 + gamma1^2)
       temp_zmean_cens <- offsetz + mutemp_z[cens_inds] + mu1_vec_train[cens_inds] #+ (ystar[cens_inds]  - mutemp_y[cens_inds])*gamma1/(phi1 + gamma1^2)
-
-
       z[cens_inds] <- rtruncnorm(n0, a= -Inf, b = 0, mean = temp_zmean_cens, sd = 1)
     }
 
     # temp_zmean_uncens <- offsetz + mutemp_z[uncens_inds] + (ystar[uncens_inds]  - mutemp_y[uncens_inds])*gamma1/(phi1 + gamma1^2)
-    temp_zmean_uncens <- offsetz + mutemp_z[uncens_inds] +
-      mu1_vec_train[uncens_inds] +
-      (ystar[uncens_inds]  - mutemp_y - mu2_vec_train[uncens_inds])*
-      gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
+    temp_zmean_uncens <- offsetz + mutemp_z[uncens_inds] + mu1_vec_train[uncens_inds] +
+      (ystar[uncens_inds]  - mutemp_y - mu2_vec_train[uncens_inds])* gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
 
-    z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = temp_zmean_uncens,
-                                 sd = temp_sd_z[uncens_inds])
-
-
+    z[uncens_inds] <- rtruncnorm(n1, a= 0, b = Inf, mean = temp_zmean_uncens, sd = temp_sd_z[uncens_inds])
 
     # z_epsilon <- z - offsetz - mutemp_z
     # y_epsilon <- ystar - mutemp_y
-
     z_epsilon <- z - offsetz - mutemp_z - mu1_vec_train
-
     # y_epsilon <- rep(0, n)
     # y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
-
-    # print("temp_sd_z = ")
-    # print(temp_sd_z)
-    #
-    # print("mutemp_z = ")
-    # print(mutemp_z)
-    #
-    # print("temp_zmean_cens = ")
-    # print(temp_zmean_cens)
-    #
-    # print("z = ")
-    # print(z)
-
 
     ####### draw sums of trees for z #######################################################
 
     #create residuals for z and set variance
-
     z_resids <- z - offsetz - mu1_vec_train #z_epsilon
     z_resids[uncens_inds] <- z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds] -
       (ystar[uncens_inds] - mu2_vec_train[uncens_inds] - mutemp_y)*gamma1_vec_train[uncens_inds]/(phi1_vec_train[uncens_inds] + gamma1_vec_train[uncens_inds]^2)
 
-    # print("z_resids = ")
-    # print(z_resids)
-
-    # print("length(z_resids) =")
-    # print(length(z_resids))
-    #
-    # print("length(mu1_vec_train) =")
-    # print(length(mu1_vec_train))
-    #
-    # print("length(z) =")
-    # print(length(z))
-
     #set the response for draws of z trees
-    sampler_z$setResponse(y = z_resids)
+    if(fixed_resp_update){
+      computational_offset <- Z_reference - z_resids
+      # dbarts_offset <- computational_offset + offsetz_vec # genuine_offset_vec
+      sampler_z$setOffset(offset = computational_offset, updateScale = FALSE)
+    }else{
+      sampler_z$setResponse(y = z_resids)
+    }
     #set the standard deivation
     sampler_z$setSigma(sigma = 1)
 
-    weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
-
-
-    if(any(is.nan(weightstemp))){
-
-      print("weightstemp = ")
-      print(weightstemp)
-      stop("weightstemp contains NaNs")
+    # weightstemp[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
+    weightstemp_z[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
+    if(any(is.nan(weightstemp_z))){
+      print("weightstemp_z = ")
+      print(weightstemp_z)
+      stop("weightstemp_z contains NaNs")
     }
-
-    # print("length(weightstemp) = ")
-    # print(length(weightstemp))
-
-    sampler_z$setWeights(weights = weightstemp)
-
+    sampler_z$setWeights(weights = weightstemp_z)
     if(sparse){
       tempmodel <- sampler_z$model
       tempmodel@tree.prior@splitProbabilities <- s_z
       sampler_z$setModel(newModel = tempmodel)
     }
-
     samplestemp_z <- sampler_z$run()
 
-    mutemp_z <- samplestemp_z$train[,1]
-    mutemp_test_z <- samplestemp_z$test[,1]
+    # mutemp_z <- samplestemp_z$train[,1]
+    # mutemp_test_z <- samplestemp_z$test[,1]
+
+    mutemp_z <- as.numeric(sampler_z$predict(xdf_z)[, 1] )
+    mutemp_test_z <- as.numeric(sampler_z$predict(xdf_z_test)[, 1])
+
     # mutemp_test_z <- sampler_z$predict(xdf_z_test)[,1]#samplestemp_z$test[,1]
-
-
     # if(sparse){
       tempcounts <- fcount(sampler_z$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
@@ -1370,93 +1258,61 @@ tbart2np <- function(x.train,
       var_count_z[tempcounts$x] <- tempcounts$N
     # }
 
-
-
     checkzpred <- sampler_z$predict(x.test = xdf_z)[,1]
-
     if(any(abs(mutemp_z - checkzpred) >0.0001)){
       print(" cbind(mutemp_z,  checkzpred)  ")
       print(cbind(mutemp_z,  checkzpred))
-
       print("which(abs(mutemp_z - checkzpred) >0.0001)) = ")
       print(which(abs(mutemp_z - checkzpred) >0.0001))
       stop("zpredictions not equal")
     }
 
-
-
     checkzpred <- sampler_z$predict(x.test = xdf_z_test)[,1]
-
     if(!all(mutemp_test_z == checkzpred)){
-      print(" cbind(mutemp_test_z,  checkzpred, weightstemp)  ")
-      print(cbind(mutemp_test_z,  checkzpred, weightstemp))
-
+      print(" cbind(mutemp_test_z,  checkzpred, weightstemp_z)  ")
+      print(cbind(mutemp_test_z,  checkzpred, weightstemp_z))
       print("which(mutemp_test_z != checkzpred) = ")
       print(which(mutemp_test_z != checkzpred))
       stop("zpredictions not equal")
     }
 
-
-
-    # print("length(mutemp_test_z) = ")
-    # print(length(mutemp_test_z))
-    #
-    # print("nrow(xdf_z_test) = ")
-    # print(nrow(xdf_z_test))
-
     #update z_epsilon
     z_epsilon <- z - offsetz - mutemp_z - mu1_vec_train
-
 
     ####### draw sums of trees for y #######################################################
 
     #create residuals for z and set variance
-
-    # print("y_epsilon = ")
-    #
-    # print(y_epsilon)
-    #
-    #
-    # print("z_epsilon = ")
-    #
-    # print(z_epsilon)
-    #
-    # print("gamma1 = ")
-    #
-    # print(gamma1)
-
-
-
     y_resids <- ystar[uncens_inds] - mu2_vec_train[uncens_inds] - gamma1_vec_train[uncens_inds]*(z[uncens_inds] - offsetz - mu1_vec_train[uncens_inds]- mutemp_z[uncens_inds])
     # sd_ydraw <- sqrt(phi1_vec_train[uncens_inds])
 
-
-    # print("y_resids = ")
-    #
-    # print(y_resids)
-
     #set the response for draws of z trees
-    sampler_y$setResponse(y = y_resids)
+    if(fixed_resp_update){
+      computational_offset_y <- y_reference - y_resids
+      # dbarts_offset <- computational_offset + offsetz_vec # genuine_offset_vec
+      sampler_y$setOffset(offset = computational_offset_y, updateScale = FALSE)
+    }else{
+      sampler_y$setResponse(y = y_resids)
+    }
     #set the standard deviation
     # sampler_y$setSigma(sigma = sd_ydraw)
 
     sampler_y$setSigma(sigma = 1)
-
     weightstemp_y  <- 1/phi1_vec_train[uncens_inds]
     sampler_y$setWeights(weights = weightstemp_y)
-
     if(sparse){
       tempmodel <- sampler_y$model
       tempmodel@tree.prior@splitProbabilities <- s_y
       sampler_y$setModel(newModel = tempmodel)
     }
-
     samplestemp_y <- sampler_y$run()
+    # mutemp_y <- samplestemp_y$train[,1]
+    # mutemp_test_y <- samplestemp_y$test[,1]
+    mutemp_y <- as.numeric(sampler_y$predict(xdf_y)[, 1])
+    mutemp_test_y <- as.numeric( sampler_y$predict(xdf_y_test)[, 1])
 
-    mutemp_y <- samplestemp_y$train[,1]
-    mutemp_test_y <- samplestemp_y$test[,1]
-
-
+    if(draw_censored_predictions){
+      mutemp_y_all <- as.numeric(sampler_y$predict(xdf_y_all)[, 1])
+    }
     # if(sparse){
       tempcounts <- fcount(sampler_y$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
@@ -1464,37 +1320,27 @@ tbart2np <- function(x.train,
       var_count_y[tempcounts$x] <- tempcounts$N
     # }
 
-
     checkypred <- sampler_y$predict(x.test = xdf_y)[,1]
-
     if(any(abs(mutemp_y - checkypred) >0.0001)){
       print(" cbind(mutemp_y,  checkypred)  ")
       print(cbind(mutemp_y,  checkypred))
-
       print("which(abs(mutemp_y - checkypred) >0.0001) = ")
       print(which(abs(mutemp_y - checkypred) >0.0001))
       stop("zpredictions not equal")
     }
 
-
     checkypred <- sampler_y$predict(x.test = xdf_y_test)[,1]
-
     if(!all(mutemp_test_y == checkypred)){
       print(" cbind(mutemp_test_y,  checkypred)  ")
       print(cbind(mutemp_test_y,  checkypred))
-
       print("which(mutemp_test_y != checkypred) = ")
       print(which(mutemp_test_y != checkypred))
       stop("zpredictions not equal")
     }
-
     #update z_epsilon
     # y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y - mu2_vec_train[uncens_inds]
 
-
-
     #########  Step 5: Sample alpha  ######################################################
-
     # This step can be implemented using the prior of van Hasselt (2011)
     # or the prior of George et al. (2019), McCulloch et al. (2021) ans Conley et al. (2008)
 
@@ -1505,111 +1351,70 @@ tbart2np <- function(x.train,
 
     varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
     varthetamat_test <- cbind(mu1_vec_test, mu2_vec_test, phi1_vec_test, gamma1_vec_test)
-
     #obtain the unique rows (components)
     vartheta_unique_mat <- unique(varthetamat)
-
     #number of unique components
     k_uniq <- nrow(vartheta_unique_mat)
-
-
     if(alpha_prior == "vh"){
-
       #########  VH Step 5 a: Sample auxiliary variable kappa  ######################################################
-
       kappa_aux = rbeta(n = 1, shape1 = alpha+1, shape2 = n)
-
       #########  VH Step 5 b: Sample alpha from a mixture of gamma distributions  ######################################################
-
       #obtain the mixing probability
       p_kappa <- (c1+k_uniq-1)/(n*(c2-log(kappa_aux))+c1+k_uniq-1)
-
       #sample a mixture component
       mix_draw <- rbinom(1,1,p_kappa)
-
       # draw alpha from the drawn component
       if(mix_draw==1){
         alpha <- rgamma(1,shape = c1 + k_uniq, rate = c2 - log(kappa_aux))
       }else{
         alpha <- rgamma(1,shape = c1 + k_uniq - 1, rate = c2 - log(kappa_aux))
-
       }
-
-
-
-
     }else{
       if(alpha_prior == "george"){
-
         #Calculate alpha_min and alpha_max
         Imin <- 1
         Imax <- floor(0.1*n)
-
         #consider IVBART prior
         # Imin <- 2
         # Imax <- floor(0.1*n)+1
-
-
         if(floor(0.1*n)<=1){
           stop("Not enough observations for Prior of George et al. (2019)")
         }
-
         psiprior <- 0.5
-
         # from ivbart package code
         # https://github.com/rsparapa/bnptools/blob/master/ivbart/R/amode.R
         egamm = 0.5772156649
         tempmin= digamma(Imin) - log(egamm+log(n))
         tempmax= digamma(Imax) - log(egamm+log(n))
-
         alpha_min <- exp(tempmin)
         alpha_max <- exp(tempmax)
         alpha_values =  seq(from=alpha_min,to=alpha_max,length.out=alpha_gridsize)
         temp_aprior = 1 - (alpha_values-alpha_min)/(alpha_max-alpha_min)
         temp_aprior = temp_aprior^psiprior
         # temp_aprior = temp_aprior/sum(temp_aprior)
-
-
         log_tempvals <- k_uniq*log(alpha_values) + lgamma(alpha_values) - lgamma(n+alpha_values)
-
-        # print("log_tempvals = ")
-        # print(log_tempvals)
-        # print("temp_aprior = ")
-        # print(temp_aprior)
-
         # temp_kgivenalpha <- exp(log_tempvals)
-        #
         # # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
         # temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
-
         logtemp_alpha_postprobs <- log_tempvals + log(temp_aprior)
 
         # maxll <- max(logtemp_alpha_postprobs)
-        #
         # temp_alpha_postprobs <- exp(logtemp_alpha_postprobs- maxll)
-        #
         # post_probs_alphs = temp_alpha_postprobs/sum(temp_alpha_postprobs)
-        #
         # # print("post_probs_alphs = ")
         # # print(post_probs_alphs)
-        #
         # #sample from 1 to alpha_gridsize
         # index_alpha <- dqsample.int(n = alpha_gridsize, size = 1, prob = post_probs_alphs, replace = TRUE)
-        #
         # alpha <- alpha_values[index_alpha]
 
         tempgumbsamps <- -log(-log(dqrunif(length(logtemp_alpha_postprobs))))
         alpha <- alpha_values[ which.max(logtemp_alpha_postprobs + tempgumbsamps ) ]
-
       }else{
         stop("Alpha prior must be vh or george")
       }
-
     }
 
     #########  Sample new cluster parameter values  ######################################################
-
-
     # print("sample new clusters step")
 
     # varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
@@ -1620,433 +1425,218 @@ tbart2np <- function(x.train,
     # create matrix for which rows correspond to observations (zstar_i, y_i)
     # columns correspond to parameter values v_j
 
-
     #including densities for censored and uncensored observations
-    jointdens_mat <- matrix(NA, nrow = n , ncol = n)
+    # jointdens_mat <- matrix(NA, nrow = n , ncol = n)
 
     itemp <- 0
 
 
 #     print("calculating matrix of probabilities for uncensored observations")
-#
 #     # uncens_inds
-#
-#
 #     for(j in 1:n){
 #       # print("j = ")
 #       # print(j)
-#
 #       # for(i in uncens_inds){
 #       #   itemp <- itemp +1
 #       #   print("itemp")
-#       #
 #       #   print(itemp)
-#       #
 #       #   print("i = ")
 #       #   print(i)
-#
 #         #can calculate manually using the formula for the bivariate probability
+#         jointdens_mat[uncens_inds,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))* exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
+#            ( (z - offsetz)[uncens_inds] - mutemp_z[uncens_inds] - mu1_vec_train[j] )^2 - 2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
+#              ((z - offsetz)[uncens_inds] - mutemp_z[uncens_inds] - mu1_vec_train[j] )*(ystar[uncens_inds] - mutemp_y  - mu2_vec_train[j] ) + ((ystar[uncens_inds] - mutemp_y  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)) )
 #
-#
-#       # print("length(mutemp_y) = ")
-#       # print(length(mutemp_y))
-#       #
-#       # print("length(uncens_inds = ")
-#       # print(length(uncens_inds))
-#
-#         jointdens_mat[uncens_inds,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
-#           exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
-#            ( (z - offsetz)[uncens_inds] - mutemp_z[uncens_inds] - mu1_vec_train[j] )^2 -
-#              2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
-#              ((z - offsetz)[uncens_inds] - mutemp_z[uncens_inds] - mu1_vec_train[j] )*
-#              (ystar[uncens_inds] - mutemp_y  - mu2_vec_train[j] ) +
-#              ((ystar[uncens_inds] - mutemp_y  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
-#           ) )
-#
-# #
-# #         Sigma_mat_temp_j <- cbind(c(1,
-# #                                     gamma1_vec_train[j]),
-# #                                   c(gamma1_vec_train[j],
-# #                                     phi1_vec_train[j]+gamma1_vec_train[j]^2))
-# #
-# #
+# #         Sigma_mat_temp_j <- cbind(c(1,gamma1_vec_train[j]),c(gamma1_vec_train[j],phi1_vec_train[j]+gamma1_vec_train[j]^2))
 # #         # print("calcaulte density")
-# #
 # #         #or can use a pre-defined function
-# #         jointdens_mat[i,j] <-  dmvnorm(c((z - offsetz)[i],
-# #                                          ystar[i]),
-# #                                        mean = c(mutemp_z[i] + mu1_vec_train[j],
-# #                                                 mutemp_y[itemp]+ mu2_vec_train[j]),
-# #                                        sigma = Sigma_mat_temp_j)
-#
+# #         jointdens_mat[i,j] <-  dmvnorm(c((z - offsetz)[i],ystar[i]), mean = c(mutemp_z[i] + mu1_vec_train[j],mutemp_y[itemp]+ mu2_vec_train[j]), sigma = Sigma_mat_temp_j)
 #
 #       # }
-#
 #         if(any(is.nan(jointdens_mat[uncens_inds,j]))){
-#
 #           print("j = ")
 #           print(j)
-#
 #           print("phi1_vec_train[j]= ")
 #           print(phi1_vec_train[j])
-#
 #           print("phi1_vec_train = ")
 #           print(phi1_vec_train)
-#
-#
 #           print("gamma1_vec_train[j] = ")
 #           print(gamma1_vec_train[j])
-#
 #           print("mu1_vec_train[j] =")
 #           print(mu1_vec_train[j])
-#
 #           print("mu2_vec_train[j] =")
 #           print(mu2_vec_train[j])
-#
-#
 #           print("jointdens_mat[uncens_inds,j] = ")
 #           print(jointdens_mat[uncens_inds,j])
 #           stop("There are some NAN probabilities")
 #         }
-#
-#
 #     }
 #
-#
 #     print("calculating matrix of probabilities for censored observations")
-#
 #
 #     # cens_inds
 #     # for(i in cens_inds){
 #       # itemp <- itemp +1
 #       for(j in 1:n){
-#
-#
-#
 #         #can calculate manually using the formula for the biavariate probability
-#         # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
-#         #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
-#         #    ( (z - offsetz)[i] - mu1_vec_train[j] )^2 -
-#         #      2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
-#         #      ((z - offsetz)[i] - mu1_vec_train[j] )*
-#         #      (ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j] ) +
-#         #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
-#         #   ) )
-#
-#
-#         # Sigma_mat_temp_j <- cbind(c(1,
-#         #                             gamma1_vec_train[j]),
-#         #                           c(gamma1_vec_train[j],
-#         #                             phi1_vec_train[j]+gamma1_vec_train[j]^2))
-#
-#
+#         # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))* exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*( ( (z - offsetz)[i] - mu1_vec_train[j] )^2 - 2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
+#         #      ((z - offsetz)[i] - mu1_vec_train[j] )*(ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j] ) +((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)) )
+#         # Sigma_mat_temp_j <- cbind(c(1,gamma1_vec_train[j]),c(gamma1_vec_train[j], phi1_vec_train[j]+gamma1_vec_train[j]^2))
 #         #or can use a pre-defined function
+#         # tempvec <- dnorm((z - offsetz)[cens_inds] ,mean = mutemp_z[cens_inds] + mu1_vec_train[j],sd = 1)
 #
-#         # tempvec <- dnorm((z - offsetz)[cens_inds] ,
-#         #       mean = mutemp_z[cens_inds] + mu1_vec_train[j],
-#         #       sd = 1)
-#         #
-#         # print("length(tempvec) = ")
-#         # print(length(tempvec) )
-#         #
-#         # print("length(mutemp_z[cens_inds]) = ")
-#         # print(length(mutemp_z[cens_inds]) )
-#         #
-#         # print("length((z - offsetz)[cens_inds]) = ")
-#         # print(length((z - offsetz)[cens_inds]) )
-#
-#
-#         jointdens_mat[cens_inds,j] <- dnorm((z - offsetz)[cens_inds] ,
-#                                     mean = mutemp_z[cens_inds] + mu1_vec_train[j],
-#                                     sd = 1)
-#
+#         jointdens_mat[cens_inds,j] <- dnorm((z - offsetz)[cens_inds] ,mean = mutemp_z[cens_inds] + mu1_vec_train[j], sd = 1)
 #         if(any(is.nan(jointdens_mat[cens_inds,j]))){
 #           print("jointdens_mat[cens_inds,j] = ")
 #           print(jointdens_mat[cens_inds,j])
 #           stop("There are some NAN probabilities")
 #         }
-#
-#
-#
 #       }
-#
 #     # }
 
-
     # print("jointdens_mat = ")
-    #
     # print(jointdens_mat)
 
     #loop over all individuals and draw (or do not draw) new values
-
-
     # can't vectorize, must update vartheta in each step
     # # vectorize to speed up
     # nonunique_inds_vec <- which(duplicated(varthetamat))
     # num_nonunique <-
-    #
     # #first consider non-unique observations
-    # mutilde_vec <- mvrnorm(n = l,
-    #                        mu = c(0, 0),
-    #                        Sigma = M_mat)
+    # mutilde_vec <- mvrnorm(n = l,mu = c(0, 0), Sigma = M_mat)
     #
-
-
 
     # print("now loop through each observation for new samples")
 
     #reset index for uncensored observations
     itemp <- 0
-
-    mutildemat <- Rfast::rmvnorm(n = n,
-                              mu = c(0, 0),
-                              sigma = M_mat)
-
+    mutildemat <- Rfast::rmvnorm(n = n, mu = c(0, 0), sigma = M_mat)
     if(mu1_tozero == TRUE){
       mutilde[1] <- 0
       mutildemat[,1] <- rep(0,n)
     }
-
-    if( (iter ==1) #| (mixstep == TRUE)
-        ){
+    # if( (iter ==1) | (mixstep == TRUE)){
       rho_i_counts <- fcount(varthetamat[,4])
       n_rho_i_vec <- rep(NA, n)
-
       for(countmatrow in 1:nrow(rho_i_counts)){
         tempnum <- rho_i_counts$x[countmatrow]
         tempinds <- which(varthetamat[,4] == tempnum)
         n_rho_i_vec[tempinds] <- rho_i_counts$N[countmatrow]
       }
-    }
+    # }
 
     for(i in 1:n){
       # find number of individuals in the same cluster
-
       # if((i %%200) == 0){
       #   print("i = ")
       #   print(i)
-      #
       # }
-
       # temp_samp_probs <- rep(NA,n)
       # log_temp_samp_probs <- rep(NA,n)
-
       if(i %in% uncens_inds){
         itemp <- itemp +1
       }
 
       # #there is probably a more efficient way of coding this
       # temp_params <- varthetamat[i,]
-      #
       # # colSums(t(varthetamat) == temp_params) == ncol(varthetamat)
-      #
       # # code form https://stackoverflow.com/questions/32640682/check-whether-matrix-rows-equal-a-vector-in-r-vectorized
       # #this gives the same number
       # # n_rho_i <- sum(colSums(t(varthetamat) == temp_params) == ncol(varthetamat))
-      #
       # #recalculate in each iteration because vartheta has been updated
       # # n_rho_i <- sum(!Rfast::colsums(t(varthetamat) != temp_params))
-      #
       # #continuous parameters, so fine to check just one value
       # n_rho_i <- sum(varthetamat[,4] == temp_params[4])
-
-
       n_rho_i <- n_rho_i_vec[i]
 
       # n_rho_i_temp <- sum(!Rfast::colsums(t(varthetamat) != temp_params))
-      #
-      # if(n_rho_i != n_rho_i_temp){
-      #   stop("n_rho_i != n_rho_i_temp")
-      # }
+      # if(n_rho_i != n_rho_i_temp){stop("n_rho_i != n_rho_i_temp")}
 
       if(n_rho_i > 1){
         # sample from the base distribution H0
-
         # calculate probabilities
         if(i %in% cens_inds){
-          # jointdens_mat[i , ] <- dnorm(rep((z - offsetz)[i], n) ,
-          #       mean = mutemp_z[i] + mu1_vec_train,
-          #       sd = 1)
-
+          # jointdens_mat[i , ] <- dnorm(rep((z - offsetz)[i], n) , mean = mutemp_z[i] + mu1_vec_train,sd = 1)
           # temp_samp_probs <- exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
-          # log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -
-          #   0.5*log(2*pi)
-
+          # log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -#   0.5*log(2*pi)
           log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) #-
             # 0.5*log(2*pi)
-
-          # jointdens_tilde <-  dnorm((z - offsetz)[i] ,
-          #                           mean = mutemp_z[i] +  mutilde[1],
-          #                           sd = 1)
+          # jointdens_tilde <-  dnorm((z - offsetz)[i] ,mean = mutemp_z[i] +  mutilde[1],sd = 1)
         }else{
-
           temp_zdiff <- (z - offsetz)[i] - mutemp_z[i] - mu1_vec_train
           temp_ydiff <- ystar[i] - mutemp_y[itemp]  - mu2_vec_train
-
-          # temp_samp_probs <-  (1/(2*pi*sqrt(phi1_vec_train)))*
-          #   exp(- (1/(2*phi1_vec_train))*(
-          #     (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
-          #       2*(gamma1_vec_train   )*
-          #       (temp_zdiff )*
-          #       (temp_ydiff ) +
-          #       ((temp_ydiff)^2 )
-          #   ) )
-
-          # log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train)- (1/(2*phi1_vec_train))*(
-          #     (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
-          #       2*(gamma1_vec_train   )*
-          #       (temp_zdiff )*
-          #       (temp_ydiff ) +
-          #       ((temp_ydiff)^2 ))
-
-          # log_temp_samp_probs <-  - 0.5*logphi1_vec_train - (1/(2*phi1_vec_train))*(
-          #   (phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
-          #     2*(gamma1_vec_train   )*
-          #     (temp_zdiff )*
-          #     (temp_ydiff ) +
-          #     ((temp_ydiff)^2 ))# -log(2*pi)
-
+          # temp_samp_probs <-  (1/(2*pi*sqrt(phi1_vec_train)))*exp(- (1/(2*phi1_vec_train))*((phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
+          #       2*(gamma1_vec_train   )*(temp_zdiff )*(temp_ydiff ) +((temp_ydiff)^2 )) )
+          # log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train)- (1/(2*phi1_vec_train))*((phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
+          #       2*(gamma1_vec_train   )*(temp_zdiff )*(temp_ydiff ) + ((temp_ydiff)^2 ))
+          # log_temp_samp_probs <-  - 0.5*logphi1_vec_train - (1/(2*phi1_vec_train))*((phi1_vec_train+gamma1_vec_train^2)*( temp_zdiff )^2 -
+          #     2*(gamma1_vec_train   )*(temp_zdiff )*(temp_ydiff ) +((temp_ydiff)^2 ))# -log(2*pi)
           log_temp_samp_probs <-  - 0.5*logphi1_vec_train - (1/(2*phi1_vec_train))*(
-            (var1_vec_train)*( temp_zdiff )^2 -
-              2*(gamma1_vec_train   )*
-              (temp_zdiff )*
-              (temp_ydiff ) +
+            (var1_vec_train)*( temp_zdiff )^2 - 2*(gamma1_vec_train   )*(temp_zdiff )*(temp_ydiff ) +
               ((temp_ydiff)^2 ))# -log(2*pi)
-
-          # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
-          #                               ystar[i]),
-          #                             mean = c(mutemp_z[i] + mutilde[1],
-          #                                      mutemp_y[itemp]+ mutilde[2]),
-          #                             sigma = Sigma_mat_temp_tilde)
+          # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],ystar[i]),mean = c(mutemp_z[i] + mutilde[1], mutemp_y[itemp]+ mutilde[2]), sigma = Sigma_mat_temp_tilde)
         }
 
-        # mutilde <- Rfast::rmvnorm(n = 1,
-        #                           mu = c(0, 0),
-        #                           sigma = M_mat)
+        # mutilde <- Rfast::rmvnorm(n = 1,mu = c(0, 0),sigma = M_mat)
         mutilde <- mutildemat[i,]
         if(mu1_tozero == TRUE){
           mutilde[1] <- 0
         }
-
         if(cov_prior == "Ding"){
           # tempsigma <- rinvwishart(nu = nu0,
           #                          S = cding*diag(2))
-
           tempsigma <- rInvWishart(n = 1L, nu0, cding*diag(2) )[,,1]
-
-
           # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
           # tempomega <- (transmat %*% tempsigma) %*% transmat
-
           offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
           tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
-
           temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
-
           # gamma1 <- tempomega[1,2]
           # phi1 <- tempomega[1,1] - (gamma1^2)
-
           gammatilde <- tempomega[1,2]
           phitilde <- tempomega[1,1] - (gammatilde^2)
-
         }else{
-
           phitilde <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
-
-          gammatilde <- rnorm(n = 1,
-                              mean = gamma0,
-                              sd = sqrt(tau*phitilde))
+          gammatilde <- rnorm(n = 1,mean = gamma0,sd = sqrt(tau*phitilde))
         }
 
         # calculate the density of the sampled value
         #can calculate manually using the formula for the biavariate probability
         # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
-        #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
-        #    ( (z - offsetz)[i] - mu1_vec_train[i] )^2 -
-        #      2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*
-        #      ((z - offsetz)[i] - mu1_vec_train[i] )*
-        #      (ystar[i] - mutemp_y[itemp]  - mu2_vec_train[i] ) +
-        #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[i])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
-        #   ) )
+        #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(( (z - offsetz)[i] - mu1_vec_train[i] )^2 -
+        #      2*(gamma1_vec_train[j] /( (phi1_vec_train[j]+gamma1_vec_train[j]^2) )  )*((z - offsetz)[i] - mu1_vec_train[i] )*
+        #      (ystar[i] - mutemp_y[itemp]  - mu2_vec_train[i] ) +((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[i])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)) )
 
-
-        Sigma_mat_temp_tilde <- cbind(c(1,
-                                    gammatilde),
-                                  c(gammatilde,
-                                    phitilde+gammatilde^2))
-
-
+        Sigma_mat_temp_tilde <- cbind(c(1,gammatilde),c(gammatilde,phitilde+gammatilde^2))
         #or can use a pre-defined function
-
         if(i %in% cens_inds){
-          # jointdens_tilde <-  dnorm((z - offsetz)[i] ,
-          #                           mean = mutemp_z[i] +  mutilde[1],
-          #                           sd = 1)
-
+          # jointdens_tilde <-  dnorm((z - offsetz)[i] ,mean = mutemp_z[i] +  mutilde[1],sd = 1)
           # jointdens_tilde <-exp(-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2)/sqrt(2*pi)
-          # log_jointdens_tilde <- (-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2) -
-          #   0.5*log(2*pi)
-          log_jointdens_tilde <- (-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2) #-
-            # 0.5*log(2*pi)
-
+          # log_jointdens_tilde <- (-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2) - #   0.5*log(2*pi)
+          log_jointdens_tilde <- (-((z - offsetz)[i] - (mutemp_z[i] + mutilde[1]) )^2/2) #- # 0.5*log(2*pi)
         }else{
-          # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
-          #                               ystar[i]),
-          #                             mean = c(mutemp_z[i] + mutilde[1],
-          #                                      mutemp_y[itemp]+ mutilde[2]),
-          #                             sigma = Sigma_mat_temp_tilde)
-
+          # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],ystar[i]),mean = c(mutemp_z[i] + mutilde[1],mutemp_y[itemp]+ mutilde[2]),sigma = Sigma_mat_temp_tilde)
           temp_zdiff <- (z - offsetz)[i] - mutemp_z[i] - mutilde[1]
           temp_ydiff <- ystar[i] - mutemp_y[itemp]  - mutilde[2]
-
-          # jointdens_tilde <-  (1/(2*pi*sqrt(phitilde)))*
-          #   exp(- (1/(2*phitilde))*(
-          #     (phitilde+gammatilde^2)*( temp_zdiff )^2 -
-          #       2*(gammatilde  )*
-          #       (temp_zdiff )*
-          #       (temp_ydiff ) +
-          #       (temp_ydiff^2 )
-          #   ) )
-
-          # log_jointdens_tilde <- - log(2*pi) - 0.5*log(phitilde) - # (1/(2*pi*sqrt(phitilde)))*
-          #    (1/(2*phitilde))*(
-          #     (phitilde+gammatilde^2)*( temp_zdiff )^2 -
-          #       2*(gammatilde  )*
-          #       (temp_zdiff )*
-          #       (temp_ydiff ) +
-          #       (temp_ydiff^2 )
-          #   )
-
+          # jointdens_tilde <-  (1/(2*pi*sqrt(phitilde)))*exp(- (1/(2*phitilde))*((phitilde+gammatilde^2)*( temp_zdiff )^2 -
+          #       2*(gammatilde  )*(temp_zdiff )*(temp_ydiff ) + (temp_ydiff^2 )) )
+          # log_jointdens_tilde <- - log(2*pi) - 0.5*log(phitilde) - # (1/(2*pi*sqrt(phitilde)))*(1/(2*phitilde))*((phitilde+gammatilde^2)*( temp_zdiff )^2 -
+          #       2*(gammatilde  )*(temp_zdiff )*(temp_ydiff ) + (temp_ydiff^2 ))
           log_jointdens_tilde <-  - 0.5*log(phitilde) - # (1/(2*pi*sqrt(phitilde)))*
-            (1/(2*phitilde))*(
-              (phitilde+gammatilde^2)*( temp_zdiff )^2 -
-                2*(gammatilde  )*
-                (temp_zdiff )*
-                (temp_ydiff ) +
-                (temp_ydiff^2 ) # - log(2*pi)
+            (1/(2*phitilde))*((phitilde+gammatilde^2)*( temp_zdiff )^2 - 2*(gammatilde  )*(temp_zdiff )*(temp_ydiff ) +(temp_ydiff^2 ) # - log(2*pi)
             )
-
         }
-
-
         #unnecessary to calculate this normalizing constant if sample functionautomatically normalizes
         # Ctemp_i <- (alpha+n-1)/( alpha*jointdens_tilde + sum(jointdens_mat[-i,j]) )
-
         # Ctemp_i <- 1/( alpha*jointdens_tilde + sum(jointdens_mat[-i,j]) )
-
-
-
         # temp_samp_probs <- jointdens_mat[i , ]
 
         # temp_samp_probs[i] <- alpha*jointdens_tilde
         log_temp_samp_probs[i] <- log(alpha)+log_jointdens_tilde
 
         # maxll <- max(log_temp_samp_probs)
-        #
         # temp_samp_probs <- exp(log_temp_samp_probs- maxll)
-        #
         # temp_samp_probs <- temp_samp_probs/sum(temp_samp_probs) # this step is probably unnecessary
-        #
         # # print("temp_samp_probs= ")
         # # print(temp_samp_probs)
         # # some of the observations not equal to i have the same vartheta values
@@ -2063,38 +1653,23 @@ tbart2np <- function(x.train,
           # the new value is unique since the parameters are drawn from continuous distributions
           # reduce count by 1 for observations that were in the same cluster
           # [an alternative way of coding this would be to save the observation indices for each cluster]
-
           n_rho_i_vec[which(varthetamat[,4] == varthetamat[i,4])] <- n_rho_i_vec[i] - 1
           n_rho_i_vec[i] <- 1
 
           #accept new proposal
           mu1_vec_train[i] <- mutilde[1]
           mu2_vec_train[i] <- mutilde[2]
-
           phi1_vec_train[i] <- phitilde
           logphi1_vec_train[i] <- log(phitilde)
           gamma1_vec_train[i] <- gammatilde
-
           var1_vec_train[i] <- phitilde + gammatilde^2
-
-
-
-
           #update densities
-
           # if(i %in% uncens_inds){
           #   # itemp <- itemp +1
-          #
           #   #only need to update rows from i+1 because yet to be sampled
-          #
           #   if(i==n){
-          #
           #   }else{
-          #
           #     for(indtemp in (i+1):n){
-          #
-          #
-          #
           #       #can calculate manually using the formula for the biavariate probability
           #       # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
           #       #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
@@ -2104,43 +1679,22 @@ tbart2np <- function(x.train,
           #       #      (ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j] ) +
           #       #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
           #       #   ) )
-          #
-          #
-          #       Sigma_mat_temp_j <- cbind(c(1,
-          #                                   gamma1_vec_train[i]),
-          #                                 c(gamma1_vec_train[i],
-          #                                   phi1_vec_train[i]+gamma1_vec_train[i]^2))
-          #
-          #
+          #       Sigma_mat_temp_j <- cbind(c(1,gamma1_vec_train[i]),c(gamma1_vec_train[i],phi1_vec_train[i]+gamma1_vec_train[i]^2))
           #       #or can use a pre-defined function
-          #       jointdens_mat[indtemp,i] <-  dmvnorm(c((z - offsetz)[indtemp],
-          #                                              ystar[indtemp]),
-          #                                            mean = c(mutemp_z[indtemp] + mu1_vec_train[i],
-          #                                                     mutemp_y[itemp]+ mu2_vec_train[i]),
+          #       jointdens_mat[indtemp,i] <-  dmvnorm(c((z - offsetz)[indtemp],ystar[indtemp]), mean = c(mutemp_z[indtemp] + mu1_vec_train[i],mutemp_y[itemp]+ mu2_vec_train[i]),
           #                                            sigma = Sigma_mat_temp_j)
-          #
-          #
           #       if(any(is.nan(jointdens_mat[indtemp,i]))){
           #         print("jointdens_mat[indtemp,i] = ")
           #         print(jointdens_mat[indtemp,i])
           #         stop("There are some NAN probabilities")
           #       }
-          #
-          #
           #     }
-          #
-          #
           #   }
-          #
           # }
-          #
           # # cens_inds
           # if(i %in% cens_inds){
           #   # itemp <- itemp +1
           #   for(indtemp in (i+1):n){
-          #
-          #
-          #
           #     #can calculate manually using the formula for the biavariate probability
           #     # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
           #     #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
@@ -2150,185 +1704,100 @@ tbart2np <- function(x.train,
           #     #      (ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j] ) +
           #     #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
           #     #   ) )
-          #
-          #
           #     # Sigma_mat_temp_j <- cbind(c(1,
           #     #                             gamma1_vec_train[i]),
           #     #                           c(gamma1_vec_train[i],
           #     #                             phi1_vec_train[i]+gamma1_vec_train[i]^2))
-          #
-          #
           #     #or can use a pre-defined function
-          #     jointdens_mat[indtemp,i] <- dnorm((z - offsetz)[indtemp] ,
-          #                                       mean = mutemp_z[indtemp] + mu1_vec_train[i],
-          #                                       sd = 1)
-          #
-          #
+          #     jointdens_mat[indtemp,i] <- dnorm((z - offsetz)[indtemp] ,mean = mutemp_z[indtemp] + mu1_vec_train[i], sd = 1)
           #     if(any(is.nan(jointdens_mat[indtemp,i]))){
           #       print("jointdens_mat[indtemp,i] = ")
           #       print(jointdens_mat[indtemp,i])
           #       stop("There are some NAN probabilities")
           #     }
-          #
-          #
           #   }
-          #
           # }
-
-
         }else{
+          # reduce count of observations in current cluster, because observation i is being removed
+          n_rho_i_vec[which(varthetamat[,4] == varthetamat[i,4])] <- n_rho_i_vec[i] - 1
           #set parameters equal to those of cluster new_varind
           mu1_vec_train[i] <- mu1_vec_train[new_varind]
           mu2_vec_train[i] <- mu2_vec_train[new_varind]
-
           phi1_vec_train[i] <- phi1_vec_train[new_varind]
           logphi1_vec_train[i] <- logphi1_vec_train[new_varind]
           gamma1_vec_train[i] <- gamma1_vec_train[new_varind]
-
           var1_vec_train[i] <- var1_vec_train[new_varind]
-
           # jointdens_mat[,i] <- jointdens_mat[,new_varind]
-
           # there is probably a faster way of updating this
           tempinds <- which(gamma1_vec_train == gamma1_vec_train[new_varind])
           n_rho_i_vec[tempinds] <- length(tempinds)
-
         }
-
-
         varthetamat[i,] <- c(mu1_vec_train[i], mu2_vec_train[i], phi1_vec_train[i], gamma1_vec_train[i])
-
-
-
       }else{ #nrho equal to 1
-
         if(n_rho_i != 1){
           stop("n_rho_i < 1 and not equal to 1")
         }
-
-
         #calculate probabilties
         if(i %in% cens_inds){
-
-
-          # jointdens_mat[i , ] <- dnorm(rep((z - offsetz)[i], n) ,
-          #                              mean = mutemp_z[i] + mu1_vec_train,
-          #                              sd = 1)
-
+          # jointdens_mat[i , ] <- dnorm(rep((z - offsetz)[i], n), mean = mutemp_z[i] + mu1_vec_train, sd = 1)
           # temp_samp_probs <-exp(-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2)/sqrt(2*pi)
-          # log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) -
-          #   0.5*log(2*pi)
+          # log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) - 0.5*log(2*pi)
           log_temp_samp_probs <- (-((z - offsetz)[i] - (mutemp_z[i] + mu1_vec_train) )^2/2) # -
             # 0.5*log(2*pi)
-
-          # jointdens_tilde <-  dnorm((z - offsetz)[i] ,
-          #                           mean = mutemp_z[i] +  mutilde[1],
-          #                           sd = 1)
+          # jointdens_tilde <-  dnorm((z - offsetz)[i] ,mean = mutemp_z[i] +  mutilde[1],sd = 1)
         }else{
-
           temp_zdiff <- (z - offsetz)[i] - mutemp_z[i] - mu1_vec_train
           temp_ydiff <- ystar[i] - mutemp_y[itemp]  - mu2_vec_train
-
-          # temp_samp_probs <-  (1/(2*pi*sqrt(phi1_vec_train)))*
-          #   exp(- (1/(2*phi1_vec_train))*(
-          #     (phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
-          #       2*(gamma1_vec_train   )*
-          #       (temp_zdiff )*
-          #       temp_ydiff +
-          #       (temp_ydiff^2 )
-          #   ) )
-
-          # log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train) -
-          #    (1/(2*phi1_vec_train))*(
-          #     (phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
-          #       2*(gamma1_vec_train   )*
-          #       (temp_zdiff )*
-          #       temp_ydiff +
-          #       (temp_ydiff^2 ))
-
-          # log_temp_samp_probs <-   - 0.5*logphi1_vec_train -
-          #   (1/(2*phi1_vec_train))*(
-          #     (phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
-          #       2*(gamma1_vec_train   )*
-          #       (temp_zdiff )*
-          #       temp_ydiff +
-          #       (temp_ydiff^2 )) # -log(2*pi)
-
+          # temp_samp_probs <-  (1/(2*pi*sqrt(phi1_vec_train)))*exp(- (1/(2*phi1_vec_train))*((phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
+          #       2*(gamma1_vec_train   )*(temp_zdiff )*temp_ydiff +(temp_ydiff^2 )) )
+          # log_temp_samp_probs <-  -log(2*pi) - 0.5*log(phi1_vec_train) - (1/(2*phi1_vec_train))*((phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
+          #       2*(gamma1_vec_train   )*(temp_zdiff )*temp_ydiff +(temp_ydiff^2 ))
+          # log_temp_samp_probs <-   - 0.5*logphi1_vec_train - (1/(2*phi1_vec_train))*((phi1_vec_train+gamma1_vec_train^2)*(temp_zdiff  )^2 -
+          #       2*(gamma1_vec_train   )*(temp_zdiff )*temp_ydiff +(temp_ydiff^2 )) # -log(2*pi)
           log_temp_samp_probs <-   - 0.5*logphi1_vec_train -
-            (1/(2*phi1_vec_train))*(
-              (var1_vec_train)*(temp_zdiff  )^2 -
-                2*(gamma1_vec_train   )*
-                (temp_zdiff )*
-                temp_ydiff +
+            (1/(2*phi1_vec_train))*((var1_vec_train)*(temp_zdiff  )^2 -2*(gamma1_vec_train   )*(temp_zdiff )*temp_ydiff +
                 (temp_ydiff^2 )) # -log(2*pi)
-
-
-          # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
-          #                               ystar[i]),
-          #                             mean = c(mutemp_z[i] + mutilde[1],
-          #                                      mutemp_y[itemp]+ mutilde[2]),
-          #                             sigma = Sigma_mat_temp_tilde)
+          # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],ystar[i]), mean = c(mutemp_z[i] + mutilde[1],mutemp_y[itemp]+ mutilde[2]),sigma = Sigma_mat_temp_tilde)
         }
-
-
-
 
         # temp_samp_probs <- jointdens_mat[i, ]
         # temp_samp_probs[i] <- alpha*temp_samp_probs[i]
-
         log_temp_samp_probs[i] <- log(alpha)+log_temp_samp_probs[i]
 
         # maxll <- max(log_temp_samp_probs)
-        #
         # temp_samp_probs <- exp(log_temp_samp_probs- maxll)
-        #
         # temp_samp_probs <- temp_samp_probs/sum(temp_samp_probs) # this step is probably unnecessary
-        #
         # # print("temp_samp_probs= ")
         # # print(temp_samp_probs)
-        #
         # new_varind <- dqsample.int(n = n, size = 1, prob = temp_samp_probs, replace = TRUE)
-
         # new_vartheta <- NA
 
         tempgumbsamps <- -log(-log(dqrunif(length(log_temp_samp_probs))))
         new_varind <- which.max(log_temp_samp_probs + tempgumbsamps )
 
-
         if(new_varind == i){
-
           #parameters unchanged
-
           # mu1_vec_train[i] <- mutilde[1]
           # mu2_vec_train[i] <- mutilde[2]
-          #
           # phi1_vec_train[i] <- phitilde
           # gamma1_vec_train[i] <- gammatilde
           #
-
           # this line is unnecessary
           varthetamat[i,] <- c(mu1_vec_train[i], mu2_vec_train[i], phi1_vec_train[i], gamma1_vec_train[i])
-
         }else{
           mu1_vec_train[i] <- mu1_vec_train[new_varind]
           mu2_vec_train[i] <- mu2_vec_train[new_varind]
-
           phi1_vec_train[i] <- phi1_vec_train[new_varind]
+          logphi1_vec_train[i] <- logphi1_vec_train[new_varind]
           gamma1_vec_train[i] <- gamma1_vec_train[new_varind]
-
+          var1_vec_train[i] <- var1_vec_train[new_varind]
           varthetamat[i,] <- c(mu1_vec_train[i], mu2_vec_train[i], phi1_vec_train[i], gamma1_vec_train[i])
-
           # jointdens_mat[,i] <- jointdens_mat[,new_varind]
-
           n_rho_i_vec[which(gamma1_vec_train == gamma1_vec_train[new_varind])] <- sum(gamma1_vec_train == gamma1_vec_train[new_varind])
-
 
           # if(i %in% uncens_inds){
           #   # itemp <- itemp +1
           #   for(indtemp in 1:n){
-          #
-          #
-          #
           #     #can calculate manually using the formula for the biavariate probability
           #     # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
           #     #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
@@ -2339,32 +1808,18 @@ tbart2np <- function(x.train,
           #     #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
           #     #   ) )
           #
-          #
-          #     Sigma_mat_temp_j <- cbind(c(1,
-          #                                 gamma1_vec_train[i]),
-          #                               c(gamma1_vec_train[i],
-          #                                 phi1_vec_train[i]+gamma1_vec_train[i]^2))
-          #
-          #
+          #     Sigma_mat_temp_j <- cbind(c(1,gamma1_vec_train[i]),c(gamma1_vec_train[i],phi1_vec_train[i]+gamma1_vec_train[i]^2))
           #     #or can use a pre-defined function
-          #     jointdens_mat[indtemp,i] <-  dmvnorm(c((z - offsetz)[indtemp],
-          #                                            ystar[indtemp]),
-          #                                          mean = c(mutemp_z[indtemp] + mu1_vec_train[i],
-          #                                                   mutemp_y[itemp]+ mu2_vec_train[i]),
+          #     jointdens_mat[indtemp,i] <-  dmvnorm(c((z - offsetz)[indtemp],ystar[indtemp]),
+          #                                          mean = c(mutemp_z[indtemp] + mu1_vec_train[i], mutemp_y[itemp]+ mu2_vec_train[i]),
           #                                          sigma = Sigma_mat_temp_j)
-          #
-          #
           #   }
-          #
           # }
           #
           # # cens_inds
           # if(i %in% cens_inds){
           #   # itemp <- itemp +1
           #   for(indtemp in 1:n){
-          #
-          #
-          #
           #     #can calculate manually using the formula for the biavariate probability
           #     # jointdens_mat[i,j] <- (1/(2*pi*sqrt(phi1_vec_train[j])))*
           #     #   exp(- ((phi1_vec_train[j]+gamma1_vec_train[j]^2)/(2*phi1_vec_train[j]))*(
@@ -2375,37 +1830,22 @@ tbart2np <- function(x.train,
           #     #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[j])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
           #     #   ) )
           #
-          #
-          #     # Sigma_mat_temp_j <- cbind(c(1,
-          #     #                             gamma1_vec_train[i]),
-          #     #                           c(gamma1_vec_train[i],
-          #     #                             phi1_vec_train[i]+gamma1_vec_train[i]^2))
-          #
-          #
+          #     # Sigma_mat_temp_j <- cbind(c(1, gamma1_vec_train[i]),c(gamma1_vec_train[i], phi1_vec_train[i]+gamma1_vec_train[i]^2))
           #     #or can use a pre-defined function
-          #     jointdens_mat[indtemp,i] <- dnorm((z - offsetz)[indtemp] ,
-          #                                       mean = mutemp_z[indtemp] + mu1_vec_train[i],
-          #                                       sd = 1)
+          #     jointdens_mat[indtemp,i] <- dnorm((z - offsetz)[indtemp] , mean = mutemp_z[indtemp] + mu1_vec_train[i], sd = 1)
           #
           #     if(any(is.nan(jointdens_mat[indtemp,i]))){
           #       print("jointdens_mat[indtemp,i] = ")
           #       print(jointdens_mat[indtemp,i])
           #       stop("There are some NAN probabilities")
           #     }
-          #
           #   }
-          #
           # } # end loop over cens_inds
           #
 
-
         } #end else new var ind !=i
-
       } # end else statement nrho equal to 1
-
     } # end loop over observations
-
-
 
 
     # loop over censored observations
@@ -2413,38 +1853,19 @@ tbart2np <- function(x.train,
     # for(i in cens_inds){
     #   # find number of individuals in the same cluster
     #   # itemp <- itemp +1
-    #
-    #
     #   #there is probably a more efficient way of coding this
     #   temp_params <- varthetamat[i,]
-    #
     #   # colSums(t(varthetamat) == temp_params) == ncol(varthetamat)
-    #
     #   # code form https://stackoverflow.com/questions/32640682/check-whether-matrix-rows-equal-a-vector-in-r-vectorized
     #   #this gives the same number
     #   # n_rho_i <- sum(colSums(t(varthetamat) == temp_params) == ncol(varthetamat))
-    #
-    #
     #   n_rho_i <- sum(!colSums(t(varthetamat) != temp_params))
-    #
-    #
-    #
     #
     #   if(n_rho_i >1){
     #     # sample from the base distribution H0
-    #
-    #
-    #     mutilde <- mvrnorm(n = 1,
-    #                        mu = c(0, 0),
-    #                        Sigma = M_mat)
-    #
-    #
-    #     gammatilde <- rnorm(1,
-    #                         mean = gamma0,
-    #                         sd = sqrt(G0))
-    #
+    #     mutilde <- mvrnorm(n = 1,mu = c(0, 0), Sigma = M_mat)
+    #     gammatilde <- rnorm(1,mean = gamma0, sd = sqrt(G0))
     #     phitilde <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
-    #
     #
     #     # calculate the density of the sampled value
     #     #can calculate manually using the formula for the biavariate probability
@@ -2457,12 +1878,10 @@ tbart2np <- function(x.train,
     #     #      ((ystar[i] - mutemp_y[itemp]  - mu2_vec_train[i])^2 )/( phi1_vec_train[j]+gamma1_vec_train[j]^2)
     #     #   ) )
     #
-    #
     #     # Sigma_mat_temp_tilde <- cbind(c(1,
     #     #                                 gammatilde),
     #     #                               c(gammatilde,
     #     #                                 phitilde+gammatilde^2))
-    #
     #
     #     #or can use a pre-defined function
     #     # jointdens_tilde <-  dmvnorm(c((z - offsetz)[i],
@@ -2471,62 +1890,39 @@ tbart2np <- function(x.train,
     #     #                                      mutemp_y[itemp]+ mutilde[2]),
     #     #                             sigma = Sigma_mat_temp_tilde)
     #
-    #     jointdens_tilde <-  dnorm((z - offsetz)[i] ,
-    #           mean = mutemp_z[i] +  mutilde[1],
-    #           sd = 1)
-    #
-    #
+    #     jointdens_tilde <-  dnorm((z - offsetz)[i] , mean = mutemp_z[i] +  mutilde[1], sd = 1)
     #     #unnecessary to calculate this normalizing constant if sample functionautomatically normalizes
     #     # Ctemp_i <- (alpha+n-1)/( alpha*jointdens_tilde + sum(jointdens_mat[-i,j]) )
-    #
     #     # Ctemp_i <- 1/( alpha*jointdens_tilde + sum(jointdens_mat[-i,j]) )
     #
     #     temp_samp_probs <- jointdens_mat[i , ]
-    #
     #     temp_samp_probs[i] <- alpha*jointdens_tilde
-    #
-    #
     #     # new_vartheta <- sample(Ctemp_i*temp_samp_probs, size = 1)
     #     new_varind <- sample(1:n, size = 1, prob = temp_samp_probs)
-    #
     #     new_vartheta <- NA
     #
     #     if(new_varind == i){
     #       #accept new proposal
     #       mu1_vec_train[i] <- mutilde[1]
     #       mu2_vec_train[i] <- mutilde[2]
-    #
     #       phi1_vec_train[i] <- phitilde
     #       gamma1_vec_train[i] <- gammatilde
-    #
     #     }else{
     #       #set parameters equal to those of cluster new_varind
     #       mu1_vec_train[i] <- mu1_vec_train[new_varind]
     #       mu2_vec_train[i] <- mu2_vec_train[new_varind]
-    #
     #       phi1_vec_train[i] <- phi1_vec_train[new_varind]
     #       gamma1_vec_train[i] <- gamma1_vec_train[new_varind]
     #     }
-    #
-    #
     #   }else{ #nrho equal to 1
-    #
-    #     if(n_rho_i != 1){
-    #       stop("n_rho_i < 1 and not equal to 1")
-    #     }
-    #
-    #
+    #     if(n_rho_i != 1){stop("n_rho_i < 1 and not equal to 1")}
     #     temp_samp_probs <- jointdens_mat[, i]
     #     temp_samp_probs[i] <- alpha*jointdens_mat[i, i]
-    #
     #     new_varind <- sample(1:n, size = 1, prob = temp_samp_probs)
-    #
     #     new_vartheta <- NA
     #
     #     if(new_varind == i){
-    #
     #       #parameters unchanged
-    #
     #       # mu1_vec_train[i] <- mutilde[1]
     #       # mu2_vec_train[i] <- mutilde[2]
     #       #
@@ -2536,32 +1932,21 @@ tbart2np <- function(x.train,
     #     }else{
     #       mu1_vec_train[i] <- mu1_vec_train[new_varind]
     #       mu2_vec_train[i] <- mu2_vec_train[new_varind]
-    #
     #       phi1_vec_train[i] <- phi1_vec_train[new_varind]
     #       gamma1_vec_train[i] <- gamma1_vec_train[new_varind]
     #     }
-    #
-    #
-    #
     #   } # end else statement nrho equal to 1
-    #
-    #
-    #
     # } # end lop over censored observations
 
     #########  Resample or remix vartheta values ######################################################
     if(any(phi1_vec_train <= 0)){
       stop("Line 1797 some phi1_vec_train values <= 0")
     }
-
     # print("remix step")
-
     # varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
 
     u_z <- z - offsetz - mutemp_z
-
     u_y <- ystar[uncens_inds] - mutemp_y
-
 
     # obtain the unique rows (components)
     # Must do this again because sa,pled new values in previous step
@@ -2570,14 +1955,12 @@ tbart2np <- function(x.train,
     #number of unique components
     k_uniq <- nrow(vartheta_unique_mat)
 
-
     if(mixstep == TRUE){
       #The values are conditionally independent
 
       #loop through the unique values and take draws
 
       for(j in 1:k_uniq){
-
         # there are 3 cases
         # Only censored observations in cluster j
         # Only uncensored observations in cluster j
@@ -2590,10 +1973,6 @@ tbart2np <- function(x.train,
         phitilde <- temp_params[3]
         gammatilde <- temp_params[4]
 
-
-        # print("temp_params = ")
-        # print(temp_params)
-
         # clust_boolvec <- !Rfast::colsums(t(varthetamat) != temp_params)
         #
         clust_boolvec <- (varthetamat[,4] == temp_params[4])
@@ -2603,48 +1982,30 @@ tbart2np <- function(x.train,
         # if(any(clust_boolvec != clust_boolvec_temp)){
         #   stop("any(clust_boolvec != clust_boolvec_temp)")
         # }
-
-
         n_rho_j <- sum(clust_boolvec)
-
-
         num_cens_temp <- sum(clust_boolvec[cens_inds])
         num_uncens_temp <- sum(clust_boolvec[uncens_inds])
 
-
         if( (num_cens_temp > 0) & (num_uncens_temp == 0)){
           #only censored observations
-
-          # mutilde <- mvrnorm(n = 1,
-          #                    mu = c(0, 0),
-          #                    Sigma = M_mat)
-
+          # mutilde <- mvrnorm(n = 1, mu = c(0, 0), Sigma = M_mat)
           if(cov_prior == "Ding"){
-            tempsigma <- rinvwishart(nu = nu0,
-                                     S = cding*diag(2))
-
+            tempsigma <- rinvwishart(nu = nu0, S = cding*diag(2))
             # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
             # tempomega <- (transmat %*% tempsigma) %*% transmat
-
             offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
             tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
-
             temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
-
             # gamma1 <- tempomega[1,2]
             # phi1 <- tempomega[1,1] - (gamma1^2)
-
             gammatilde <- tempomega[1,2]
             phitilde <- tempomega[1,1] - (gammatilde^2)
-
           }else{
             phitilde <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
-
             gammatilde <- rnorm(1,
                                 mean = gamma0,
                                 sd = sqrt(tau*phitilde))
           }
-
           mutilde[1] <- rnorm(n = 1,
                              mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
                              sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
@@ -2653,7 +2014,6 @@ tbart2np <- function(x.train,
             mutilde[1] <- 0
             mutildemat[,1] <- rep(0,n)
           }
-
           mutilde[2] <- rnorm(n = 1,
                              mean =   mutilde[1]*M_mat[1,2]/M_mat[1,1],
                              sd =  sqrt( M_mat[2,2] - (M_mat[1,2]^2/M_mat[1,1])   ))
@@ -2662,386 +2022,158 @@ tbart2np <- function(x.train,
         }
         if( (num_cens_temp == 0) & (num_uncens_temp > 0)){
           #only uncensored observations
-
           clust_uncens_for_y <- which(uncens_inds %in% which(clust_boolvec))
-
-
-          # print("uncens_inds = ")
-          # print(uncens_inds)
-          # print("which(clust_boolvec) = ")
-          # print(which(clust_boolvec))
-          # print("clust_uncens_for_y = ")
-          # print(clust_uncens_for_y)
-
           # clust_uncens_for_z <- clust_boolvec[uncens_inds]
           clust_uncens_boolvec <- uncens_boolvec & clust_boolvec
 
           # Exact sampling is not feasible, make Gibbs samples
-
           # not clear if can just take one Gibbs sample, i.e. num_sample <- 1
           # or if correlation across samples might be an issue
           num_sample <- 1
-
-
-
           for(samp_ind in 1:num_sample){
-
-            Sigma_mat_temp_j <- cbind(c(1,
-                                        gammatilde),
-                                      c(gammatilde,
-                                        phitilde+gammatilde^2))
-
+            Sigma_mat_temp_j <- cbind(c(1, gammatilde), c(gammatilde, phitilde+gammatilde^2))
             tempsigmainv <- solve(Sigma_mat_temp_j, tol = NULL)
             tempsigmamat <- solve(M_inv + n_rho_j*tempsigmainv, tol = NULL )
-
             mutilde <- Rfast::rmvnorm(n = 1,
-                               mu = (tempsigmamat%*%tempsigmainv) %*%
-                                 c(sum(u_z[clust_uncens_boolvec]),sum(u_y[clust_uncens_for_y])),
+                               mu = (tempsigmamat%*%tempsigmainv) %*% c(sum(u_z[clust_uncens_boolvec]),sum(u_y[clust_uncens_for_y])),
                                sigma = tempsigmamat )
 
             if(mu1_tozero == TRUE){
               mutilde[1] <- 0
               mutildemat[,1] <- rep(0,n)
             }
-
-            # print("clust_uncens_boolvec = ")
-            # print(clust_uncens_boolvec)
-
-            # print("length(u_y) = ")
-            # print(length(u_y))
-            #
-            # print("clust_uncens_for_y = ")
-            # print(clust_uncens_for_y)
-            #
-            # print("u_y[clust_uncens_for_y] = ")
-            # print(u_y[clust_uncens_for_y])
-            #
-            # print("u_z[clust_uncens_boolvec] = ")
-            # print(u_z[clust_uncens_boolvec])
-            #
-            # print("gammatilde= ")
-            # print(gammatilde)
-            #
-            # print("mutilde= ")
-            # print(mutilde)
-            #
-            # print("dbar_temp= ")
-            # print(dbar_temp)
-
-
-            # print("(nzero/2) +  (n_rho_j + 1)/2 = ")
-            # print((nzero/2) +  (n_rho_j + 1)/2)
-
-
-
             if(cov_prior == "Ding"){
-
               y_epsilon2 <- u_y[clust_uncens_for_y]  - mutilde[2]
-
               rho1 <- gammatilde/sqrt(Sigma_mat_temp_j[2,2])
-
-              # print( "nu0 = " )
-              # print(nu0)
-              #
-              # print( "cding = " )
-              # print(cding)
-              #
-              # print( "rho1 = " )
-              # print(rho1)
-
-              sigz2 <- 1/rgamma(n = 1,
-                                shape = nu0/2,
-                                rate = cding/(2*(1- (rho1^2))))
-
-
+              sigz2 <- 1/rgamma(n = 1, shape = nu0/2, rate = cding/(2*(1- (rho1^2))))
               z_epsilon2 <- sqrt(sigz2)*(u_z[clust_uncens_boolvec] - mutilde[1])
-
               zsquares <- crossprod(z_epsilon2, z_epsilon2)[1]
               ysquares <- crossprod(y_epsilon2, y_epsilon2)[1]
               zycross <- crossprod(z_epsilon2, y_epsilon2)[1]
-
-              Stemp <- cbind(c(ysquares,zycross),
-                             c(zycross, zsquares))
-
-              # print(" nu0 = ")
-              # print( nu0)
-              # print(" n_rho_j  = ")
-              # print( n_rho_j )
-              #
-              # print(" Stemp = ")
-              # print( Stemp)
-              # print(" cding*diag(2) = ")
-              # print( cding*diag(2))
-              # print(" Stemp+cding*diag(2) = ")
-              # print( Stemp+cding*diag(2))
-
-              tempsigma <- rinvwishart(nu = n_rho_j + nu0,
-                                       S = Stemp+cding*diag(2))
-
-
+              Stemp <- cbind(c(ysquares,zycross), c(zycross, zsquares))
+              tempsigma <- rinvwishart(nu = n_rho_j + nu0, S = Stemp+cding*diag(2))
               # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
               # tempomega <- (transmat %*% tempsigma) %*% transmat
-
               offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
               tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
-
               temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
-
               gammatilde <- tempomega[1,2]
               phitilde <- tempomega[1,1] - (gammatilde^2)
-
-
-
             }else{
-
               if(simultaneous_covmat == TRUE){
-
                 if(cov_prior == "VH"){
                   h_num <- (gamma0/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1],
                                                     u_y[clust_uncens_for_y] - mutilde[2])[1]
                   a_temp <- (1/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1],
                                                 u_z[clust_uncens_boolvec] - mutilde[1])[1]
-
                   h_temp <- h_num/a_temp
                   k_temp <- ((gamma0^2)/tau)+S0 +
-                    crossprod(u_y[clust_uncens_for_y] - mutilde[2],
-                              u_y[clust_uncens_for_y] - mutilde[2])[1] -
+                    crossprod(u_y[clust_uncens_for_y] - mutilde[2], u_y[clust_uncens_for_y] - mutilde[2])[1] -
                     ((h_num^2)/(a_temp))
 
-                  phitilde <- 1/rgamma(n = 1,
-                                   shape =  (nzero + n_rho_j )/2,
-                                   rate = k_temp/2)
-
+                  phitilde <- 1/rgamma(n = 1, shape =  (nzero + n_rho_j )/2, rate = k_temp/2)
                   gammatilde <- rnorm(n = 1, mean = h_temp, sd = sqrt(phitilde/a_temp))
-
-
                 }else{
                   stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
                 }
               }else{
-                dbar_temp <- (S0/2) + ((gammatilde-gamma0)^2/tau) +
+                dbar_temp <- (S0/2) + ((gammatilde-gamma0)^2/(2*tau)) +
                   (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
-
                 phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (n_rho_j + 1)/2 , rate = dbar_temp)
-
-
-                gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
+                gammabar_temp <- (gamma0 / tau + sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) )) /
                   ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
 
-                # print("gammabar_temp= ")
-                # print(gammabar_temp)
-                #
-                # print("sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_for_z] - mutilde[1])^2 ) )   ) = ")
-                # print(sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
-
-                gammatilde <- rnorm(1,
-                                    mean = gammabar_temp,
+                gammatilde <- rnorm(1, mean = gammabar_temp,
                                     sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
-
                 # CAN IMPROVE THIS WITH NORMAL-INVERSE GAMMA SAMPLE
-
               }
-
             } # end covariance matrix sample if and else statements
           } # end of Gibbs sampler loop
-
-
         }
         if( (num_cens_temp > 0) & (num_uncens_temp > 0)){
           #Both censored and uncensored observations
-
-
-
-
           #obtain number censored and uncensored
-
           clust_cens_boolvec <- cens_boolvec & clust_boolvec
           clust_uncens_boolvec <- uncens_boolvec & clust_boolvec
-
           # clust_uncens_for_y <- which(uncens_boolvec %in% clust_boolvec)
           clust_uncens_for_y <- which(uncens_inds %in% which(clust_boolvec))
-          # print("clust_uncens_for_y = ")
-          # print(clust_uncens_for_y)
-
           # num_cens_inclust <- sum(clust_cens_boolvec)
           # num_uncens_inclust <- sum(clust_uncens_boolvec)
 
-
-
-
           # The mean of the error in the z equation can be sampled directly
-          mutilde[1] <- rnorm(n = 1,
-                              mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
+          mutilde[1] <- rnorm(n = 1, mean = sum(u_z[clust_boolvec])/( (1/M_mat[1,1]) + n_rho_j  ),
                               sd = sqrt(1/( (1/M_mat[1,1]) + n_rho_j  )) )
-
           if(mu1_tozero == TRUE){
             mutilde[1] <- 0
             mutildemat[,1] <- rep(0,n)
           }
-
           # The other cluster parameters must be sampled in a Gibbs sampler
-
           M2bar <- 1/( ( M_mat[1,1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  + (num_uncens_temp/phitilde )  )
-
           # sum(u_y[clust_cens_inds] -  gammatilde*(u_z[clust_cens_inds]  -mutilde[1] ))
-
-          mu2bar <- M2bar*( ( M_mat[1,1]*mutilde[1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  +
+          mu2bar <- M2bar*( ( M_mat[1,2]*mutilde[1]/(M_mat[1,1]*M_mat[2,2] - M_mat[1,2]^2) )  +
             (sum(u_y[clust_uncens_for_y] -  gammatilde*(u_z[clust_uncens_boolvec]  -mutilde[1] ))/phitilde ) )
-
-
-          mutilde[2] <- rnorm(n = 1,
-                              mean = mu2bar,
-                              sd = sqrt(M2bar) )
-
-
+          mutilde[2] <- rnorm(n = 1, mean = mu2bar, sd = sqrt(M2bar) )
           if(cov_prior == "Ding"){
-
-            Sigma_mat_temp_j <- cbind(c(1,
-                                        gammatilde),
-                                      c(gammatilde,
-                                        phitilde+gammatilde^2))
-
+            Sigma_mat_temp_j <- cbind(c(1, gammatilde), c(gammatilde, phitilde+gammatilde^2))
             y_epsilon2 <- u_y[clust_uncens_for_y]  - mutilde[2]
-
             rho1 <- gammatilde/sqrt(Sigma_mat_temp_j[2,2])
-
-            # print( "gammatilde = " )
-            # print(gammatilde)
-            #
-            # print( "sqrt(Sigma_mat_temp_j[2,2]) = " )
-            # print(sqrt(Sigma_mat_temp_j[2,2]))
-            #
-            # print( "nu0 = " )
-            # print(nu0)
-            #
-            # print( "cding = " )
-            # print(cding)
-            #
-            # print( "rho1 = " )
-            # print(rho1)
-
-            sigz2 <- 1/rgamma(n = 1,
-                              shape = nu0/2,
-                              rate = cding/(2*(1- (rho1^2))))
-
-
+            sigz2 <- 1/rgamma(n = 1, shape = nu0/2, rate = cding/(2*(1- (rho1^2))))
             z_epsilon2 <- sqrt(sigz2)*(u_z[clust_uncens_boolvec] - mutilde[1])
-
             zsquares <- crossprod(z_epsilon2, z_epsilon2)[1]
             ysquares <- crossprod(y_epsilon2, y_epsilon2)[1]
             zycross <- crossprod(z_epsilon2, y_epsilon2)[1]
-
-            Stemp <- cbind(c(ysquares,zycross),
-                           c(zycross, zsquares))
-
-
-            # print(" nu0 = ")
-            # print( nu0)
-            # print(" num_uncens_temp  = ")
-            # print( num_uncens_temp )
-            #
-            # print(" Stemp = ")
-            # print( Stemp)
-            # print(" cding*diag(2) = ")
-            # print( cding*diag(2))
-            # print(" Stemp+cding*diag(2) = ")
-            # print( Stemp+cding*diag(2))
-
-
+            Stemp <- cbind(c(ysquares,zycross), c(zycross, zsquares))
             tempsigma <- rinvwishart(nu = num_uncens_temp + nu0,
                                      S = Stemp+cding*diag(2))
-
-
             # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
             # tempomega <- (transmat %*% tempsigma) %*% transmat
-
             offdiag <- tempsigma[2,1]/sqrt(tempsigma[2,2])
             tempomega <- cbind(c(tempsigma[1,1],offdiag),c(offdiag,1))
-
             temprho <- tempomega[1,2]/(sqrt(tempomega[1,1]))
-
             gammatilde <- tempomega[1,2]
             phitilde <- tempomega[1,1] - (gammatilde^2)
-
-
-
           }else{
             if(simultaneous_covmat == TRUE){
-
               if(cov_prior == "VH"){
-                h_num <- (gamma0/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1],
-                                                  u_y[clust_uncens_for_y] - mutilde[2])[1]
-                a_temp <- (1/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1],
-                                              u_z[clust_uncens_boolvec] - mutilde[1])[1]
-
+                h_num <- (gamma0/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1], u_y[clust_uncens_for_y] - mutilde[2])[1]
+                a_temp <- (1/tau) + crossprod(u_z[clust_uncens_boolvec] - mutilde[1], u_z[clust_uncens_boolvec] - mutilde[1])[1]
                 h_temp <- h_num/a_temp
                 k_temp <- ((gamma0^2)/tau)+S0 +
-                  crossprod(u_y[clust_uncens_for_y] - mutilde[2],
-                            u_y[clust_uncens_for_y] - mutilde[2])[1] -
-                  ((h_num^2)/(a_temp))
-
-                phitilde <- 1/rgamma(n = 1,
-                                     shape =  (nzero + num_uncens_temp )/2,
-                                     rate = k_temp/2)
-
+                  crossprod(u_y[clust_uncens_for_y] - mutilde[2], u_y[clust_uncens_for_y] - mutilde[2])[1] - ((h_num^2)/(a_temp))
+                phitilde <- 1/rgamma(n = 1, shape =  (nzero + num_uncens_temp )/2, rate = k_temp/2)
                 gammatilde <- rnorm(n = 1, mean = h_temp, sd = sqrt(phitilde/a_temp))
-
 
               }else{
                 stop("If simultaneous_covmat == TRUE, then must use Van Hasselt Covariance prior. Set cov_prior to VH.")
               }
             }else{
-              gammabar_temp <- sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) /
+              gammabar_temp <- (gamma0 / tau + sum( (u_z[clust_uncens_boolvec] - mutilde[1])*(u_y[clust_uncens_for_y] - mutilde[2]) ) ) /
                 ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )
-
-
-              gammatilde <- rnorm(1,
-                                  mean = gammabar_temp,
-                                  sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
-
-
-              dbar_temp <- (S0/2) + ((gammatilde- gamma0)^2/tau) +
+              gammatilde <- rnorm(1, mean = gammabar_temp, sd = sqrt( phitilde / ((1/tau) + sum( (u_z[clust_uncens_boolvec] - mutilde[1])^2 ) )   ))
+              dbar_temp <- (S0/2) + ((gammatilde- gamma0)^2/(2*tau)) +
                 (1/2)*sum( (u_y[clust_uncens_for_y] - mutilde[2] - gammatilde*(u_z[clust_uncens_boolvec] - mutilde[1]) )^2 )
-
               phitilde <- 1/rgamma(n = 1, shape =  (nzero/2) +  (num_uncens_temp + 1)/2 , rate = dbar_temp)
-
             }
           }
-
-
-
         }
-
         # now must update vartheta_mat and vartheta_unique_mat
-
-
         # tempmat <- matrix( rnorm(4*10), nrow = 4, ncol = 10)
         #
         # tempmat[c(1,3),1 ] <- 1
         #
-
         #presumably this is less efficient because creates a new matrix
         # varthetamat[clust_boolvec,] <- rep(c(mutilde, phitilde, gammatilde), each = length(clust_boolvec))
-
         varthetamat[clust_boolvec,1] <- mutilde[1]
         varthetamat[clust_boolvec,2] <- mutilde[2]
         varthetamat[clust_boolvec,3] <- phitilde
         varthetamat[clust_boolvec,4] <- gammatilde
-
-
       } #end of loop over unique cluster values
-
     } # end mixing step
 
-
     # presumably only update this after loop over all unique clusters because conditionally independent
-
     vartheta_unique_mat <- unique(varthetamat)
-
     #number of unique components
     k_uniq <- nrow(vartheta_unique_mat)
-
-
     #update the vectors of parameter values
 
     # varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
@@ -3059,9 +2191,7 @@ tbart2np <- function(x.train,
     phi1_vec_train <- varthetamat[,3]
     logphi1_vec_train <- log(phi1_vec_train)
     gamma1_vec_train <- varthetamat[,4]
-
     var1_vec_train <- phi1_vec_train + gamma1_vec_train^2
-
 
     if(any(phi1_vec_train <= 0)){
       stop("Line 1797 some phi1_vec_train values <= 0")
@@ -3069,34 +2199,20 @@ tbart2np <- function(x.train,
 
     ###### Sample test vartheta values   ###############################
 
-
-
-
     if(ntest>0){
-
       temp_sample_probs <- c(rep(1/(alpha+n) , n), alpha/(alpha+n) )
-
       temp_inds <- sample.int(n = (n+1), size = ntest, prob = temp_sample_probs, replace = TRUE)
-
-
       for(i in 1:ntest){
-
-
         if(temp_inds[i] == n+1){
           # sample from the base distribution
-          mutilde <- Rfast::rmvnorm(n = 1,
-                                    mu = c(0, 0),
-                                    sigma = M_mat)
-
+          mutilde <- Rfast::rmvnorm(n = 1, mu = c(0, 0), sigma = M_mat)
           if(mu1_tozero == TRUE){
             mutilde[1] <- 0
             # mu1_vec_train <- rep(0,n)
           }
 
           if(cov_prior == "Ding"){
-
-            tempsigma <- rinvwishart(nu = nu0,
-                                     S = cding*diag(2))
+            tempsigma <- rinvwishart(nu = nu0, S = cding*diag(2))
 
             # transmat <- cbind(c(1,0),c(0,1/sqrt(tempsigma[2,2])))
             # tempomega <- (transmat %*% tempsigma) %*% transmat
@@ -3113,75 +2229,44 @@ tbart2np <- function(x.train,
             phitilde <- tempomega[1,1] - (gammatilde^2)
 
           }else{
-
             phitilde <- 1/rgamma(n = 1, shape =  nzero/2, rate = S0/2)
-
-            gammatilde <- rnorm(1,
-                                mean = gamma0,
-                                sd = sqrt(tau*phitilde))
-
+            gammatilde <- rnorm(1, mean = gamma0, sd = sqrt(tau*phitilde))
           }
-
-
-
           if( (is.na(gammatilde)) | !is.finite(gammatilde)   ){
             print("gammatilde = ")
             print(gammatilde)
-
             print("nzero = ")
             print(nzero)
-
-
             print("S0 = ")
             print(S0)
-
-
             print("gamma0 = ")
             print(gamma0)
             print("tau = ")
             print(tau)
             print("phitilde = ")
             print(phitilde)
-
             stop("gamma tilde stop")
           }
-
           varthetamat_test[i,] <- c(mutilde, phitilde, gammatilde)
-
-
         }else{
           varthetamat_test[i,] <- varthetamat[temp_inds[i],]
-
-          if( any(is.na(gammatilde)) | any(!is.finite(gammatilde))   ){
-
+          if( any(is.na(varthetamat_test[i, ])) | any(!is.finite(varthetamat_test[i, ]))   ){
             print("varthetamat_test = ")
             print(varthetamat_test)
-
             print("i = ")
             print(i)
-
             print("temp_inds[i] = ")
             print(temp_inds[i])
-
           }
-
-
         }
-
       } # end of for-loop of length ntest
-
-
     }
-
-
-
 
     # #########  set parameters for gamma draw  ######################################################
     #
     # if(vh_prior == TRUE){
     #   G0 <- tau*phi1
     # }
-    #
     #
     # # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon)
     # G1inv <- (1/G0) + (1/phi1)*crossprod(z_epsilon[uncens_inds])
@@ -3190,45 +2275,11 @@ tbart2np <- function(x.train,
     # # gamma_one <- (G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon , y_epsilon   )   ))[1,1]
     # gamma_one <- (G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   ))[1,1]
     #
-    # # print("phi1 = ")
-    # # print(phi1)
-    # # print("G0 = ")
-    # # print(G0)
-    # #
-    # # print("(G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )) = ")
-    # # print((G1*( (1/G0)*gamma0 + (1/phi1)*crossprod(z_epsilon[uncens_inds] , y_epsilon[uncens_inds]   )   )))
-    # #
-    # # print("gamma_one = ")
-    # # print(gamma_one)
-    # #
-    # # print("crossprod(z_epsilon , y_epsilon   ) = ")
-    # # print(crossprod(z_epsilon , y_epsilon   ))
-    # #
-    # # print("crossprod(z_epsilon    ) = ")
-    # # print(crossprod(z_epsilon   ))
-    # #
-    # # print("z_epsilon     = ")
-    # # print(z_epsilon   )
-    # #
-    # # print("G1 = ")
-    # # print(G1)
-    #
     # gamma1 <- rnorm(n = 1, mean = gamma_one, sd =  sqrt(G1) )
     #
     # #########  set parameters for phi draw  ######################################################
     #
     # n_one <- nzero + n1 + 1
-    #
-    # # print("S0 = ")
-    # # print(S0)
-    # # print("(gamma1^2)*crossprod(z_epsilon) = ")
-    # # print((gamma1^2)*crossprod(z_epsilon))
-    # #
-    # # print("2*gamma1*crossprod(z_epsilon , y_epsilon   ) = ")
-    # # print(2*gamma1*crossprod(z_epsilon , y_epsilon   ))
-    # #
-    # # print("crossprod(y_epsilon) = ")
-    # # print(crossprod(y_epsilon))
     #
     # # S1 <- S0 + (gamma1^2)*crossprod(z_epsilon) - 2*gamma1*crossprod(z_epsilon , y_epsilon   )  + crossprod(y_epsilon)
     #
@@ -3245,39 +2296,19 @@ tbart2np <- function(x.train,
     # # draw from inverse gamma
     # phi1 <- 1/rgamma(n = 1, shape =  n_one/2, rate = S1/2)
     #
-    #
-    #
-    #
-    #
-    # # print("gamma1 = ")
-    # # print(gamma1)
-    #
-    #
     # ######### update Sigma matrix #####################################################
     #
     # Sigma_mat <- cbind(c(1,gamma1),c(gamma1,phi1+gamma1^2))
     #
-    #
-    #
-    #
     # ###### Accelerated sampler  ###############################
     #
-    #
     # if(accelerate){
-    #
-    #
     #   #if prior mean for mu parameters is zero (does this make sense? require an offset for y?)
-    #
     #   nu1 <- sum(sampler_z$getTrees@.Data()$var ==-1) - nzero + 1
-    #
-    #
     #   asquared <- (1/phi1)*(S0 + crossprod(y_epsilon[uncens_inds]))
-    #
     #   znodestemp <- sampler_z$getTrees@.Data()$value[sampler_z$getTrees@.Data()$var!=-1]
-    #
     #   bsquared <- (1 + (gamma1^2)/phi1)*crossprod(z_epsilon) +
     #     (1/sigmu_z)*crossprod(znodestemp) + (gamma1^2)*(1/G0)
-    #
     #
     #   if(sqrt(asquared*bsquared) > 150^2){
     #     print("GIG sample will be slow.")
@@ -3285,107 +2316,53 @@ tbart2np <- function(x.train,
     #
     #   #candidate g parameer value
     #   gprime <- rgig(n = 1, lambda = nu1/2, chi = asquared, psi = bsquared )
-    #
-    #
-    #
-    #
     #   probaccept <- min(1, exp((gprime-1)* ((1/sigmu_z)*sum(znodestemp)*meanmu_z      +
     #                                           gamma1*gamma0/G0 )    ) )
-    #
     #   g_accepted <- 1
-    #
     #   #check if accept
     #   accept_bin <- rbinom(n = 1,size = 1, prob = probaccept)
     #
     #   if(is.na(accept_bin)){
-    #
     #     print("accept_bin is na.  probaccept =")
     #     print(probaccept)
-    #
     #     print("gprime = ")
     #     print(gprime)
-    #
     #     print("sigmu_z = ")
     #     print(sigmu_z)
-    #
     #     print("sum(znodestemp) = ")
     #     print(sum(znodestemp))
-    #
     #     print("meanmu_z = ")
     #     print(meanmu_z)
-    #
     #   }
-    #
     #   if(accept_bin ==1){
     #     g_accepted <- gprime
-    #
     #     phi1 <- (gprime^2)*phi1
-    #
     #     gamma1 <- gprime*gamma1
-    #
     #     mutemp_z <- gprime*mutemp_z
-    #
     #     z <- gprime*z
-    #
     #   }
-    #
-    #
-    #
-    #
     # }
 
-
-
     ########### splitting probability draws #############################
-
-
     if (sparse & (iter > floor(n.burnin * 0.5))) {
       s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
       s_z <- s_update_z[[1]]
-
       s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
       s_y <- s_update_y[[1]]
-
       if(alpha_split_prior){
         alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
         alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
       }
     }
-
-
-
-
     ###### Store results   ###############################
-
-
-
-
-
-
     if(iter>n.burnin){
       iter_min_burnin <- iter-n.burnin
-
-
-
       if(selection_test ==1){
         utrain <- matrix(NA, nrow = n, ncol = 2)
-
         for(i in 1:n){
-
-          Sigma_mattemp <- cbind(c(1,
-                                   varthetamat[i,4]),
-                                 c(varthetamat[i,4],
-                                   varthetamat[i,3]+varthetamat[i,4]^2))
-
-
-          utrain[i,] <- Rfast::rmvnorm(n = 1,
-                                       mu = c(varthetamat[i,1],
-                                              varthetamat[i,2]),
-                                       sigma = Sigma_mattemp)
+          Sigma_mattemp <- cbind(c(1, varthetamat[i,4]), c(varthetamat[i,4], varthetamat[i,3]+varthetamat[i,4]^2))
+          utrain[i,] <- Rfast::rmvnorm(n = 1, mu = c(varthetamat[i,1], varthetamat[i,2]), sigma = Sigma_mattemp)
         }
-
-
-
         draw$error_draws[,iter_min_burnin,] <- utrain
 
         # draw correlations
@@ -3393,33 +2370,16 @@ tbart2np <- function(x.train,
         # draw$kendalltau_draws[iter_min_burnin] <- cor(utrain[,1],utrain[,2], method = "kendall") #array(NA, dim = c(n, n.iter))
         # draw$spearmanrho_draws[iter_min_burnin] <-  cor(utrain[,1],utrain[,2], method = "spearman") #array(NA, dim = c(n, n.iter))
 
-
         # for(i in 1:ntest){
 
-          # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
+        # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
 
         #can use first element, just need one draw from posterior predictive
-
-        Sigma_mattemp <- cbind(c(1,
-                                 varthetamat_test[1,4]),
-                               c(varthetamat_test[1,4],
-                                 varthetamat_test[1,3]+varthetamat_test[1,4]^2))
-
-
-        draw$error_draws_test[iter_min_burnin,] <- Rfast::rmvnorm(n = 1,
-                                                                  mu = c(varthetamat_test[1,1],
-                                                                         varthetamat_test[1,2]),
+        Sigma_mattemp <- cbind(c(1, varthetamat_test[1,4]), c(varthetamat_test[1,4], varthetamat_test[1,3]+varthetamat_test[1,4]^2))
+        draw$error_draws_test[iter_min_burnin,] <- Rfast::rmvnorm(n = 1, mu = c(varthetamat_test[1,1],varthetamat_test[1,2]),
                                                                   sigma = Sigma_mattemp)
         # }
-
-
-
-
-
       }
-
-
-
 
       #NOTE y and z training sample values saved here
       #do not correspond to the the same means and errors as
@@ -3446,47 +2406,39 @@ tbart2np <- function(x.train,
       # zytest[,2] <- zytest[,2] + mutemp_test_y
 
       for(i in 1:ntest){
-
         # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
+        Sigma_mattemp <- cbind(c(1,varthetamat_test[i,4]),
+                               c(varthetamat_test[i,4],varthetamat_test[i,3]+varthetamat_test[i,4]^2))
 
-
-        Sigma_mattemp <- cbind(c(1,
-                                 varthetamat_test[i,4]),
-                               c(varthetamat_test[i,4],
-                                 varthetamat_test[i,3]+varthetamat_test[i,4]^2))
-
-
-        zytest[i,] <- Rfast::rmvnorm(n = 1,
-                              mu = c(offsetz + mutemp_test_z[i] + varthetamat_test[i,1],
-                                     mutemp_test_y[i]+ varthetamat_test[i,2]),
+        zytest[i,] <- Rfast::rmvnorm(n = 1, mu = c(offsetz + mutemp_test_z[i] + varthetamat_test[i,1], mutemp_test_y[i]+ varthetamat_test[i,2]),
                               sigma = Sigma_mattemp)
       }
 
 
-      probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
+      # probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
+      probcens_train <- pnorm(- mutemp_z - offsetz - varthetamat[,1] )
       probcens_test <- pnorm(- mutemp_test_z - offsetz - varthetamat_test[,1])
 
       #calculate conditional expectation
-
       # condexptrain <- mutemp_y + gamma1*(dnorm(- mutemp_z - offsetz ))/(1-probcens_train)
+      # temp_ztrain <- mutemp_z[uncens_inds] + offsetz + varthetamat[uncens_inds,1]
+      temp_ztrain <- mutemp_z + offsetz + varthetamat[,1]
+      IMR_train <- exp( dnorm(temp_ztrain,log=TRUE) - pnorm(temp_ztrain,log.p = TRUE) )
 
-      temp_ztrain <- mutemp_z[uncens_inds] + offsetz + varthetamat[uncens_inds,1]
 
-      IMR_train <- exp( dnorm(temp_ztrain,log=T) - pnorm(temp_ztrain,log.p = T) )
+      # condexptrain <- mutemp_y + varthetamat[uncens_inds,2] + varthetamat[uncens_inds,4]*IMR_train#*
 
-
-      condexptrain <- mutemp_y + varthetamat[uncens_inds,2] + varthetamat[uncens_inds,4]*IMR_train#*
-        # (dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1]))/(1-probcens_train)
-
+      if(draw_censored_predictions){
+        condexptrain <- mutemp_y_all + varthetamat[,2] + varthetamat[,4]*IMR_train#*
+        draw$cond_exp_train[, iter_min_burnin] <- condexptrain*tempsd+tempmean
+        draw$mu_y_train[, iter_min_burnin] <- (mutemp_y_all +varthetamat[, 2]) * tempsd + tempmean
+      }
+      draw$cond_exp_train_uncens[, iter_min_burnin] <- (mutemp_y + varthetamat[uncens_inds,2] + varthetamat[uncens_inds,4]*IMR_train[uncens_inds])*tempsd+tempmean#*
+      # (dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1]))/(1-probcens_train)
       # (dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1] ))/(1-probcens_test)
-
-
       temp_ztest <- mutemp_test_z + offsetz + varthetamat_test[,1]
-
-      IMR_test <- exp( dnorm(temp_ztest,log=T) - pnorm(temp_ztest,log.p = T) )
-
-      condexptest <- mutemp_test_y + varthetamat_test[,2] +
-        varthetamat_test[,4]*IMR_test#(dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1] ))/(1-probcens_test)
+      IMR_test <- exp( dnorm(temp_ztest,log=TRUE) - pnorm(temp_ztest,log.p = TRUE) )
+      condexptest <- mutemp_test_y + varthetamat_test[,2] + varthetamat_test[,4]*IMR_test#(dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1] ))/(1-probcens_test)
 
       # condexptest <- ifelse(probcens_test ==1,
       #                       mutemp_test_y + varthetamat_test[,2],
@@ -3495,23 +2447,16 @@ tbart2np <- function(x.train,
       #                       )
 
       if( any(is.na(condexptest)) | any(!is.finite(condexptest))   ){
-
         print("condexptest = ")
         print(condexptest)
-
         print("mutemp_test_y = ")
         print(mutemp_test_y)
-
         print("mutemp_test_z = ")
         print(mutemp_test_z)
-
         print(" varthetamat_test[,4] = ")
         print( varthetamat_test[,4])
-
         print("which(is.na(condexptest)) = ")
         print(which(is.na(condexptest)))
-
-
         print("which(!is.finite(condexptest)) = ")
         print(which(!is.finite(condexptest)))
 
@@ -3519,39 +2464,31 @@ tbart2np <- function(x.train,
 
         print("offsetz= ")
         print(offsetz)
-
         print("condexptest[err_inds] = ")
         print(condexptest[err_inds])
-
         print("mutemp_test_y[err_inds] = ")
         print(mutemp_test_y[err_inds])
-
         print("mutemp_test_z[err_inds] = ")
         print(mutemp_test_z[err_inds])
-
         print(" varthetamat_test[err_inds,] = ")
         print( varthetamat_test[err_inds,])
-
         print(" probcens_test[err_inds] = ")
         print( probcens_test[err_inds])
-
-
-
         stop("any(is.na(condexptest)) | any(!is.finite(condexptest))")
-
       }
-
-
-
       # draw$Z.mat_train[,iter_min_burnin] <- z
       # draw$Z.mat_test[,iter_min_burnin] <-  zytest[,1]
       # draw$Y.mat_train = array(NA, dim = c(n, n.iter)),
       # draw$Y.mat_test = array(NA, dim = c(ntest, n.iter)),
-      draw$mu_y_train[, iter_min_burnin] <- (mutemp_y + varthetamat[uncens_inds,2]) *tempsd+tempmean
-      draw$mu_y_test[, iter_min_burnin] <- (mutemp_test_y + varthetamat_test[,2]) *tempsd+tempmean
 
-      draw$mu_y_train_noerror[, iter_min_burnin] <- (mutemp_y) *tempsd+tempmean #+ varthetamat[uncens_inds,2]
+      # draw$mu_y_train[, iter_min_burnin] <- (mutemp_y + varthetamat[uncens_inds,2]) *tempsd+tempmean
+      draw$mu_y_test[, iter_min_burnin] <- (mutemp_test_y + varthetamat_test[,2]) *tempsd+tempmean
+      # draw$mu_y_train_noerror[, iter_min_burnin] <- (mutemp_y) *tempsd+tempmean #+ varthetamat[uncens_inds,2]
       draw$mu_y_test_noerror[, iter_min_burnin] <- (mutemp_test_y) *tempsd+tempmean #+ varthetamat_test[,2]
+      if (draw_censored_predictions) {
+        draw$mu_y_train[, iter_min_burnin] <- (mutemp_y_all +varthetamat[, 2]) * tempsd + tempmean
+        draw$mu_y_train_noerror[, iter_min_burnin] <- mutemp_y_all * tempsd + tempmean
+      }
 
 
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
@@ -3564,71 +2501,85 @@ tbart2np <- function(x.train,
       draw$train.probcens[, iter_min_burnin] <-  probcens_train
       draw$test.probcens[, iter_min_burnin] <-  probcens_test
 
-      draw$cond_exp_train[, iter_min_burnin] <- condexptrain
-      draw$cond_exp_test[, iter_min_burnin] <- condexptest
+      if(draw_censored_predictions){
+        draw$cond_exp_train[, iter_min_burnin] <- condexptrain*tempsd+tempmean
+      }
+      draw$cond_exp_test[, iter_min_burnin] <- condexptest * tempsd + tempmean
 
-      draw$ystar_train[, iter_min_burnin] <- (ystar) *tempsd+tempmean
+      # draw$ystar_train[, iter_min_burnin] <- (ystar) *tempsd+tempmean
       draw$ystar_test[, iter_min_burnin] <- (zytest[,2]) *tempsd+tempmean
       draw$zstar_train[,iter_min_burnin] <- z
       draw$zstar_test[,iter_min_burnin] <-  zytest[,1]
+      draw$ycond_test_matrix[, iter_min_burnin] <- ifelse( draw$zstar_test[,iter_min_burnin] >= 0, draw$ystar_test[, iter_min_burnin], NA_real_ )
 
-      draw$ycond_draws_train[[iter_min_burnin]] <-  (ystar[z >=0]) *tempsd+tempmean
+      draw$ycond_draws_train[[iter_min_burnin]] <-  (ystar[uncens_inds]) *tempsd+tempmean
       draw$ycond_draws_test[[iter_min_burnin]] <-  (zytest[,2][zytest[,1] >= 0]) *tempsd+tempmean
 
+      if (draw_censored_predictions) {
+        ystar_store <- ystar
+        cens_mean <- mutemp_y_all[cens_inds] +mu2_vec_train[cens_inds] + gamma1_vec_train[cens_inds] *(z[cens_inds] -offsetz -mutemp_z[cens_inds] -mu1_vec_train[cens_inds])
+        ystar_store[cens_inds] <- rnorm(n0,mean = cens_mean,sd = sqrt(phi1_vec_train[cens_inds]))
+        draw$ystar_train[, iter_min_burnin] <-ystar_store * tempsd + tempmean
+      }
 
       varthetamat_scaled <- varthetamat
-      varthetamat_scaled[,1:3] <- varthetamat[,1:3]*tempsd
-      varthetamat_scaled[,4] <- varthetamat[,4]*(tempsd^2)
+      varthetamat_scaled[, 1] <- varthetamat[, 1]
+      varthetamat_scaled[, 2] <- varthetamat[, 2] * tempsd
+      varthetamat_scaled[, 3] <- varthetamat[, 3] * tempsd^2
+      varthetamat_scaled[, 4] <- varthetamat[, 4] * tempsd
 
       varthetamat_test_scaled <- varthetamat_test
-      varthetamat_test_scaled[,1:3] <- varthetamat_test[,1:3]*tempsd
-      varthetamat_test_scaled[,4] <- varthetamat_test[,4]*(tempsd^2)
+      varthetamat_test_scaled[, 1] <- varthetamat_test[, 1]
+      varthetamat_test_scaled[, 2] <- varthetamat_test[, 2] * tempsd
+      varthetamat_test_scaled[, 3] <- varthetamat_test[, 3] * tempsd^2
+      varthetamat_test_scaled[, 4] <- varthetamat_test[, 4] * tempsd
 
       draw$vartheta_draws[,, iter_min_burnin] <- varthetamat_scaled
       draw$vartheta_test_draws[,, iter_min_burnin] <- varthetamat_test_scaled
 
+      # if(is.numeric(censored_value)){
+      #
+      #   # uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z - offsetz )
+      #   uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + varthetamat[uncens_inds,4]*dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
+      #   uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + varthetamat_test[,4]*dnorm(- mutemp_test_z - offsetz -  varthetamat_test[,1])
+      #
+      #   draw$uncond_exp_train[, iter_min_burnin] <- (uncondexptrain) *tempsd+tempmean
+      #   draw$uncond_exp_test[, iter_min_burnin] <- (uncondexptest) *tempsd+tempmean
+      #
+      #
+      #   # draw$ydraws_train[, iter_min_burnin] <- ifelse(z < 0, censored_value, ystar )
+      #   draw$ydraws_test[, iter_min_burnin] <- (ifelse(zytest[,1] < 0, censored_value, zytest[,2] )) *tempsd+tempmean
+      # }
 
-      if(is.numeric(censored_value)){
-
+      if(has_numeric_censor){
         # uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z - offsetz )
-        uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + varthetamat[uncens_inds,4]*dnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
-        uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + varthetamat_test[,4]*dnorm(- mutemp_test_z - offsetz -  varthetamat_test[,1])
+        if(draw_censored_predictions){
+          uncondexptrain <- censored_value*probcens_train + (mutemp_y_all + varthetamat[, 2])*(1- probcens_train ) + varthetamat[,4]*dnorm(- mutemp_z - offsetz - varthetamat[,1])
+          draw$uncond_exp_train[, iter_min_burnin] <- uncondexptrain*tempsd+tempmean
+        }
+        uncondexptrain_uncens <- censored_value*probcens_train[uncens_inds] +
+          (mutemp_y + varthetamat[uncens_inds, 2])*(1- probcens_train[uncens_inds] ) + varthetamat[uncens_inds,4]*dnorm(- mutemp_z[uncens_inds] - offsetz  - varthetamat[uncens_inds,1] )
+        draw$uncond_exp_train_uncens[, iter_min_burnin] <- uncondexptrain_uncens*tempsd+tempmean
 
-        draw$uncond_exp_train[, iter_min_burnin] <- (uncondexptrain) *tempsd+tempmean
-        draw$uncond_exp_test[, iter_min_burnin] <- (uncondexptest) *tempsd+tempmean
-
-
+        uncondexptest <- censored_value*probcens_test +  (mutemp_test_y + varthetamat_test[, 2])*(1- probcens_test ) + varthetamat_test[,4]*dnorm(- mutemp_test_z - offsetz - varthetamat_test[,1])
+        draw$uncond_exp_test[, iter_min_burnin] <- uncondexptest*tempsd+tempmean
         # draw$ydraws_train[, iter_min_burnin] <- ifelse(z < 0, censored_value, ystar )
-        draw$ydraws_test[, iter_min_burnin] <- (ifelse(zytest[,1] < 0, censored_value, zytest[,2] )) *tempsd+tempmean
+        draw$ydraws_test[, iter_min_burnin] <- ifelse(zytest[,1] < 0, censored_value, zytest[,2] )*tempsd+tempmean
       }
-
       draw$alpha[iter_min_burnin] <- alpha
-
       draw$var_count_y_store[iter_min_burnin,] <- var_count_y
       draw$var_count_z_store[iter_min_burnin,] <- var_count_z
       if(sparse){
         draw$alpha_s_y_store[iter_min_burnin] <- alpha_s_y
         draw$alpha_s_z_store[iter_min_burnin] <- alpha_s_z
-
         draw$s_prob_y_store[iter_min_burnin,] <- s_y
         draw$s_prob_z_store[iter_min_burnin,] <- s_z
-
       }
-
     } # end if iter > burnin
-
     if(iter %% print.opt == 0){
       print(paste("Gibbs Iteration", iter))
       # print(c(sigma2.alpha, sigma2.beta))
     }
-
-
   }#end iterations of Giibs sampler
-
-
-
   return(draw)
-
-
-
 }

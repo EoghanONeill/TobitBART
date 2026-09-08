@@ -75,7 +75,7 @@
 #' \item{cond_exp_test}{Matrix of test data expectations of observed outcomes conditional on covariates (not conditional on censorship status). Number of rows equals number of test observations. Number of columns equals n.iter .}
 #' \item{sigma}{Vector of draws of the standard deviation of the error term. Number of elements equals n.iter .}
 #' \item{alpha_s_y_store}{Output if sparse == TRUE, otherwise NULL. For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
-#' \item{var_count_y_store}{Output if sparse == TRUE, otherwise NULL. Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
+#' \item{var_count_y_store}{Output if sparse == TRUE, otherwise NULL. Matrix of counts of splits on each variable in outcome observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations.}
 #' \item{s_prob_y_store}{Output if sparse == TRUE, otherwise NULL. Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
 #' @examples
 #'
@@ -108,12 +108,12 @@ tbart1 <- function(x.train,
                    below_cens = 0,
                    above_cens = Inf,
                    n.trees = 50L,
-                   n.burn = 0L,
-                   n.samples = 1L,
-                   n.thin = 1L,
-                   n.chains = 1,
-                   n.threads = 1L,#guessNumCores(),
-                   printEvery = 100L,
+                   # n.burn = 0L,
+                   # n.samples = 1L,
+                   # n.thin = 1L,
+                   # n.chains = 1,
+                   # n.threads = 1L,#guessNumCores(),
+                   # printEvery = 100L,
                    printCutoffs = 0L,
                    rngKind = "default",
                    rngNormalKind = "default",
@@ -122,7 +122,7 @@ tbart1 <- function(x.train,
                    tree_power = 2,
                    tree_base = 0.95,
                    node.prior = dbarts:::normal,
-                   resid.prior = dbarts:::chisq,
+                   # resid.prior = dbarts:::chisq,
                    proposal.probs = c(birth_death = 0.5, swap = 0.1, change = 0.4, birth = 0.5),
                    sigmadbarts = NA_real_,
                    print.opt = 100,
@@ -136,9 +136,16 @@ tbart1 <- function(x.train,
                    sparse = FALSE,
                    alpha_a_y = 0.5,
                    alpha_b_y = 1,
-                   alpha_split_prior = TRUE){
+                   alpha_split_prior = TRUE,
+                   fixed_resp_update = TRUE){
 
-
+  if (length(below_cens) != 1L ||
+      length(above_cens) != 1L ||
+      is.na(below_cens) ||
+      is.na(above_cens) ||
+      below_cens >= above_cens) {
+    stop("below_cens and above_cens must be scalar and satisfy below_cens < above_cens.")
+  }
 
 
   # if(is.vector(x.train) | is.factor(x.train)| is.data.frame(x.train)) x.train = as.matrix(x.train)
@@ -149,7 +156,11 @@ tbart1 <- function(x.train,
 
   if(nrow(x.train) != length(y)) stop("number of rows in x.train must equal length of y.train")
   if((ncol(x.test)!=ncol(x.train))) stop("input x.test must have the same number of columns as x.train")
-
+  if (!is.na(lambda0) && !isTRUE(censsigprior)) {
+    stop("lambda0 is only used when censsigprior = TRUE.")
+  }
+  if (n.iter < 2L) stop("n.iter must be at least 2.")
+  if (n.burnin < 0L) stop("n.burnin must be non-negative.")
 
   #indexes of censored observations
   cens_inds <- which(y <= below_cens | y >= above_cens)
@@ -167,6 +178,10 @@ tbart1 <- function(x.train,
   #this line is perhaps unnecessary
   z[which(y <= below_cens )] <- below_cens
   z[which(y >= above_cens )] <- above_cens
+
+  Z_initial <-  z
+  Z_reference <- z
+
 
   if(!is.na(sigest)){
     if(sigest == "naive"){
@@ -203,7 +218,7 @@ tbart1 <- function(x.train,
 
 
 
-  if(censsigprior == TRUE){
+  # if(censsigprior == TRUE){
 
     if(is.na(lambda0)) {
       if(is.na(sigest)) {
@@ -262,12 +277,25 @@ tbart1 <- function(x.train,
       censsigest =sqrt(lambda0*nu0/ qchisq(1.0-sigquant,nu0))
     }
 
+  # }
+
+  if(fixed_resp_update){
+  # if(censsigprior == TRUE){
+    if(length(censbelow_inds)>0){
+      Z_reference[censbelow_inds] <- rtruncnorm(n_censbelow, a= -Inf, b = below_cens, mean = mean(z), sd = censsigest)
+    }
+    if(length(censabove_inds)>0){
+      Z_reference[censabove_inds] <- rtruncnorm(n_censabove, a= above_cens, b = Inf, mean = mean(z), sd = censsigest)
+    }
+  # }else{
+  #   if(length(censbelow_inds)>0){
+  #     Z_reference[censbelow_inds] <- rtruncnorm(n_censbelow, a= -Inf, b = below_cens, mean = mu[censbelow_inds], sd = censsigest)
+  #   }
+  #   if(length(censabove_inds)>0){
+  #     Z_reference[censabove_inds] <- rtruncnorm(n_censabove, a= above_cens, b = Inf, mean = mu[censabove_inds], sd = censsigest)
+  #   }
+  # }
   }
-
-
-
-
-
 
 
 
@@ -315,12 +343,12 @@ tbart1 <- function(x.train,
   control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                            keepTrees = TRUE,
                            n.trees = n.trees,
-                           n.burn = n.burn,
-                           n.samples = n.samples,
-                           n.thin = n.thin,
-                           n.chains = n.chains,
-                           n.threads = n.threads,
-                           printEvery = printEvery,
+                           n.burn = 0L, # n.burn,
+                           n.samples = 1L, # n.samples,
+                           n.thin = 1L, # n.thin,
+                           n.chains = 1L, # n.chains,
+                           n.threads = 1L, # ,
+                           printEvery = print.opt, # printEvery,
                            printCutoffs = printCutoffs,
                            rngKind = rngKind,
                            rngNormalKind = rngNormalKind,
@@ -334,7 +362,10 @@ tbart1 <- function(x.train,
   # colnames(x.train) <- NULL
   # colnames(x.test) <- NULL
 
-  dftrain <- data.frame(y = z , x = x.train)
+  # dftrain <- data.frame(y = z , x = x.train)
+  dftrain <- data.frame(y = Z_reference , x = x.train)
+
+
 
   if(nrow(x.test )==0){
     sampler <- dbarts(y ~ .,
@@ -426,7 +457,16 @@ tbart1 <- function(x.train,
 
 
 
-  sampler$setResponse(y = z)
+
+  if(fixed_resp_update){
+    computational_offset <- Z_reference - Z_initial
+    # dbarts_offset <- computational_offset + offsetz_vec # genuine_offset_vec
+    sampler$setOffset(offset = computational_offset,updateScale = FALSE)
+  }else{
+    sampler$setResponse(y = z)
+  }
+
+
   # sampler$setSigma(sigma = 1)
 
   #sampler$setPredictor(x= Xmat.train$x, column = 1, forceUpdate = TRUE)
@@ -439,7 +479,7 @@ tbart1 <- function(x.train,
 
 
   #mu = as.vector( alpha + X.mat %*% beta )
-  sampler$sampleTreesFromPrior()
+  # sampler$sampleTreesFromPrior()
   samplestemp <- sampler$run()
 
   #mutemp <- samplestemp$train[,1]
@@ -448,8 +488,24 @@ tbart1 <- function(x.train,
   # print("sigma = ")
   sigma <- samplestemp$sigma
 
-  mu <- samplestemp$train[,1]
-  mutest <- samplestemp$test[,1]
+  # mu <- samplestemp$train[,1]
+  # # mutest <- samplestemp$test[,1]
+  # if (ntest > 0L) {
+  #   mutest <- as.vector(samplestemp$test[, 1L])
+  # } else {
+  #   mutest <- numeric(0L)
+  # }
+
+  # mu <- samplestemp$train[,1]
+  mu <- as.numeric(sampler$predict(dftrain)[, 1])
+
+  # mutest <- samplestemp$test[,1]
+  if (ntest > 0L) {
+    # mutest <- as.vector(samplestemp$test[, 1L])
+    mutest <- as.numeric( sampler$predict(dftest)[, 1])
+  } else {
+    mutest <- numeric(0L)
+  }
 
   if(sparse){
     tempcounts <- fcount(sampler$getTrees()$var)
@@ -467,10 +523,9 @@ tbart1 <- function(x.train,
   #
   #
   # }else{
-    ystartestcens <- rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
-
+    # ystartestcens <- rtruncnorm(ntest, a = below_cens, b = above_cens, mean = mutest, sd = sigma)
+    ystartestcens <- pmin(pmax(ystartest, below_cens), above_cens)
   # }
-
 
 
 
@@ -515,38 +570,68 @@ tbart1 <- function(x.train,
 
       condexptest <- (mutest )
     }else{ # above_cens !=Inf
+      # condexptrain <-
+      #   (mu )*(1- probcensabove_train ) +
+      #   sigma*(  - fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+      #   above_cens*probcensabove_train
+      #
+      # condexptest <-
+      #   (mutest )*(1- probcensabove ) +
+      #   sigma*(  -fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+      #   above_cens*probcensabove
+
       condexptrain <-
         (mu )*(1- probcensabove_train ) +
-        sigma*(  - fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+        sigma*(  - fastnormdens( (above_cens - mu)/sigma, mean = 0 , sd = 1) ) +
         above_cens*probcensabove_train
 
       condexptest <-
         (mutest )*(1- probcensabove ) +
-        sigma*(  -fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+        sigma*(  -fastnormdens((above_cens - mutest)/sigma, mean = 0, sd = 1) ) +
         above_cens*probcensabove
     }
   }else{ # below_cens != - Inf
     if(above_cens == Inf){
+      # condexptrain <- below_cens*probcensbelow_train +
+      #   (mu )*(1 - probcensbelow_train) +
+      #   sigma*( fastnormdens(below_cens, mean = mu , sd = sigma)  )
+      #
+      # condexptest <- below_cens*probcensbelow +
+      #   (mutest )*(1 - probcensbelow) +
+      #   sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma)  )
+
       condexptrain <- below_cens*probcensbelow_train +
         (mu )*(1 - probcensbelow_train) +
-        sigma*( fastnormdens(below_cens, mean = mu , sd = sigma)  )
+        sigma*( fastnormdens( (below_cens - mu)/sigma, mean = 0 , sd = 1)  )
 
       condexptest <- below_cens*probcensbelow +
         (mutest )*(1 - probcensbelow) +
-        sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma)  )
+        sigma*( fastnormdens( (below_cens - mutest)/sigma, mean = 0, sd = 1)  )
 
 
     }else{ # above_cens !=Inf
+      # condexptrain <- below_cens*probcensbelow_train +
+      #   (mu )*(1- probcensabove_train - probcensbelow_train) +
+      #   sigma*( fastnormdens(below_cens, mean = mu , sd = sigma) -
+      #             fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+      #   above_cens*probcensabove_train
+      #
+      # condexptest <- below_cens*probcensbelow +
+      #   (mutest )*(1- probcensabove - probcensbelow) +
+      #   sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma) -
+      #             fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+      #   above_cens*probcensabove
+
       condexptrain <- below_cens*probcensbelow_train +
         (mu )*(1- probcensabove_train - probcensbelow_train) +
-        sigma*( fastnormdens(below_cens, mean = mu , sd = sigma) -
-                  fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+        sigma*( fastnormdens( (below_cens - mu)/sigma, mean = 0 , sd = 1) -
+                  fastnormdens( (above_cens - mu)/sigma, mean = 0 , sd = 1) ) +
         above_cens*probcensabove_train
 
       condexptest <- below_cens*probcensbelow +
         (mutest )*(1- probcensabove - probcensbelow) +
-        sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma) -
-                  fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+        sigma*( fastnormdens( (below_cens - mutest)/sigma, mean = 0, sd = 1) -
+                  fastnormdens( (above_cens - mutest)/sigma, mean = 0, sd = 1) ) +
         above_cens*probcensabove
     }
   }
@@ -609,7 +694,15 @@ tbart1 <- function(x.train,
     #set the response.
     #Check that 0 is a reasonable initial value
     #perhaps makes more sense to use initial values of Z
-    sampler$setResponse(y = z)
+    if(fixed_resp_update){
+      computational_offset <- Z_reference - z
+      # dbarts_offset <- computational_offset + offsetz_vec # genuine_offset_vec
+      sampler$setOffset( offset = computational_offset, updateScale = FALSE )
+    }else{
+      sampler$setResponse(y = z)
+    }
+
+
     # sampler$setSigma(sigma = 1)
     #sampler$setPredictor(x= Xmat.train$x, column = 1, forceUpdate = TRUE)
 
@@ -624,9 +717,16 @@ tbart1 <- function(x.train,
 
     sigma <- samplestemp$sigma
 
-    mu <- samplestemp$train[,1]
-    mutest <- samplestemp$test[,1]
+    # mu <- samplestemp$train[,1]
+    mu <- as.numeric(sampler$predict(dftrain)[, 1])
 
+    # mutest <- samplestemp$test[,1]
+    if (ntest > 0L) {
+      # mutest <- as.vector(samplestemp$test[, 1L])
+      mutest <- as.numeric( sampler$predict(dftest)[, 1])
+    } else {
+      mutest <- numeric(0L)
+    }
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
@@ -711,38 +811,68 @@ tbart1 <- function(x.train,
 
         condexptest <- (mutest )
       }else{ # above_cens !=Inf
+        # condexptrain <-
+        #   (mu )*(1- probcensabove_train ) +
+        #   sigma*(  - fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+        #   above_cens*probcensabove_train
+        #
+        # condexptest <-
+        #   (mutest )*(1- probcensabove ) +
+        #   sigma*(  -fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+        #   above_cens*probcensabove
+
         condexptrain <-
           (mu )*(1- probcensabove_train ) +
-          sigma*(  - fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+          sigma*(  - fastnormdens((above_cens - mu)/sigma, mean = 0 , sd = 1) ) +
           above_cens*probcensabove_train
 
         condexptest <-
           (mutest )*(1- probcensabove ) +
-          sigma*(  -fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+          sigma*(  -fastnormdens((above_cens - mutest)/sigma, mean = 0, sd = 1) ) +
           above_cens*probcensabove
       }
     }else{ # below_cens != - Inf
       if(above_cens == Inf){
+        # condexptrain <- below_cens*probcensbelow_train +
+        #   (mu )*(1 - probcensbelow_train) +
+        #   sigma*( fastnormdens(below_cens, mean = mu , sd = sigma)  )
+        #
+        # condexptest <- below_cens*probcensbelow +
+        #   (mutest )*(1 - probcensbelow) +
+        #   sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma)  )
+
         condexptrain <- below_cens*probcensbelow_train +
           (mu )*(1 - probcensbelow_train) +
-          sigma*( fastnormdens(below_cens, mean = mu , sd = sigma)  )
+          sigma*( fastnormdens((below_cens - mu)/sigma, mean = 0 , sd = 1)  )
 
         condexptest <- below_cens*probcensbelow +
           (mutest )*(1 - probcensbelow) +
-          sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma)  )
+          sigma*( fastnormdens((below_cens - mutest)/sigma, mean = 0, sd = 1)  )
 
 
       }else{ # above_cens !=Inf
+        # condexptrain <- below_cens*probcensbelow_train +
+        #   (mu )*(1- probcensabove_train - probcensbelow_train) +
+        #   sigma*( fastnormdens(below_cens, mean = mu , sd = sigma) -
+        #                        fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+        #   above_cens*probcensabove_train
+        #
+        # condexptest <- below_cens*probcensbelow +
+        #   (mutest )*(1- probcensabove - probcensbelow) +
+        #   sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma) -
+        #                       fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+        #   above_cens*probcensabove
+
         condexptrain <- below_cens*probcensbelow_train +
           (mu )*(1- probcensabove_train - probcensbelow_train) +
-          sigma*( fastnormdens(below_cens, mean = mu , sd = sigma) -
-                               fastnormdens(above_cens, mean = mu , sd = sigma) ) +
+          sigma*( fastnormdens((below_cens - mu)/sigma, mean = 0 , sd = 1) -
+                    fastnormdens((above_cens - mu)/sigma, mean = 0 , sd = 1) ) +
           above_cens*probcensabove_train
 
         condexptest <- below_cens*probcensbelow +
           (mutest )*(1- probcensabove - probcensbelow) +
-          sigma*( fastnormdens(below_cens, mean = mutest, sd = sigma) -
-                              fastnormdens(above_cens, mean = mutest, sd = sigma) ) +
+          sigma*( fastnormdens((below_cens - mutest)/sigma, mean = 0, sd = 1) -
+                    fastnormdens((above_cens - mutest)/sigma, mean = 0, sd = 1) ) +
           above_cens*probcensabove
       }
     }

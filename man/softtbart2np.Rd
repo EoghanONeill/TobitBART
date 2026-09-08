@@ -13,19 +13,20 @@ softtbart2np(
   n.iter = 1000,
   n.burnin = 100,
   censored_value = NA,
-  gamma0 = 0,
-  G0 = 10,
+  gamma0_prior = NA,
   nzero = 6,
-  S0 = 12,
+  S0 = NA,
+  SGratio = 9,
   sigest = NA,
   n.trees_outcome = 50L,
   n.trees_censoring = 50L,
-  SB_group = NULL,
+  SB_group_y = NULL,
+  SB_group_z = NULL,
   SB_alpha = 1,
   SB_beta = 2,
   SB_gamma = 0.95,
-  SB_k = 2,
-  SB_sigma_hat = NULL,
+  k_y = 2,
+  k_z = 2,
   SB_shape = 1,
   SB_width = 0.1,
   SB_alpha_scale = NULL,
@@ -34,13 +35,11 @@ softtbart2np(
   SB_tau_rate = 10,
   SB_num_tree_prob = NULL,
   SB_temperature = 1,
-  SB_weights = NULL,
-  SB_normalize_Y = TRUE,
+  SB_normalize_Y = FALSE,
   print.opt = 100,
-  accelerate = FALSE,
   cov_prior = "VH",
   tau = 5,
-  M_mat = 2 * diag(2),
+  M_mat = NULL,
   alpha_prior = "vh",
   c1 = 2,
   c2 = 2,
@@ -51,7 +50,9 @@ softtbart2np(
   quantsig = 0.95,
   mixstep = TRUE,
   simultaneous_covmat = TRUE,
-  mu1_tozero = TRUE
+  mu1_tozero = TRUE,
+  yinit_resid = FALSE,
+  draw_censored_predictions = TRUE
 )
 }
 \arguments{
@@ -71,23 +72,19 @@ softtbart2np(
 
 \item{censored_value}{The value taken by censored observations}
 
-\item{gamma0}{The mean of the normal prior on the covariance of the errors in the censoring and outcome models.}
+\item{gamma0_prior}{The mean of the normal prior on the covariance of the errors in the censoring and outcome models.}
 
-\item{G0}{The variance of the normal prior on the covariance of the errors in the censoring and outcome models.}
+\item{nzero}{A prior parameter which when divided by 2 gives the shape parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.}
 
-\item{nzero}{A prior parameter which when divided by 2 gives the mean of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.}
+\item{S0}{A prior parameter which when divided by 2 gives the scale parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.}
 
-\item{S0}{A prior parameter which when divided by 2 gives the variance of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.}
-
-\item{sigest}{If variance of the error term is the}
+\item{sigest}{Estimate of standard deviation of the error term.}
 
 \item{n.trees_outcome}{(dbarts control option) A positive integer giving the number of trees used in the outcome model sum-of-trees formulation.}
 
 \item{n.trees_censoring}{(dbarts control option) A positive integer giving the number of trees used in the censoring model sum-of-trees formulation.}
 
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
-
-\item{accelerate}{If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).}
 
 \item{cov_prior}{Prior for the covariance of the error terms. If VH, apply the prior of van Hasselt (2011), N(gamma0, tau*phi), imposing dependence between gamma and phi. If Omori, apply the prior N(gamma0,G0). If mixture, then a mixture of the VH and Omori priors with probability mixprob applied to the VH prior.}
 
@@ -105,31 +102,9 @@ softtbart2np(
 
 \item{mixstep}{If equal to TRUE, includes mixing step for samplinod Dirichlet Process micture parameters.}
 
-\item{n.chains}{(dbarts control option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
+\item{yinit_resid}{If TRUE initialize outcome equation trees with linear tobit-2 residualized outcome (for better prior calibration of terminal node parameters)}
 
-\item{n.threads}{(dbarts control option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.}
-
-\item{printEvery}{(dbarts control option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.}
-
-\item{printCutoffs}{(dbarts control option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode}
-
-\item{rngKind}{(dbarts control option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.}
-
-\item{rngNormalKind}{(dbarts control option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind}
-
-\item{rngSeed}{(dbarts control option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.}
-
-\item{updateState}{(dbarts control option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
-
-\item{tree.prior}{(dbarts option) An expression of the form dbarts:::cgm or dbarts:::cgm(power,base) setting the tree prior used in fitting.}
-
-\item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
-
-\item{resid.prior}{(dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance}
-
-\item{proposal.probs}{(dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.}
-
-\item{sigmadbarts}{(dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.}
+\item{draw_censored_predictions}{If TRUE, draw ystar and posterior conditional mean samples for censored observations. Not possible if missing predictors in x.train for outcome-censored (i.e. unselected) observations.}
 }
 \value{
 The following objects are returned:
@@ -149,7 +124,7 @@ The following objects are returned:
 \item{cond_exp_test}{Matrix of draws of the conditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{uncond_exp_train}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all training observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{uncond_exp_test}{Only defined if censored_value is a number. Matrix of draws of the unconditional (i.e. possibly censored) expectations of the outcome for all test observations. Number of rows equals number of test observations. Number of columns equals n.iter .}
-\item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Number of rows equals number of training observations. Number of columns equals n.iter .}
+\item{ystar_train}{Matrix of training sample draws of the outcome assuming uncensored. Fixed at true values for selected/uncensored observations. Number of rows equals number of training observations. Number of columns equals n.iter .}
 \item{ystar_test}{Matrix of test sample draws of the outcome assuming uncensored . Number of rows equals number of test observations. Number of columns equals n.iter .}
 \item{zstar_train}{Matrix of training sample draws of the censoring model latent outcome. Number of rows equals number of training observations. Number of columns equals n.iter.}
 \item{zstar_test}{Matrix of test sample draws of the censoring model latent outcome. Number of rows equals number of test observations. Number of columns equals n.iter.}

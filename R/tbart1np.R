@@ -6,7 +6,7 @@ fastcountuniq <- function(x)
 }
 
 #' @export
-fastnormdens <- function(x, mean = 0, sd = 0){
+fastnormdens <- function(x, mean = 0, sd = 1){
   (1/(sd*sqrt(2*pi)))*exp(-0.5*((x-mean)/sd)^2)
 }
 
@@ -128,12 +128,12 @@ tbart1np <- function(x.train,
                    below_cens = 0,
                    above_cens = Inf,
                    n.trees = 50L,
-                   n.burn = 0L,
-                   n.samples = 1L,
-                   n.thin = 1L,
-                   n.chains = 1,
-                   n.threads = 1L,#guessNumCores(),
-                   printEvery = 100L,
+                   # n.burn = 0L,
+                   # n.samples = 1L,
+                   # n.thin = 1L,
+                   # n.chains = 1,
+                   # n.threads = 1L,#guessNumCores(),
+                   # printEvery = 100L,
                    printCutoffs = 0L,
                    rngKind = "default",
                    rngNormalKind = "default",
@@ -162,7 +162,8 @@ tbart1np <- function(x.train,
                    sparse = FALSE,
                    alpha_a_y = 0.5,
                    alpha_b_y = 1,
-                   alpha_split_prior = TRUE
+                   alpha_split_prior = TRUE,
+                   fixed_resp_update = TRUE
                    ){
 
 
@@ -176,12 +177,15 @@ tbart1np <- function(x.train,
 
   if(nrow(x.train) != length(y)) stop("number of rows in x.train must equal length of y.train")
   if((ncol(x.test)!= ncol(x.train))) stop("input x.test must have the same number of columns as x.train")
-
+  if (!is.na(lambda0) && !isTRUE(censsigprior)) {
+    stop("lambda0 is only used when censsigprior = TRUE.")
+  }
 
   #indexes of censored observations
   cens_inds <- which( (y <= below_cens) | (y >= above_cens))
   if(length(cens_inds)==0) stop("No censored observations")
-
+  if (n.iter < 2L) stop("n.iter must be at least 2.")
+  if (n.burnin < 0L) stop("n.burnin must be non-negative.")
 
   uncens_inds <- which( (y > below_cens) & (y < above_cens))
   censbelow_inds <- which(y <= below_cens )
@@ -195,6 +199,8 @@ tbart1np <- function(x.train,
   z[which(y <= below_cens )] <- below_cens
   z[which(y >= above_cens )] <- above_cens
 
+  Z_initial <-  z
+  Z_reference <- z
 
   n <- length(y)
   n0 <- length(cens_inds)
@@ -267,12 +273,12 @@ tbart1np <- function(x.train,
   control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                            keepTrees = TRUE,
                            n.trees = n.trees,
-                           n.burn = n.burn,
-                           n.samples = n.samples,
-                           n.thin = n.thin,
-                           n.chains = n.chains,
-                           n.threads = n.threads,
-                           printEvery = printEvery,
+                           n.burn = 0L, # n.burn,
+                           n.samples = 1L, # n.samples,
+                           n.thin = 1L, # n.thin,
+                           n.chains = 1L, # n.chains,
+                           n.threads = 1L, # ,
+                           printEvery = print.opt, # printEvery,
                            printCutoffs = printCutoffs,
                            rngKind = rngKind,
                            rngNormalKind = rngNormalKind,
@@ -366,7 +372,8 @@ tbart1np <- function(x.train,
       qchi = qchisq(1.0-sigquant,nu0)
       lambda0 = (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
     } else {
-      sigest=sqrt(lambda0)
+      # sigest=sqrt(lambda0)
+      sigest <- sqrt(lambda0 * nu0 /qchisq(1 - sigquant, nu0))
     }
   }else{
     # sigest <- sd(z)
@@ -387,7 +394,16 @@ tbart1np <- function(x.train,
   }
 
 
-
+  if(fixed_resp_update){
+    if(length(censbelow_inds)>0){
+      Z_reference[censbelow_inds] <- rtruncnorm(n_censbelow, a= -Inf, b = below_cens,
+                                                mean = mean(z), sd = sigest)
+    }
+    if(length(censabove_inds)>0){
+      Z_reference[censabove_inds] <- rtruncnorm(n_censabove, a= above_cens, b = Inf,
+                                                mean = mean(z), sd = sigest)
+    }
+  }
 
 
   k_s <- 10 # using default from fully nonparametric BART paper
@@ -431,7 +447,7 @@ tbart1np <- function(x.train,
   if(init.many.clust==TRUE){
     # testinitinds <- sample(1:n, ntest, replace = FALSE)
     # testinitinds <- sample.int(n, ntest, replace = FALSE)
-    testinitinds <- dqsample.int(n, ntest, replace = FALSE)
+    testinitinds <- dqsample.int(n, ntest, replace = TRUE)
 
     sigma1_vec_train <- sqrt(1/rgamma(n = n, shape =  nu0/2, rate = nu0*lambda0/2))
     sigma1_vec_test <- sigma1_vec_train[testinitinds]
@@ -488,7 +504,12 @@ tbart1np <- function(x.train,
   # print("z = ")
   # print(z)
 
-  dftrain <- data.frame(y00 = z - 0, x00 = x.train)
+
+
+  # dftrain <- data.frame(y00 = z - 0, x00 = x.train)
+  dftrain <- data.frame(y00 = Z_reference, x00 = x.train)
+
+
 
   # print("dftrain = ")
   # print(dftrain)
@@ -538,8 +559,15 @@ tbart1np <- function(x.train,
 
 
   # print("Line 350")
+  if(fixed_resp_update){
+    computational_offset <- Z_reference - z + mu1_vec_train
+    # dbarts_offset <- computational_offset + offsetz_vec # genuine_offset_vec
+    sampler$setOffset(offset = computational_offset,updateScale = FALSE)
+  }else{
+    sampler$setResponse(y = z - mu1_vec_train)
+  }
 
-  sampler$setResponse(y = z - mu1_vec_train)
+
   sampler$setSigma(sigma = 1)
   sampler$setWeights(weights = weightstemp_y)
 
@@ -561,9 +589,23 @@ tbart1np <- function(x.train,
   # print("sigma = ")
   sigma <- samplestemp$sigma
 
-  mu <- samplestemp$train[,1]
-  mutest <- samplestemp$test[,1]
+  # mu <- samplestemp$train[,1]
+  # # mutest <- samplestemp$test[,1]
+  # if (ntest > 0L) {
+  #   mutest <- as.vector(samplestemp$test[, 1L])
+  # } else {
+  #   mutest <- numeric(0L)
+  # }
+  # mu <- samplestemp$train[,1]
+  mu <- as.numeric(sampler$predict(dftrain)[, 1])
 
+  # mutest <- samplestemp$test[,1]
+  if (ntest > 0L) {
+    # mutest <- as.vector(samplestemp$test[, 1L])
+    mutest <- as.numeric( sampler$predict(dftest)[, 1])
+  } else {
+    mutest <- numeric(0L)
+  }
   if(sparse){
     tempcounts <- fcount(sampler$getTrees()$var)
     tempcounts <- tempcounts[tempcounts$x != -1, ]
@@ -643,36 +685,44 @@ tbart1np <- function(x.train,
     }else{ # above_cens !=Inf
       condexptrain <-
         (mu + mu1_vec_train)*(1- probcensabove_train ) +
-        sigma1_vec_train*(  - fastnormdens(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+        sigma1_vec_train*(  - fastnormdens( (above_cens - mu - mu1_vec_train)/sigma1_vec_train,
+                                            mean = 0, sd = 1) ) +
         above_cens*probcensabove_train
 
       condexptest <-
         (mutest + mu1_vec_test)*(1- probcensabove ) +
-        sigma1_vec_test*(  -fastnormdens(above_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test) ) +
+        sigma1_vec_test*(  -fastnormdens( (above_cens - mutest - mu1_vec_test)/sigma1_vec_test,
+                                         mean = 0, sd = 1) ) +
         above_cens*probcensabove
     }
   }else{ # below_cens != - Inf
     if(above_cens == Inf){
       condexptrain <- below_cens*probcensbelow_train +
         (mu + mu1_vec_train)*(1 - probcensbelow_train) +
-        sigma1_vec_train*( fastnormdens(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
+        sigma1_vec_train*( fastnormdens( ( below_cens - mu - mu1_vec_train)/sigma1_vec_train,
+                                        mean = 0, sd = 1)  )
 
       condexptest <- below_cens*probcensbelow +
         (mutest + mu1_vec_test)*(1 - probcensbelow) +
-        sigma1_vec_test*( fastnormdens(below_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test)  )
+        sigma1_vec_test*( fastnormdens( ( below_cens - mutest - mu1_vec_test)/sigma1_vec_test,
+                                       mean = 0, sd = 1)  )
 
 
     }else{ # above_cens !=Inf
       condexptrain <- below_cens*probcensbelow_train +
         (mu + mu1_vec_train)*(1- probcensabove_train - probcensbelow_train) +
-        sigma1_vec_train*( fastnormdens(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
-                             fastnormdens(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+        sigma1_vec_train*( fastnormdens(( below_cens - mu - mu1_vec_train)/sigma1_vec_train,
+                                        mean = 0, sd = 1) -
+                             fastnormdens((above_cens - mu - mu1_vec_train)/sigma1_vec_train,
+                                          mean = 0, sd = 1) ) +
         above_cens*probcensabove_train
 
       condexptest <- below_cens*probcensbelow +
         (mutest + mu1_vec_test)*(1- probcensabove - probcensbelow) +
-        sigma1_vec_test*( fastnormdens(below_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test) -
-                            fastnormdens(above_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test) ) +
+        sigma1_vec_test*( fastnormdens( (below_cens - mutest - mu1_vec_test)/sigma1_vec_test,
+                                       mean = 0, sd = 1) -
+                            fastnormdens((above_cens - mutest - mu1_vec_test)/sigma1_vec_test,
+                                         mean = 0, sd = 1) ) +
         above_cens*probcensabove
     }
   }
@@ -686,17 +736,17 @@ tbart1np <- function(x.train,
     # draw$Z.matuncens[,1] = z[uncens_inds]
     draw$Z.matcensbelow[,1] = z[censbelow_inds]
     draw$Z.matcensabove[,1] = z[censabove_inds]
-    draw$mu[,1] = mu
-    draw$mucens[,1] = mu[cens_inds]
-    draw$muuncens[,1] = mu[uncens_inds]
-    draw$mucensbelow[,1] = mu[censbelow_inds]
-    draw$mucensabove[,1] = mu[censabove_inds]
+    draw$mu[,1] = mu + mu1_vec_train
+    draw$mucens[,1] = mu[cens_inds] + mu1_vec_train[cens_inds]
+    draw$muuncens[,1] = mu[uncens_inds] + mu1_vec_train[uncens_inds]
+    draw$mucensbelow[,1] = mu[censbelow_inds] + mu1_vec_train[censbelow_inds]
+    draw$mucensabove[,1] = mu[censabove_inds] + mu1_vec_train[censabove_inds]
     draw$ystar[,1] = ystar
     draw$ystarcens[,1] = ystar[cens_inds]
     draw$ystaruncens[,1] = ystar[uncens_inds]
     draw$ystarcensbelow[,1] = ystar[censbelow_inds]
     draw$ystarcensabove[,1] = ystar[censabove_inds]
-    draw$test.mu[,1] = mutest
+    draw$test.mu[,1] = mutest + mu1_vec_test
     draw$test.y_nocensoring[,1] = ystartest
     draw$test.y_withcensoring[,1] = ystartestcens
     draw$test.probcensbelow[,1] = probcensbelow
@@ -708,7 +758,7 @@ tbart1np <- function(x.train,
     draw$error_mu_test[, 1] = mu1_vec_test
     draw$cond_exp_train[, 1] = condexptrain
     draw$cond_exp_test[, 1] = condexptest
-    draw$alpha[1] = 1
+    draw$alpha[1] = alpha
 
     if(sparse){
       draw$alpha_s_y_store[1] <- alpha_s_y
@@ -753,7 +803,15 @@ tbart1np <- function(x.train,
     # weightstemp_y  <- 1/sigma1_vec_train
     weightstemp_y  <- 1/(sigma1_vec_train^2)
 
-    sampler$setResponse(y = z- mu1_vec_train)
+
+    if(fixed_resp_update){
+      computational_offset <- Z_reference - z + mu1_vec_train
+      # dbarts_offset <- computational_offset + offsetz_vec # genuine_offset_vec
+      sampler$setOffset( offset = computational_offset, updateScale = FALSE )
+    }else{
+      sampler$setResponse(y = z- mu1_vec_train)
+    }
+
     sampler$setSigma(sigma = 1)
     sampler$setWeights(weights = weightstemp_y)
 
@@ -775,10 +833,23 @@ tbart1np <- function(x.train,
     # mutest <- samplestemp$test[,1]
 
 
-    mu <- samplestemp$train[,1]
-    mutest <- samplestemp$test[,1]
+    # mu <- samplestemp$train[,1]
+    # # mutest <- samplestemp$test[,1]
+    # if (ntest > 0L) {
+    #   mutest <- as.vector(samplestemp$test[, 1L])
+    # } else {
+    #   mutest <- numeric(0L)
+    # }
+    # mu <- samplestemp$train[,1]
+    mu <- as.numeric(sampler$predict(dftrain)[, 1])
 
-
+    # mutest <- samplestemp$test[,1]
+    if (ntest > 0L) {
+      # mutest <- as.vector(samplestemp$test[, 1L])
+      mutest <- as.numeric( sampler$predict(dftest)[, 1])
+    } else {
+      mutest <- numeric(0L)
+    }
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
@@ -1277,36 +1348,44 @@ tbart1np <- function(x.train,
       }else{ # above_cens !=Inf
         condexptrain <-
           (mu + mu1_vec_train)*(1 - probcensabove_train ) +
-          sigma1_vec_train*(  - fastnormdens(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+          sigma1_vec_train*(  - fastnormdens((above_cens - mu - mu1_vec_train)/sigma1_vec_train,
+                                             mean = 0, sd = 1) ) +
           above_cens*probcensabove_train
 
         condexptest <-
           (mutest + mu1_vec_test)*(1 - probcensabove ) +
-          sigma1_vec_test*(  - fastnormdens(above_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test) ) +
+          sigma1_vec_test*(  - fastnormdens((above_cens - mutest - mu1_vec_test)/sigma1_vec_test,
+                                            mean = 0, sd = 1) ) +
           above_cens*probcensabove
       }
     }else{ # below_cens != - Inf
       if(above_cens == Inf){
         condexptrain <- below_cens*probcensbelow_train +
           (mu + mu1_vec_train)*(1 - probcensbelow_train) +
-          sigma1_vec_train*( fastnormdens(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train)  )
+          sigma1_vec_train*( fastnormdens((below_cens - mu - mu1_vec_train)/sigma1_vec_train,
+                                          mean = 0, sd = 1)  )
 
         condexptest <- below_cens*probcensbelow +
           (mutest + mu1_vec_test)*(1 - probcensbelow) +
-          sigma1_vec_test*( fastnormdens(below_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test)  )
+          sigma1_vec_test*( fastnormdens((below_cens - mutest - mu1_vec_test)/sigma1_vec_test,
+                                         mean = 0, sd = 1)  )
 
 
       }else{ # above_cens !=Inf
         condexptrain <- below_cens*probcensbelow_train +
           (mu + mu1_vec_train)*(1 - probcensabove_train - probcensbelow_train) +
-          sigma1_vec_train*( fastnormdens(below_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) -
-                               fastnormdens(above_cens, mean = mu + mu1_vec_train, sd = sigma1_vec_train) ) +
+          sigma1_vec_train*( fastnormdens((below_cens - mu - mu1_vec_train)/sigma1_vec_train,
+                                          mean = 0, sd = 1) -
+                               fastnormdens((above_cens - mu - mu1_vec_train)/sigma1_vec_train,
+                                            mean = 0, sd = 1) ) +
           above_cens*probcensabove_train
 
         condexptest <- below_cens*probcensbelow +
           (mutest + mu1_vec_test)*(1 - probcensabove - probcensbelow) +
-          sigma1_vec_test*( fastnormdens(below_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test) -
-                              fastnormdens(above_cens, mean = mutest + mu1_vec_test, sd = sigma1_vec_test) ) +
+          sigma1_vec_test*( fastnormdens((below_cens - mutest - mu1_vec_test)/sigma1_vec_test,
+                                         mean = 0, sd = 1) -
+                              fastnormdens((above_cens - mutest - mu1_vec_test)/sigma1_vec_test,
+                                           mean = 0, sd = 1) ) +
           above_cens*probcensabove
       }
     }

@@ -13,10 +13,10 @@ softtbart2marg(
   n.iter = 1000,
   n.burnin = 100,
   censored_value = NA,
-  gamma0 = 0,
-  G0 = 1,
+  gamma0_prior = NA,
   nzero = 6,
-  S0 = 12,
+  S0 = NA,
+  SGratio = 9,
   sigest = NA,
   n.trees_outcome = 50L,
   n.trees_censoring = 50L,
@@ -32,13 +32,8 @@ softtbart2marg(
   beta_z = 2,
   alpha_y = 0.95,
   beta_y = 2,
-  node.prior = dbarts:::normal,
-  resid.prior = dbarts:::chisq,
-  proposal.probs = c(birth_death = 0.5, swap = 0, change = 0.5, birth = 0.5),
-  sigmadbarts = NA_real_,
   print.opt = 100,
-  eq_by_eq = TRUE,
-  cov_prior = "Ding",
+  cov_prior = "VH",
   tau = 1/3,
   mixprob = 0.5,
   simultaneous_covmat = TRUE,
@@ -56,17 +51,18 @@ softtbart2marg(
   sigma_mu_dist = "Cauchy",
   node_min_size = 5,
   centre_y = TRUE,
-  splitting_rules = "continuous",
+  splitting_rules = "discrete",
   marginalize = TRUE,
   one_chol = FALSE,
-  tau_hyperprior = TRUE,
+  tau_hyperprior = FALSE,
   alpha_tau = 1,
   beta_tau = 10,
-  jointgammanodes = FALSE,
+  jointgammanodes = TRUE,
   linearterms = FALSE,
   jointbetagamma = FALSE,
   mh_tau_bandwidth = TRUE,
-  tau_rate = 10
+  tau_rate = 10,
+  draw_censored_predictions = TRUE
 )
 }
 \arguments{
@@ -86,15 +82,13 @@ softtbart2marg(
 
 \item{censored_value}{The value taken by censored observations}
 
-\item{gamma0}{The mean of the normal prior on the covariance of the errors in the censoring and outcome models.}
+\item{gamma0_prior}{The mean of the normal prior on the covariance of the errors in the censoring and outcome models.}
 
-\item{G0}{The variance of the normal prior on the covariance of the errors in the censoring and outcome models (only if cov_prior equals Omori).}
+\item{nzero}{A prior parameter which when divided by 2 gives the shape parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.}
 
-\item{nzero}{A prior parameter which when divided by 2 gives the mean of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.}
+\item{S0}{A prior parameter which when divided by 2 gives the scale parameter of the inverse gamma prior on phi, where phi + gamma^2 is the variance of the errors of the outcome model.}
 
-\item{S0}{A prior parameter which when divided by 2 gives the variance of the normal prior on phi, where phi*gamma is the variance of the errors of the outcome model.}
-
-\item{sigest}{Estimate of variance of hte error term.}
+\item{sigest}{Estimate of standard deviation of the error term.}
 
 \item{n.trees_outcome}{(dbarts control option) A positive integer giving the number of trees used in the outcome model sum-of-trees formulation.}
 
@@ -112,17 +106,7 @@ softtbart2marg(
 
 \item{k_y}{Hyperparameter for calibration of sigma2_mu_y.}
 
-\item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
-
-\item{resid.prior}{(dbarts option) An expression of the form dbarts:::chisq or dbarts:::chisq(df,quant) that sets the prior used on the residual/error variance}
-
-\item{proposal.probs}{(dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.}
-
-\item{sigmadbarts}{(dbarts option) A positive numeric estimate of the residual standard deviation. If NA, a linear model is used with all of the predictors to obtain one.}
-
 \item{print.opt}{Print every print.opt number of Gibbs samples.}
-
-\item{eq_by_eq}{If TRUE, implements sampler equation by equation (as in BAVART by Huber and Rossini (2021)). If FALSE, implements sampler in similar approach to SUR-BART (Chakraborty 2016) or MPBART (Kindo 2016).}
 
 \item{cov_prior}{Prior for the covariance of the error terms. If VH, apply the prior of van Hasselt (2011), N(gamma0, tau*phi), imposing dependence between gamma and phi. If Omori, apply the prior N(gamma0,G0). If mixture, then a mixture of the VH and Omori priors with probability mixprob applied to the VH prior.}
 
@@ -150,7 +134,9 @@ softtbart2marg(
 
 \item{alpha_split_prior}{If true, set hyperprior for Linero alpha parameter}
 
-\item{accelerate}{If TRUE, add extra parameter for accelerated sampler as descibed by Omori (2007).}
+\item{node.prior}{(dbarts option) An expression of the form dbarts:::normal or dbarts:::normal(k) that sets the prior used on the averages within nodes.}
+
+\item{proposal.probs}{(dbarts option) Named numeric vector or NULL, optionally specifying the proposal rules and their probabilities. Elements should be "birth_death", "change", and "swap" to control tree change proposals, and "birth" to give the relative frequency of birth/death in the "birth_death" step.}
 }
 \value{
 The following objects are returned:
@@ -179,10 +165,10 @@ The following objects are returned:
 \item{Sigma_draws}{3 dimensional array of MCMC draws of the covariance matrix for the censoring and outcome error terms. The numbers of rows and columns equal are equal to 2. The first row and column correspond to the censoring model. The second row and column correspond to the outcome model. The number of slices equals n.iter . }
 \item{alpha_s_y_store}{For Dirichlet prior on splitting probabilities in outcome equation, vector of alpha hyperparameter draws for each iteration.}
 \item{alpha_s_z_store}{For Dirichlet prior on splitting probabilities in selection equation, vector of alpha hyperparameter draws for each iteration }
-\item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations.}
-\item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
-\item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
-\item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of rows is the number of potential splitting variables. The number of columns is the number of post-burn-in iterations. }
+\item{var_count_y_store}{Matrix of counts of splits on each variable in outcome observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations.}
+\item{var_count_z_store}{Matrix of counts of splits on each variable in selection observation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
+\item{s_prob_y_store}{Splitting probabilities for the outcome equation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
+\item{s_prob_z_store}{Splitting probabilities for the selection equation. The number of columns is the number of potential splitting variables. The number of rows is the number of post-burn-in iterations. }
 }
 \description{
 Type II Tobit Soft Bayesian Additive Regression Trees implemented using MCMC and marginalization of all terminal node parameters for tree sampling

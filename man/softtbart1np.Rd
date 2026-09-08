@@ -18,7 +18,6 @@ softtbart1np(
   SB_beta = 2,
   SB_gamma = 0.95,
   SB_k = 2,
-  SB_sigma_hat = NULL,
   SB_shape = 1,
   SB_width = 0.1,
   SB_alpha_scale = NULL,
@@ -71,8 +70,6 @@ softtbart1np(
 \item{SB_gamma}{Parameter for SoftBART sampler. Parameter penalizing new nodes in the branching process prior.}
 
 \item{SB_k}{Parameter for SoftBART sampler. Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.Related to the signal-to-noise ratio, \code{sigma_mu = 0.5 / (sqrt(num_tree) * k)}. BART defaults to \code{k = 2} after applying the max/min normalization to the outcome.}
-
-\item{SB_sigma_hat}{Parameter for SoftBART sampler. A prior guess at the conditional variance of \code{Y} given \code{X}. If not provided, this is estimated empirically by linear regression.}
 
 \item{SB_shape}{Parameter for SoftBART sampler. A prior guess at the conditional variance of \code{Y} given \code{X}. If not provided, this is estimated empirically by linear regression.}
 
