@@ -255,7 +255,9 @@ tobit2linear <- function(x.train,
                     alpha_a_z = 0.5,
                     alpha_b_z = 1,
                     alpha_split_prior = TRUE,
-                    tau_hyperprior = FALSE, alpha_tau = 1, beta_tau = 10, jointbetagamma = TRUE){
+                    tau_hyperprior = FALSE, alpha_tau = 1, beta_tau = 10, jointbetagamma = TRUE,
+                    yinit_resid = FALSE,
+                    draw_censored_predictions = TRUE){
 
 
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){
@@ -308,7 +310,10 @@ tobit2linear <- function(x.train,
   if (!is.na(sigest)) { sigest <- sigest / tempsd}
   if (!is.na(gamma0_prior)) {gamma0_prior <- gamma0_prior / tempsd}
   if (!is.na(S0)) {S0 <- S0 / tempsd^2}
-  if(is.numeric(censored_value)){
+
+
+  has_numeric_censor <- length(censored_value) == 1L && !is.na(censored_value) && is.numeric(censored_value)
+  if(has_numeric_censor){
     censored_value <- (censored_value- tempmean)/tempsd
   }
 
@@ -471,16 +476,39 @@ tobit2linear <- function(x.train,
       outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)],
                                      collapse = " + "))
 
-      heckit.ml <- heckit(selection = as.formula(seleq),
-                          outcome = as.formula(outeq),
-                          data = df,
-                          method = "ml")
+      fit_ok <- FALSE
+      if (is.na(sigest) && ncol(x.train) < n1) {
+        heckit.ml <- heckit(selection = as.formula(seleq),
+                            outcome = as.formula(outeq),
+                            data = df,
+                            method = "ml")
 
-      correst <- heckit.ml$estimate["rho"]
-      sigest <- heckit.ml$estimate["sigma"]
+        correst <- heckit.ml$estimate["rho"]
+        sigest <- heckit.ml$estimate["sigma"]
 
+        if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+          rho_hat <- heckit.ml$estimate["rho"]
+          sigma_hat <- heckit.ml$estimate["sigma"]
+          if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+            zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+            if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+              correst <- max(min(rho_hat, 0.99), -0.99)
+              sigest <- sigma_hat
+              gamma0 <- correst * sigest
+              zhat_heckman <- zhat_candidate
+              fit_ok <- TRUE
+            }
+          }
+        }
+      }
       # correst <- heckit.2step$coefficients["rho"]
       # sigest <- heckit.2step$coefficients["sigma"]
+      if (!fit_ok) {
+        sigest <- sd(y[uncens_inds])
+        correst <- 0
+        gamma0 <- 0
+        zhat_heckman <- rep(0, nrow(df))
+      }
 
       # print("heckit.2step$coefficients = ")
       # print(heckit.2step$coefficients)
@@ -498,10 +526,12 @@ tobit2linear <- function(x.train,
       sigest = sd(y[uncens_inds])
       correst <- 0
       gamma0 <- 0
+      zhat_heckman <- rep(0, nrow(w.train))
     }
   }else{
     correst <- 0
     gamma0 <- 0
+    zhat_heckman <- rep(0, nrow(w.train))
   }
 
   # if(is.null(nzero)){
@@ -697,17 +727,17 @@ tobit2linear <- function(x.train,
     # Z.mat_test = array(NA, dim = c(ntest, n.iter)),
     # Y.mat_train = array(NA, dim = c(n, n.iter)),
     # Y.mat_test = array(NA, dim = c(ntest, n.iter)),
-    mu_y_train = array(NA, dim = c(n1, n.iter)),# array(NA, dim = c(n, n.iter)),
+    # mu_y_train = array(NA, dim = c(n1, n.iter)),# array(NA, dim = c(n, n.iter)),
     mu_y_test = array(NA, dim = c(ntest, n.iter)),
     # mucens_y_train = array(NA, dim = c(n0, n.iter)),
     muuncens_y_train = array(NA, dim = c(n1, n.iter)),
     mu_z_train = array(NA, dim = c(n, n.iter)),
     mu_z_test = array(NA, dim = c(ntest, n.iter)),
-    train.probcens =  array(NA, dim = c(n1, n.iter)),#array(NA, dim = c(n, n.iter)),#,
+    train.probcens =  array(NA, dim = c(n, n.iter)),#array(NA, dim = c(n, n.iter)),#,
     test.probcens =  array(NA, dim = c(ntest, n.iter)),#,
-    cond_exp_train = array(NA, dim = c(n1, n.iter)),#cond_exp_train = array(NA, dim = c(n, n.iter)),
+    cond_exp_train_uncens = array(NA, dim = c(n1, n.iter)),#cond_exp_train = array(NA, dim = c(n, n.iter)),
     cond_exp_test = array(NA, dim = c(ntest, n.iter)),
-    ystar_train = array(NA, dim = c(n, n.iter)),
+    # ystar_train = array(NA, dim = c(n, n.iter)),
     ystar_test = array(NA, dim = c(ntest, n.iter)),
     zstar_train = array(NA, dim = c(n, n.iter)),
     zstar_test = array(NA, dim = c(ntest, n.iter)),
@@ -717,8 +747,23 @@ tobit2linear <- function(x.train,
     Sigma_draws = array(NA, dim = c(2, 2, n.iter))
   )
 
-  if(is.numeric(censored_value)){
-    draw$uncond_exp_train <- array(NA, dim = c(n1, n.iter)) #array(NA, dim = c(n, n.iter))
+
+  if(draw_censored_predictions){
+    draw$ystar_train = array(NA, dim = c(n, n.iter))
+    draw$mu_y_train = array(NA, dim = c(n, n.iter))# array(NA, dim = c(n, n.iter)),
+    draw$cond_exp_train = array(NA, dim = c(n, n.iter))#cond_exp_train = array(NA, dim = c(n, n.iter)),
+  }
+  # if(is.numeric(censored_value)){
+  #   draw$uncond_exp_train <- array(NA, dim = c(n1, n.iter)) #array(NA, dim = c(n, n.iter))
+  #   draw$uncond_exp_test <- array(NA, dim = c(ntest, n.iter))
+  #   # draw$ydraws_train <- array(NA, dim = c(n, n.iter))
+  #   draw$ydraws_test <- array(NA, dim = c(ntest, n.iter))
+  # }
+  if(has_numeric_censor){
+    if(draw_censored_predictions){
+      draw$uncond_exp_train <- array(NA, dim = c(n, n.iter)) #array(NA, dim = c(n, n.iter))
+    }
+    draw$uncond_exp_train_uncens <- array(NA, dim = c(n1, n.iter)) #array(NA, dim = c(n, n.iter))
     draw$uncond_exp_test <- array(NA, dim = c(ntest, n.iter))
     # draw$ydraws_train <- array(NA, dim = c(n, n.iter))
     draw$ydraws_test <- array(NA, dim = c(ntest, n.iter))
@@ -740,119 +785,123 @@ tobit2linear <- function(x.train,
     draw$tau_par <- rep(NA, n.iter)
   }
 
-  ########## Initialize dbarts #####################
-
-  control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                             keepTrees = TRUE,
-                             n.trees = n.trees_censoring,
-                             n.burn = 0L, #n.burn,
-                             n.samples = 1L, #n.samples,
-                             n.thin = 1L, # n.thin,
-                             n.chains = 1L, # n.chains,
-                             n.threads = 1L, # n.threads,
-                             printEvery = print.opt, # printEvery,
-                             printCutoffs = 0L, # printCutoffs,
-                             rngKind = rngKind,
-                             rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
-
-  control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
-                             keepTrees = TRUE,
-                             n.trees = n.trees_outcome,
-                             n.burn = 0L, # n.burn,
-                             n.samples = 1L, # n.samples,
-                             n.thin = 1L, # n.thin,
-                             n.chains = 1L, # n.chains,
-                             n.threads = 1L, # n.threads,
-                             printEvery = print.opt, # printEvery,
-                             printCutoffs = 0L, # printCutoffs,
-                             rngKind = rngKind,
-                             rngNormalKind = rngNormalKind,
-                             rngSeed = rngSeed)
-  # print(colnames(Xmat.train))
-
-  # print("begin dbarts")
-
-  weightstemp <- rep(1,n)
-
-  weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
-
-  # print("weightstemp = ")
-  # print(weightstemp)
+  # ########## Initialize dbarts #####################
   #
-  # print("length(weightstemp) = ")
-  # print(length(weightstemp))
+  # control_z <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+  #                            keepTrees = TRUE,
+  #                            n.trees = n.trees_censoring,
+  #                            n.burn = 0L, #n.burn,
+  #                            n.samples = 1L, #n.samples,
+  #                            n.thin = 1L, # n.thin,
+  #                            n.chains = 1L, # n.chains,
+  #                            n.threads = 1L, # n.threads,
+  #                            printEvery = print.opt, # printEvery,
+  #                            printCutoffs = 0L, # printCutoffs,
+  #                            rngKind = rngKind,
+  #                            rngNormalKind = rngNormalKind,
+  #                            rngSeed = rngSeed)
   #
-  # print("length(uncens_inds) = ")
-  # print(length(uncens_inds))
-
-  if(nrow(x.test ) == 0){
-
-
-    xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
-    sampler_y <- dbarts(y ~ .,
-                        data = xdf_y,
-                        #test = x.test,
-                        control = control_y,
-                        tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
-                        node.prior = node.prior,
-                        resid.prior = fixed(1),
-                        proposal.probs = proposal.probs,
-                        sigma = 1 # sigmadbarts
-    )
-
-    # print("Line 425")
-
-    xdf_z <- data.frame(y = z - offsetz, x = w.train)
-
-    sampler_z <- dbarts(y ~ .,
-                        data = xdf_z,
-                        #test = x.test,
-                        weights = weightstemp,
-                        control = control_z,
-                        tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-                        node.prior = node.prior,
-                        resid.prior = fixed(1),
-                        proposal.probs = proposal.probs,
-                        sigma = 1
-    )
-
-  }else{
-
-    xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
-    xdf_y_test <- data.frame(x = x.test)
-
-    sampler_y <- dbarts(y ~ .,
-                        data = xdf_y,
-                        test = xdf_y_test,
-                        control = control_y,
-                        tree.prior = dbarts:::cgm(power = tree_power_y, base = tree_base_y,  split.probs = rep(1 / p_y, p_y)),
-                        node.prior = node.prior,
-                        resid.prior = fixed(1),
-                        proposal.probs = proposal.probs,
-                        sigma = 1 # sigmadbarts
-    )
-
-    # print("Line 425")
-
-    xdf_z <- data.frame(y = z - offsetz, x = w.train)
-    xdf_z_test <- data.frame(x = w.test)
-
-    sampler_z <- dbarts(y ~ .,
-                        data = xdf_z,
-                        test = xdf_z_test,
-                        # weights = weightstemp,
-                        control = control_z,
-                        tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-                        node.prior = node.prior,
-                        resid.prior = fixed(1),
-                        proposal.probs = proposal.probs,
-                        sigma = 1 # sigmadbarts
-    )
-  }
+  # control_y <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+  #                            keepTrees = TRUE,
+  #                            n.trees = n.trees_outcome,
+  #                            n.burn = 0L, # n.burn,
+  #                            n.samples = 1L, # n.samples,
+  #                            n.thin = 1L, # n.thin,
+  #                            n.chains = 1L, # n.chains,
+  #                            n.threads = 1L, # n.threads,
+  #                            printEvery = print.opt, # printEvery,
+  #                            printCutoffs = 0L, # printCutoffs,
+  #                            rngKind = rngKind,
+  #                            rngNormalKind = rngNormalKind,
+  #                            rngSeed = rngSeed)
+  # # print(colnames(Xmat.train))
+  #
+  # # print("begin dbarts")
+  #
+  # weightstemp <- rep(1,n)
+  #
+  # weightstemp[uncens_inds] <- (gamma1^2 + phi1)/phi1
+  #
+  # # print("weightstemp = ")
+  # # print(weightstemp)
+  # #
+  # # print("length(weightstemp) = ")
+  # # print(length(weightstemp))
+  # #
+  # # print("length(uncens_inds) = ")
+  # # print(length(uncens_inds))
+  #
+  # if(nrow(x.test ) == 0){
+  #
+  #
+  #   xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
+  #   sampler_y <- dbarts(y ~ .,
+  #                       data = xdf_y,
+  #                       #test = x.test,
+  #                       control = control_y,
+  #                       tree.prior = dbarts:::cgm(power = tree_power_y, base =  tree_base_y,  split.probs = rep(1 / p_y, p_y)),
+  #                       node.prior = node.prior,
+  #                       resid.prior = fixed(1),
+  #                       proposal.probs = proposal.probs,
+  #                       sigma = 1 # sigmadbarts
+  #   )
+  #
+  #   # print("Line 425")
+  #
+  #   xdf_z <- data.frame(y = z - offsetz, x = w.train)
+  #
+  #   sampler_z <- dbarts(y ~ .,
+  #                       data = xdf_z,
+  #                       #test = x.test,
+  #                       weights = weightstemp,
+  #                       control = control_z,
+  #                       tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
+  #                       node.prior = node.prior,
+  #                       resid.prior = fixed(1),
+  #                       proposal.probs = proposal.probs,
+  #                       sigma = 1
+  #   )
+  #
+  # }else{
+  #
+  #   xdf_y <- data.frame(y = ystar[uncens_inds], x = x.train[uncens_inds,])
+  #   xdf_y_test <- data.frame(x = x.test)
+  #
+  #   sampler_y <- dbarts(y ~ .,
+  #                       data = xdf_y,
+  #                       test = xdf_y_test,
+  #                       control = control_y,
+  #                       tree.prior = dbarts:::cgm(power = tree_power_y, base = tree_base_y,  split.probs = rep(1 / p_y, p_y)),
+  #                       node.prior = node.prior,
+  #                       resid.prior = fixed(1),
+  #                       proposal.probs = proposal.probs,
+  #                       sigma = 1 # sigmadbarts
+  #   )
+  #
+  #   # print("Line 425")
+  #
+  #   xdf_z <- data.frame(y = z - offsetz, x = w.train)
+  #   xdf_z_test <- data.frame(x = w.test)
+  #
+  #   sampler_z <- dbarts(y ~ .,
+  #                       data = xdf_z,
+  #                       test = xdf_z_test,
+  #                       # weights = weightstemp,
+  #                       control = control_z,
+  #                       tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
+  #                       node.prior = node.prior,
+  #                       resid.prior = fixed(1),
+  #                       proposal.probs = proposal.probs,
+  #                       sigma = 1 # sigmadbarts
+  #   )
+  # }
 
   # print("Line 473")
-
+  yinit_vec <- ystar[uncens_inds]
+  if(yinit_resid == TRUE){
+    yinit_vec <- ystar[uncens_inds] - gamma0*(z[uncens_inds] - offsetz - zhat_heckman[uncens_inds])
+    # node.prior_y = dbarts:::normal
+  }
   preds.train_ystar <- matrix(NA, n, 1)
   preds.train_z <- matrix(NA, n, 1)
 
@@ -860,7 +909,9 @@ tobit2linear <- function(x.train,
   preds.test_z <- matrix(NA, ntest, 1)
 
   mutemp_y <- rep(mean(ystar[uncens_inds]), length(uncens_inds))
-
+  if(draw_censored_predictions){
+    mutemp_y_all <- rep(mean(yinit_vec), n)
+  }
   # #initialize sum-of-tree sampler
   # z_resids <- z - offsetz #z_epsilon
   # # z_resids[uncens_inds] <- z[uncens_inds] - offsetz - (ystar[uncens_inds]  - 0)*gamma1/(phi1 + gamma1^2)
@@ -943,7 +994,9 @@ tobit2linear <- function(x.train,
     beta_vec <- betagamma_vec[- length(betagamma_vec)]
     mutemp_y <- xmat_train[uncens_inds,, drop = FALSE] %*% beta_vec
     mutemp_test_y <- xmat_test %*% beta_vec
-
+    if(draw_censored_predictions){
+      mutemp_y_all <- xmat_train[,, drop = FALSE] %*% beta_vec
+    }
   }else{
 
     # # sample as SUR as outlined by VH? requires data augmentation of y.
@@ -968,7 +1021,9 @@ tobit2linear <- function(x.train,
 
     mutemp_y <- xmat_train[uncens_inds,, drop = FALSE] %*% beta_vec
     mutemp_test_y <- xmat_test %*% beta_vec
-
+    if(draw_censored_predictions){
+      mutemp_y_all <- xmat_train[,, drop = FALSE] %*% beta_vec
+    }
   }
 
   if(any(is.na(y_resids))){
@@ -1290,7 +1345,7 @@ tobit2linear <- function(x.train,
 
       # print("line 1084 = ")
 
-      Xresmat <- cbind(xmat_train[uncens_inds,, drop = FALSE] ,z[uncens_inds] - mutemp_z[uncens_inds] )
+      Xresmat <- cbind(xmat_train[uncens_inds,, drop = FALSE] ,z[uncens_inds] - offsetz - mutemp_z[uncens_inds] )
 
       gamma0res <- c(Bmean_p,gamma0)
       G0res <- rbind(cbind(Bvar_p, rep(0, nrow(Bvar_p))),
@@ -1312,7 +1367,9 @@ tobit2linear <- function(x.train,
       beta_vec <- betagamma_vec[- length(betagamma_vec)]
       mutemp_y <- xmat_train[uncens_inds,, drop = FALSE] %*% beta_vec
       mutemp_test_y <- xmat_test %*% beta_vec
-
+      if(draw_censored_predictions){
+        mutemp_y_all <- xmat_train[,, drop = FALSE] %*% beta_vec
+      }
     }else{
       # print("line 1105 = ")
 
@@ -1335,7 +1392,9 @@ tobit2linear <- function(x.train,
       beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
       mutemp_y <- xmat_train[uncens_inds,, drop = FALSE] %*% beta_vec
       mutemp_test_y <- xmat_test %*% beta_vec
-
+      if(draw_censored_predictions){
+        mutemp_y_all <- xmat_train[,, drop = FALSE] %*% beta_vec
+      }
     }
     y_epsilon[uncens_inds] <- ystar[uncens_inds] - mutemp_y
 
@@ -1943,7 +2002,16 @@ tobit2linear <- function(x.train,
 
     if(iter > n.burnin){
       iter_min_burnin <- iter-n.burnin
-
+      if (draw_censored_predictions) {
+        if (anyNA(x.train[cens_inds, , drop = FALSE])) {warning("Cannot draw ystar for censored observations with missing outcome covariates.")}else{
+          # xdf_y_all <- data.frame(x = x.train)
+          # mutemp_y_all <- as.numeric(sampler_y$predict(xdf_y_all)[, 1])
+          ystar_draw_full <- ystar
+          mean_cens_y <- mutemp_y_all[cens_inds] + gamma1 * (z[cens_inds] - offsetz - mutemp_z[cens_inds])
+          ystar_draw_full[cens_inds] <- rnorm(length(cens_inds), mean = mean_cens_y, sd = sqrt(phi1))
+          draw$ystar_train[, iter_min_burnin] <- ystar_draw_full * tempsd + tempmean
+        }
+      }
 
       #NOTE y and z training sample values saved here
       #do not correspond to the the same means and errors as
@@ -2018,14 +2086,23 @@ tobit2linear <- function(x.train,
       #   stop("Highly correlated f_y and IMR")
       # }
 
-      condexptrain <- mutemp_y + gamma1*IMR_train
+      # condexptrain <- mutemp_y + gamma1*IMR_train[uncens_inds]
+      # condexptest <- mutemp_test_y + gamma1*IMR_test
+      if(draw_censored_predictions){
+        condexptrain <- mutemp_y_all + gamma1*IMR_train#*
+        draw$cond_exp_train[, iter_min_burnin] <- condexptrain*tempsd+tempmean
+        draw$mu_y_train[, iter_min_burnin] <- mutemp_y_all * tempsd + tempmean
+      }
+      condexptrain <- mutemp_y + gamma1*IMR_train[uncens_inds]
       condexptest <- mutemp_test_y + gamma1*IMR_test
+      draw$cond_exp_train_uncens[, iter_min_burnin] <- condexptrain*tempsd+tempmean#*
 
       # draw$Z.mat_train[,iter_min_burnin] <- z
       # draw$Z.mat_test[,iter_min_burnin] <-  zytest[,1]
       # draw$Y.mat_train = array(NA, dim = c(n, n.iter)),
       # draw$Y.mat_test = array(NA, dim = c(ntest, n.iter)),
-      draw$mu_y_train[, iter_min_burnin] <- mutemp_y*tempsd+tempmean
+      # draw$mu_y_train[, iter_min_burnin] <- mutemp_y*tempsd+tempmean
+      draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y*tempsd+tempmean
       draw$mu_y_test[, iter_min_burnin] <- mutemp_test_y*tempsd+tempmean
 
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
@@ -2038,7 +2115,7 @@ tobit2linear <- function(x.train,
       draw$train.probcens[, iter_min_burnin] <-  probcens_train
       draw$test.probcens[, iter_min_burnin] <-  probcens_test
 
-      draw$cond_exp_train[, iter_min_burnin] <- condexptrain*tempsd+tempmean
+      # draw$cond_exp_train[, iter_min_burnin] <- condexptrain*tempsd+tempmean
       draw$cond_exp_test[, iter_min_burnin] <- condexptest*tempsd+tempmean
 
       draw$ystar_train[, iter_min_burnin] <- ystar*tempsd+tempmean
@@ -2054,12 +2131,16 @@ tobit2linear <- function(x.train,
 
 
       if(is.numeric(censored_value)){
+        if(draw_censored_predictions){
+          uncondexptrain <- censored_value*probcens_train +  mutemp_y_all*(1- probcens_train ) + gamma1*dnorm(- mutemp_z - offsetz )
+          draw$uncond_exp_train[, iter_min_burnin] <- uncondexptrain*tempsd+tempmean
+        }
+        uncondexptrain_uncens <- censored_value*probcens_train[uncens_inds] +  mutemp_y*(1- probcens_train[uncens_inds] ) + gamma1*dnorm(- mutemp_z[uncens_inds] - offsetz )
+        draw$uncond_exp_train_uncens[, iter_min_burnin] <- uncondexptrain_uncens*tempsd+tempmean
 
         # uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z - offsetz )
-        uncondexptrain <- censored_value*probcens_train +  mutemp_y*(1- probcens_train ) + gamma1*dnorm(- mutemp_z[uncens_inds] - offsetz )
         uncondexptest <- censored_value*probcens_test +  mutemp_test_y*(1- probcens_test ) + gamma1*dnorm(- mutemp_test_z - offsetz)
 
-        draw$uncond_exp_train[, iter_min_burnin] <- uncondexptrain*tempsd+tempmean
         draw$uncond_exp_test[, iter_min_burnin] <- uncondexptest*tempsd+tempmean
 
 

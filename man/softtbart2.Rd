@@ -47,7 +47,8 @@ softtbart2(
   alpha_tau = 1,
   beta_tau = 10,
   yinit_resid = FALSE,
-  draw_censored_predictions = TRUE
+  draw_censored_predictions = TRUE,
+  linHeck_centring = TRUE
 )
 }
 \arguments{

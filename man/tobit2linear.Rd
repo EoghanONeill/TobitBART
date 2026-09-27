@@ -48,7 +48,9 @@ tobit2linear(
   tau_hyperprior = FALSE,
   alpha_tau = 1,
   beta_tau = 10,
-  jointbetagamma = TRUE
+  jointbetagamma = TRUE,
+  yinit_resid = FALSE,
+  draw_censored_predictions = TRUE
 )
 }
 \arguments{

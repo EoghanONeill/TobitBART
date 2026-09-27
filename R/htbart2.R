@@ -152,7 +152,8 @@ htbart2 <- function(x.train,
                     fixed_resp_update = TRUE,
                     node_min_size = 5,
                     max_bad_trees = 10,
-                    splitting_rules = "discrete"){
+                    splitting_rules = "discrete",
+                    linHeck_centring = TRUE){
 
   if (nrow(x.test) == 0L) {stop("x.test with zero rows is currently not supported; pass training rows if no test set is needed.")}
   if(!(cov_prior %in% c("VH","Omori","Mixture", "Ding"))){stop("cov_prior must equal VH, Omori, Mixture, or Ding")}
@@ -214,9 +215,151 @@ htbart2 <- function(x.train,
   }
   if(length(cens_inds)==0) stop("No censored observations")
   if (sd(y[uncens_inds]) <= 0 || !is.finite(sd(y[uncens_inds]))) {stop("Uncensored outcomes must have positive finite standard deviation.")}
+
+
+  if ( anyNA(w.train)|| anyNA(w.test) ) {stop("Missing covariate values in w.train or w.test.")}
+  if ( anyNA(v.train)|| anyNA(v.test) ) {stop("Missing covariate values in v.train or v.test.")}
+  if(draw_censored_predictions){
+    if (anyNA(x.train)  || anyNA(x.test) ) {stop("There are missing covariate values in x.train or x.test. This is not allowed with draw_censored_predictions == TRUE. If draw_censored_predictions == FALSE, Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.")}
+  }else{
+    if (anyNA(x.train[uncens_inds,])  || anyNA(x.test) ) {stop("There are missing covariate values in uncensored x.train or any of x.test. Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.")}
+  }
+
+  n <- length(y)
+  n0 <- length(cens_inds)
+  n1 <- length(uncens_inds)
+  ntest = nrow(x.test)
+
   # normalize the outcome
   tempmean <- mean(y[uncens_inds])
   tempsd <- sd(y[uncens_inds])
+  if(linHeck_centring){
+    if(is.na(sigest)) {
+      if(ncol(x.train) < n1) {
+        if(is.na(censored_value)){
+          dtemp <-  1*(!(is.na(y)))
+        }else{
+          dtemp <-  1*(y != censored_value)
+        }
+        df = data.frame(x = cbind(x.train,w.train), y = y, d = dtemp )
+        seleq <- paste0("d ~ " , paste(colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))],
+                                       collapse = " + "))
+        outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)],
+                                       collapse = " + "))
+        fit_ok <- FALSE
+        if (is.na(sigest) && ncol(x.train) < n1) {
+          heckit.ml <- tryCatch(
+            sampleSelection::heckit(
+              selection = as.formula(seleq),
+              outcome   = as.formula(outeq),
+              data = df,
+              method = "ml"
+            ),
+            error = function(e) NULL
+          )
+          if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+            rho_hat <- heckit.ml$estimate["rho"]
+            sigma_hat <- heckit.ml$estimate["sigma"]
+            if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+              zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+              if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                tempsd <- sigma_hat
+                fit_ok <- TRUE
+                y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                tempmean <- mean(y_initpreds)
+              }
+            }
+          }
+        }
+        if (!fit_ok) {
+          if(is.na(censored_value)){
+            dtemp <-  1*(!(is.na(y)))
+          }else{
+            dtemp <-  1*(y != censored_value)
+          }
+          df = data.frame(y = y, d = dtemp ,intercept_covariate = rep(0, length(y)))
+          seleq <- "d ~ 1"
+          outeq <- "y ~ 1"
+          fit_ok2 <- FALSE
+          if (is.na(sigest) && ncol(x.train) < n1) {
+            heckit.ml <- tryCatch(
+              sampleSelection::heckit(
+                selection = as.formula(seleq),
+                outcome   = as.formula(outeq),
+                data = df,
+                method = "ml"
+              ),
+              error = function(e) NULL
+            )
+            if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+              rho_hat <- heckit.ml$estimate["rho"]
+              sigma_hat <- heckit.ml$estimate["sigma"]
+              if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+                zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+                if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                  tempsd <- sigma_hat
+                  fit_ok2 <- TRUE
+                  y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                  tempmean <- mean(y_initpreds)
+                }
+              }
+            }
+          }
+          if (!fit_ok2) {
+            tempsd <- sd(y[uncens_inds])
+            # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+            tempmean <- mean(y[uncens_inds])
+          }
+          # tempsd <- sd(y[uncens_inds])
+          # # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+          # tempmean <- mean(y[uncens_inds])
+        }
+      } else {
+        if(is.na(censored_value)){
+          dtemp <-  1*(!(is.na(y)))
+        }else{
+          dtemp <-  1*(y != censored_value)
+        }
+        df = data.frame(y = y, d = dtemp )
+        seleq <- "d ~ ."
+        outeq <- "y ~ ."
+        fit_ok <- FALSE
+        if (is.na(sigest) && ncol(x.train) < n1) {
+          heckit.ml <- tryCatch(
+            sampleSelection::heckit(
+              selection = as.formula(seleq),
+              outcome   = as.formula(outeq),
+              data = df,
+              method = "ml"
+            ),
+            error = function(e) NULL
+          )
+          if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+            rho_hat <- heckit.ml$estimate["rho"]
+            sigma_hat <- heckit.ml$estimate["sigma"]
+            if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+              zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+              if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                tempsd <- sigma_hat
+                fit_ok <- TRUE
+                y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                tempmean <- mean(y_initpreds)
+              }
+            }
+          }
+        }
+        if (!fit_ok) {
+          tempsd <- sd(y[uncens_inds])
+          # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+          tempmean <- mean(y[uncens_inds])
+        }
+      }
+    }else{
+      tempmean <- mean(y[uncens_inds])
+      tempsd <- sigest
+    }
+  }
+
   originaly <- y
   y <- (y-tempmean)/tempsd
   if (!is.na(sigest)) { sigest <- sigest / tempsd}
@@ -228,13 +371,6 @@ htbart2 <- function(x.train,
     censored_value <- (censored_value- tempmean)/tempsd
   }
 
-  if ( anyNA(w.train)|| anyNA(w.test) ) {stop("Missing covariate values in w.train or w.test.")}
-  if ( anyNA(v.train)|| anyNA(v.test) ) {stop("Missing covariate values in v.train or v.test.")}
-  if(draw_censored_predictions){
-    if (anyNA(x.train)  || anyNA(x.test) ) {stop("There are missing covariate values in x.train or x.test. This is not allowed with draw_censored_predictions == TRUE. If draw_censored_predictions == FALSE, Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.")}
-  }else{
-    if (anyNA(x.train[uncens_inds,])  || anyNA(x.test) ) {stop("There are missing covariate values in uncensored x.train or any of x.test. Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.")}
-  }
 
   ecdfsx   <- list()
   for(i in 1:ncol(x.train)) {
@@ -277,10 +413,7 @@ htbart2 <- function(x.train,
   #create ystar vector
   ystar <- rep(NA, length(y))
   ystar[uncens_inds] <- y[uncens_inds]
-  n <- length(y)
-  n0 <- length(cens_inds)
-  n1 <- length(uncens_inds)
-  ntest = nrow(x.test)
+
 
   if (n1 < 2L) {stop("At least two uncensored observations are required to construct gamma_reference.")}
 
@@ -692,7 +825,14 @@ htbart2 <- function(x.train,
     # node.prior_y = dbarts:::normal
   }
 
-  y_reference <- yinit_vec
+  ## Robust scale of the initial standardized outcome
+  y_reference_half_range <- 0.5 * diff(quantile(yinit_vec,probs = c(0.025, 0.975),na.rm = TRUE,names = FALSE))
+  if (is.finite(y_reference_half_range) ||y_reference_half_range <= 0) {
+    y_reference_half_range <- 2
+  }
+  y_reference <- c(-y_reference_half_range,y_reference_half_range,rep(0, n1 - 2L))
+
+  # y_reference <- yinit_vec
 
   Z_initial <-  z - offsetz
   reference_half_range <- 3.0
@@ -760,7 +900,7 @@ htbart2 <- function(x.train,
                         weights = rep(1,n), # weightstemp_z,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-                        node.prior = node.prior,
+                        node.prior = normal(k_sig_mu),
                         resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1)
@@ -809,7 +949,7 @@ htbart2 <- function(x.train,
                         weights = rep(1,n), # weightstemp_z,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-                        node.prior = node.prior,
+                        node.prior = normal(k_sig_mu),
                         resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1 # sigmadbarts
@@ -818,10 +958,16 @@ htbart2 <- function(x.train,
 
   # mutemp_y <- rep(mean(ystar[uncens_inds]), length(uncens_inds))
   # mutemp_y_all <- rep(mean(ystar[uncens_inds]), length(uncens_inds))
-  mutemp_y <- rep(mean(yinit_vec), length(uncens_inds))
-  if(draw_censored_predictions){
-    mutemp_y_all <- rep(mean(yinit_vec), n)
+
+  # mutemp_y <- rep(mean(yinit_vec), length(uncens_inds))
+  # if(draw_censored_predictions){
+  #   mutemp_y_all <- rep(mean(yinit_vec), n)
+  # }
+  mutemp_y <- rep(0, n1)
+  if (draw_censored_predictions) {
+    mutemp_y_all <- rep(0, n)
   }
+
   preds.train_ystar <- matrix(NA, n, 1)
   preds.train_z <- matrix(NA, n, 1)
   preds.test_ystar <- matrix(NA, ntest, 1)
@@ -1055,6 +1201,8 @@ htbart2 <- function(x.train,
     tempmodel@tree.prior@splitProbabilities <- s_gamma
     sampler_gamma$setModel(newModel = tempmodel)
   }
+
+
 
   samplestemp_gamma <- sampler_gamma$run()
 
@@ -1356,10 +1504,26 @@ htbart2 <- function(x.train,
     # weightstemp_z[uncens_inds] <- (gamma1_vec_train^2 + phi1_vec_train)/phi1_vec_train
     # weightstemp_z[uncens_inds] <- (gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds])/phi1_vec_train[uncens_inds]
 
-
-    weightstemp_z[uncens_inds] <- exp(log(gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds]) - phi_log_s2prod)
+    # weightstemp_z[uncens_inds] <- exp(log(gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds]) - phi_log_s2prod)
+    # weightstemp_z[uncens_inds] <- exp(2*log(abs(gamma1_vec_train[uncens_inds]))  - phi_log_s2prod) + 1
 
     # weightstemp_z[uncens_inds] <- ifelse((gamma1_vec_train[uncens_inds]^2 + phi1_vec_train[uncens_inds]) < 1e-6, 0, weightstemp_z[uncens_inds]  )
+    gamma_uncens <- gamma1_vec_train[uncens_inds]
+    logphi_uncens <- phi_log_s2prod
+
+    if (any(!is.finite(gamma_uncens))) {stop(sprintf("Nonfinite gamma values before selection update at iteration %d.", iter))}
+    if (any(!is.finite(logphi_uncens))) {stop(sprintf("Nonfinite log phi values before selection update at iteration %d.", iter))}
+
+    log_gamma_sq <- rep(-Inf, n1)
+    nonzero_gamma <- gamma_uncens != 0
+    log_gamma_sq[nonzero_gamma] <- 2 * log(abs(gamma_uncens[nonzero_gamma]))
+    log_gamma2_over_phi <- log_gamma_sq - logphi_uncens
+
+    log_weights_z_uncens <- ifelse( log_gamma2_over_phi > 0,
+                                    log_gamma2_over_phi + log1p(exp(-log_gamma2_over_phi)),
+                                    log1p(exp(log_gamma2_over_phi)) )
+    if (any(!is.finite(log_weights_z_uncens))) { stop(sprintf("Nonfinite log selection weights at iteration %d.", iter)) }
+    weightstemp_z[uncens_inds] <- exp(log_weights_z_uncens)
 
 
     if (any(!is.finite(weightstemp_z)) || any(weightstemp_z <= 0)) {
@@ -1519,7 +1683,7 @@ htbart2 <- function(x.train,
     gamma_tol <- sqrt(.Machine$double.eps) * max(1, max(abs(a_gamma), na.rm = TRUE))
     gamma_numerator <- ystar[uncens_inds] - mutemp_y
     raw_gamma_weight <- a_gamma^2 /phi1_vec_train[uncens_inds]
-    min_gamma_weight <- 1e-6
+    min_gamma_weight <- 0 # 1e-6
     gamma_ok <- is.finite(a_gamma) & is.finite(gamma_numerator) & is.finite(phi1_vec_train[uncens_inds]) & phi1_vec_train[uncens_inds] > 0 &
       is.finite(raw_gamma_weight) & raw_gamma_weight >= min_gamma_weight
     # gamma_ok <- is.finite(a_gamma) & is.finite(gamma_numerator) & is.finite(phi1_vec_train[uncens_inds]) & phi1_vec_train[uncens_inds] > 0 & abs(a_gamma) > gamma_tol
@@ -1535,7 +1699,7 @@ htbart2 <- function(x.train,
     # weights_gamma <- a_gamma^2/phi1_vec_train[uncens_inds]
     # weights_gamma[!gamma_ok] <- 0
     weights_gamma <- numeric(n1)
-    weights_gamma[gamma_ok] <-a_gamma[gamma_ok]^2 / phi1_vec_train[uncens_inds][gamma_ok]
+    weights_gamma[gamma_ok] <- a_gamma[gamma_ok]^2 / phi1_vec_train[uncens_inds][gamma_ok]
     if (any(!is.finite(weights_gamma)) || any(weights_gamma < 0)) {
       stop(sprintf("Invalid gamma weights at iteration %d.",iter))
     }
@@ -1553,8 +1717,8 @@ htbart2 <- function(x.train,
 
 
     #set the standard deviation
-    # sampler_gamma$setSigma(sigma = 1)
-    # sampler_gamma$setWeights(weights = weights_gamma)
+    sampler_gamma$setSigma(sigma = 1)
+    sampler_gamma$setWeights(weights = weights_gamma)
 
     positive_gamma <- weights_gamma > 0
     if (any(positive_gamma)) {
@@ -1565,8 +1729,8 @@ htbart2 <- function(x.train,
       weights_gamma_scaled <- weights_gamma
       sigma_gamma_scaled <- 1
     }
-    sampler_gamma$setSigma(sigma = sigma_gamma_scaled)
-    sampler_gamma$setWeights(weights = weights_gamma_scaled)
+    # sampler_gamma$setSigma(sigma = sigma_gamma_scaled)
+    # sampler_gamma$setWeights(weights = weights_gamma_scaled)
 
     if(sparse){
       tempmodel <- sampler_gamma$model
@@ -1574,8 +1738,88 @@ htbart2 <- function(x.train,
       sampler_gamma$setModel(newModel = tempmodel)
     }
 
-    samplestemp_gamma <- sampler_gamma$run()
 
+    if (any(!is.finite(gamma_resids))) {
+      stop(sprintf("Nonfinite gamma pseudo-response at iteration %d.", iter))
+    }
+
+    if (any(!is.finite(computational_offset_gamma))) {
+      stop(sprintf("Nonfinite gamma computational offset at iteration %d.", iter))
+    }
+
+    if (any(!is.finite(weights_gamma)) || any(weights_gamma < 0)) {
+      stop(sprintf("Invalid raw gamma weights at iteration %d.", iter))
+    }
+
+    if (any(!is.finite(weights_gamma_scaled)) ||any(weights_gamma_scaled < 0) ||!is.finite(sigma_gamma_scaled) ||sigma_gamma_scaled <= 0) {
+      stop(sprintf("Invalid scaled gamma likelihood at iteration %d.", iter))
+    }
+
+    positive_gamma <- weights_gamma > 0
+    variance_raw <- 1 / weights_gamma[positive_gamma]
+    variance_scaled <- sigma_gamma_scaled^2 /weights_gamma_scaled[positive_gamma]
+    if (!isTRUE(all.equal(variance_raw,variance_scaled,tolerance = 1e-10,check.attributes = FALSE))) {stop(sprintf("Gamma weight rescaling failed at iteration %d.", iter))}
+
+
+    # if(iter > 110L){
+      # gamma_pre_run_diag <- list(
+      #   iteration = iter,
+      #   gamma_ok = gamma_ok,
+      #   gamma_resids = gamma_resids,
+      #   computational_offset_gamma = computational_offset_gamma,
+      #   weights_gamma = weights_gamma,
+      #   weights_gamma_scaled = weights_gamma_scaled,
+      #   sigma_gamma_scaled = sigma_gamma_scaled,
+      #   a_gamma = a_gamma,
+      #   gamma_numerator = gamma_numerator,
+      #   phi_uncens = phi1_vec_train[uncens_inds],
+      #   gamma_previous = gamma1_vec_train[uncens_inds]
+      # )
+      # print("gamma_pre_run_diag = ")
+      # print(gamma_pre_run_diag)
+      # saveRDS(
+      #   gamma_pre_run_diag,
+      #   file = sprintf(
+      #     "gamma_pre_run_iter_%05d.rds",
+      #     iter
+      #   )
+      # )
+
+      positive_gamma <- weights_gamma > 0
+
+      # gamma_summary <- c(
+      #   n_positive = sum(positive_gamma),
+      #   n_zero = sum(!positive_gamma),
+      #   sum_weights = sum(weights_gamma),
+      #   min_positive_weight = min(
+      #     weights_gamma[positive_gamma]
+      #   ),
+      #   max_weight = max(weights_gamma),
+      #   max_abs_response = max(abs(gamma_resids)),
+      #   max_abs_offset = max(
+      #     abs(computational_offset_gamma)
+      #   ),
+      #   sigma_scaled = sigma_gamma_scaled,
+      #   max_scaled_weight = max(
+      #     weights_gamma_scaled
+      #   ),
+      #   min_positive_scaled_weight = min(
+      #     weights_gamma_scaled[
+      #       weights_gamma_scaled > 0
+      #     ]
+      #   )
+      # )
+      # print("gamma_summary = ")
+      # print(gamma_summary)
+
+    # }
+
+    trees_before <- sampler_gamma$getTrees()
+    samplestemp_gamma <- sampler_gamma$run()
+    trees_after <- sampler_gamma$getTrees()
+
+    mu_before <- trees_before$mu
+    mu_after <- trees_after$mu
 
 
 
@@ -1621,8 +1865,106 @@ htbart2 <- function(x.train,
     # gamma1_vec_train[uncens_inds] <- samplestemp_gamma$train[,1]
     # gamma1_vec_test <- samplestemp_gamma$test[,1]
 
-    gamma1_vec_train[uncens_inds] <-as.numeric(sampler_gamma$predict(xdf_gamma)[, 1]  )
-    gamma1_vec_test <-as.numeric(sampler_gamma$predict( xdf_gamma_test)[, 1])
+    # gamma_trees <- sampler_gamma$getTrees()
+    # bad_gamma_mu <- which(!is.finite(gamma_trees$mu) &!is.na(gamma_trees$mu))
+    # if (length(bad_gamma_mu) > 0L) {stop(sprintf("Gamma forest contains %d nonfinite terminal-node parameters at iteration %d.",length(bad_gamma_mu),iter))}
+    gamma_train_new <- as.numeric(sampler_gamma$predict(xdf_gamma)[, 1])
+    gamma_test_new <- as.numeric(sampler_gamma$predict(xdf_gamma_test)[, 1])
+
+
+    # gamma_train_new <- as.numeric(sampler_gamma$predict(xdf_gamma)[, 1])
+    # gamma_test_new <- as.numeric(sampler_gamma$predict(xdf_gamma_test)[, 1])
+
+    # if (any(!is.finite(gamma_train_new)) ||any(!is.finite(gamma_test_new))) {
+    #   positive_weights <- weights_gamma[weights_gamma > 0]
+    #   diagnostic <- list(iteration = iter,bad_gamma_train = which(!is.finite(gamma_train_new)),bad_gamma_test = which(!is.finite(gamma_test_new)),
+    #     gamma_train = gamma_train_new,gamma_test = gamma_test_new,gamma_resids = gamma_resids,
+    #     computational_offset_gamma = computational_offset_gamma,weights_gamma = weights_gamma,weights_gamma_scaled = weights_gamma_scaled,sigma_gamma_scaled = sigma_gamma_scaled,
+    #     a_gamma = a_gamma,gamma_numerator = gamma_numerator,phi_uncens = phi1_vec_train[uncens_inds],gamma_ok = gamma_ok
+    #   )
+    #
+    #   diagnostic_file <- file.path(diagnostic_path,sprintf("htbart2_gamma_failure_rep_%03d_iter_%05d.rds",replication_id,iter))
+    #   saveRDS(diagnostic, diagnostic_file)
+    #
+    #   stop(sprintf(paste0("Nonfinite offset-free gamma prediction at iteration %d. ","n_ok=%d, n_zero=%d, raw positive weight range=[%g,%g], ","scaled sigma=%g, max_abs_offset=%g. Diagnostic: %s"),
+    #     iter,
+    #     sum(gamma_ok),
+    #     sum(weights_gamma == 0),
+    #     if (length(positive_weights)) min(positive_weights) else NA_real_,
+    #     if (length(positive_weights)) max(positive_weights) else NA_real_,
+    #     sigma_gamma_scaled,
+    #     max(abs(computational_offset_gamma)),
+    #     diagnostic_file
+    #   ))
+    # }
+    if (length(gamma_train_new) != n1 || length(gamma_test_new) != ntest || any(!is.finite(gamma_train_new)) || any(!is.finite(gamma_test_new))) {
+      bad_train <- which(!is.finite(gamma_train_new))
+      bad_test <- which(!is.finite(gamma_test_new))
+
+      # print("gamma_summary = ")
+      # print(gamma_summary)
+
+      # print("gamma_pre_run_diag = ")
+      # print(gamma_pre_run_diag)
+
+      compact_gamma_diag <- list(
+        iteration = iter,
+        n_ok = sum(gamma_ok),
+        n_not_ok = sum(!gamma_ok),
+        failed_indices = which(!gamma_ok),
+        a_failed = a_gamma[!gamma_ok],
+        numerator_failed = gamma_numerator[!gamma_ok],
+        raw_weight_failed = raw_gamma_weight[!gamma_ok],
+        gamma_previous_failed = gamma_previous[!gamma_ok],
+        raw_weight_quantiles = quantile(
+          raw_gamma_weight[is.finite(raw_gamma_weight)],
+          c(0, 0.001, 0.01, 0.5, 0.99, 0.999, 1)
+        ),
+        working_response_quantiles = quantile(
+          gamma_working_response,
+          c(0, 0.001, 0.01, 0.5, 0.99, 0.999, 1)
+        ),
+        max_abs_offset = max(
+          abs(computational_offset_gamma)
+        ),
+        phi_range = range(phi_uncens)
+      )
+
+      print(compact_gamma_diag)
+
+
+      print("mu Na outputs = ")
+      print(c(
+        before_nan = sum(is.nan(mu_before)),
+        after_nan = sum(is.nan(mu_after)),
+        before_inf = sum(is.infinite(mu_before)),
+        after_inf = sum(is.infinite(mu_after)),
+        before_finite = sum(is.finite(mu_before)),
+        after_finite = sum(is.finite(mu_after))
+      ))
+
+      new_nan <- which(!is.nan(mu_before) & is.nan(mu_after))
+      new_inf <- which(!is.infinite(mu_before) & is.infinite(mu_after))
+
+      print("new_nan = ")
+      print(new_nan)
+      print("new_inf = ")
+      print(new_inf)
+
+      print("trees_after[new_nan, , drop = FALSE] = ")
+      print(trees_after[new_nan, , drop = FALSE])
+      print("trees_after[new_inf, , drop = FALSE] = ")
+      print(trees_after[new_inf, , drop = FALSE])
+
+      stop(sprintf( paste0( "Offset-free gamma prediction failed at iteration %d. ", "Nonfinite train predictions: %d; test predictions: %d."),
+        iter, length(bad_train),length(bad_test)))
+    }
+
+    gamma1_vec_train[uncens_inds] <- gamma_train_new
+    gamma1_vec_test <- gamma_test_new
+
+    # gamma1_vec_train[uncens_inds] <-as.numeric(sampler_gamma$predict(xdf_gamma)[, 1]  )
+    # gamma1_vec_test <-as.numeric(sampler_gamma$predict( xdf_gamma_test)[, 1])
 
 
     if(draw_censored_predictions){
@@ -1697,16 +2039,16 @@ htbart2 <- function(x.train,
       curr_tree_phi <- curr_trees_phi[[j]]
       new_tree_phi <- new_trees_phi[[j]]
 
-      phi_log_check <- get_predictions( curr_trees_phi, v.train[uncens_inds, , drop = FALSE], single_tree = n.trees_phi == 1L )
-      phi_log_error <- max( abs( phi_log_s2prod - phi_log_check ) )
-      if (!is.finite(phi_log_error) || phi_log_error > 1e-10) {
-        stop( sprintf(paste0( "Phi backfitting mismatch at iteration %d, tree %d: %.3e."),iter,j,phi_log_error))
-      }
-      stored_log_check <- rowSums(tree_fits_store_logphi)
-      stored_log_error <- max( abs( phi_log_s2prod - stored_log_check ) )
-      if (!is.finite(stored_log_error) || stored_log_error > 1e-10) {
-        stop( sprintf( paste0( "Stored phi-tree fits mismatch at iteration %d, tree %d: %.3e."), iter, j, stored_log_error))
-      }
+      # phi_log_check <- get_predictions( curr_trees_phi, v.train[uncens_inds, , drop = FALSE], single_tree = n.trees_phi == 1L )
+      # phi_log_error <- max( abs( phi_log_s2prod - phi_log_check ) )
+      # if (!is.finite(phi_log_error) || phi_log_error > 1e-10) {
+      #   stop( sprintf(paste0( "Phi backfitting mismatch at iteration %d, tree %d: %.3e."),iter,j,phi_log_error))
+      # }
+      # stored_log_check <- rowSums(tree_fits_store_logphi)
+      # stored_log_error <- max( abs( phi_log_s2prod - stored_log_check ) )
+      # if (!is.finite(stored_log_error) || stored_log_error > 1e-10) {
+      #   stop( sprintf( paste0( "Stored phi-tree fits mismatch at iteration %d, tree %d: %.3e."), iter, j, stored_log_error))
+      # }
 
 
       if((nrow(new_tree_phi$tree_matrix) == nrow(curr_tree_phi$tree_matrix) ) & (type_phi != "change" )){
@@ -1841,12 +2183,15 @@ htbart2 <- function(x.train,
 
       #draw z and y for test observations
       zytest <- matrix(NA, nrow = ntest, ncol = 2)
-      for(i in 1:ntest){
-        # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
-        Sigma_mattemp <- cbind(c(1,gamma1_vec_test[i]), c(gamma1_vec_test[i],phi1_vec_test[i]+gamma1_vec_test[i]^2))
-        zytest[i,] <- Rfast::rmvnorm(n = 1, mu = c(offsetz + mutemp_test_z[i], mutemp_test_y[i]), sigma = Sigma_mattemp)
-      }
-
+      # for(i in 1:ntest){
+      #   # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
+      #   Sigma_mattemp <- cbind(c(1,gamma1_vec_test[i]), c(gamma1_vec_test[i],phi1_vec_test[i]+gamma1_vec_test[i]^2))
+      #   zytest[i,] <- Rfast::rmvnorm(n = 1, mu = c(offsetz + mutemp_test_z[i], mutemp_test_y[i]), sigma = Sigma_mattemp)
+      # }
+      e1 <- rnorm(ntest)
+      e2 <- rnorm(ntest)
+      zytest[,1] <- offsetz + mutemp_test_z + e1
+      zytest[,2] <- mutemp_test_y + gamma1_vec_test * e1 + sqrt(phi1_vec_test) * e2
       if(fast == TRUE){
         # probcens_train <- fastpnorm(- mutemp_z[uncens_inds] - offsetz )
         probcens_train <- fastpnorm(- mutemp_z - offsetz )
@@ -1910,8 +2255,8 @@ htbart2 <- function(x.train,
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
       draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y*tempsd+tempmean
-      draw$mu_z_train[, iter_min_burnin] <- mutemp_z
-      draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z
+      draw$mu_z_train[, iter_min_burnin] <- mutemp_z + offsetz
+      draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z + offsetz
       draw$train.probcens[, iter_min_burnin] <-  probcens_train
       draw$test.probcens[, iter_min_burnin] <-  probcens_test
       draw$cond_exp_test[, iter_min_burnin] <- condexptest*tempsd+tempmean

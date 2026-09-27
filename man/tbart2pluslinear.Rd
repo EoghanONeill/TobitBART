@@ -52,7 +52,8 @@ tbart2pluslinear(
   interceptonly = FALSE,
   yinit_resid = FALSE,
   draw_censored_predictions = TRUE,
-  fixed_resp_update = TRUE
+  fixed_resp_update = TRUE,
+  linHeck_centring = TRUE
 )
 }
 \arguments{

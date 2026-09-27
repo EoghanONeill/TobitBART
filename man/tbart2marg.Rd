@@ -60,7 +60,8 @@ tbart2marg(
   linearterms = FALSE,
   jointbetagamma = FALSE,
   yinit_resid = FALSE,
-  draw_censored_predictions = TRUE
+  draw_censored_predictions = TRUE,
+  linHeck_centring = TRUE
 )
 }
 \arguments{

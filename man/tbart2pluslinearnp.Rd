@@ -61,7 +61,8 @@ tbart2pluslinearnp(
   mu1_tozero = TRUE,
   yinit_resid = FALSE,
   draw_censored_predictions = TRUE,
-  fixed_resp_update = TRUE
+  fixed_resp_update = TRUE,
+  linHeck_centring = TRUE
 )
 }
 \arguments{

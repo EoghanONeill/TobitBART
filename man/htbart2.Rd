@@ -65,7 +65,8 @@ htbart2(
   fixed_resp_update = TRUE,
   node_min_size = 5,
   max_bad_trees = 10,
-  splitting_rules = "discrete"
+  splitting_rules = "discrete",
+  linHeck_centring = TRUE
 )
 }
 \arguments{

@@ -52,7 +52,8 @@ tobit2linearnp(
   alpha_b_z = 1,
   alpha_split_prior = TRUE,
   mu1_tozero = TRUE,
-  draw_censored_predictions = TRUE
+  draw_censored_predictions = TRUE,
+  linHeck_centring = TRUE
 )
 }
 \arguments{

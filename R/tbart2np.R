@@ -261,7 +261,8 @@ tbart2np <- function(x.train,
                     mu1_tozero = TRUE,
                     yinit_resid = FALSE,
                     draw_censored_predictions = TRUE,
-                    fixed_resp_update = TRUE){
+                    fixed_resp_update = TRUE,
+                    linHeck_centring = TRUE){
 
   if (nrow(x.test) == 0L) {
     stop("x.test with zero rows is currently not supported; pass training rows if no test set is needed.")
@@ -319,7 +320,10 @@ tbart2np <- function(x.train,
     cens_inds <- which(y == censored_value)
     uncens_inds <- which(y != censored_value)
   }
-
+  n <- length(y)
+  n0 <- length(cens_inds)
+  n1 <- length(uncens_inds)
+  ntest = nrow(x.test)
   if(length(cens_inds)==0) stop("No censored observations")
 
   if (sd(y[uncens_inds]) <= 0 || !is.finite(sd(y[uncens_inds]))) {
@@ -328,6 +332,132 @@ tbart2np <- function(x.train,
   # normalize the outcome
   tempmean <- mean(y[uncens_inds])
   tempsd <- sd(y[uncens_inds])
+  if(linHeck_centring){
+    if(is.na(sigest)) {
+      if(ncol(x.train) < n1) {
+        if(is.na(censored_value)){
+          dtemp <-  1*(!(is.na(y)))
+        }else{
+          dtemp <-  1*(y != censored_value)
+        }
+        df = data.frame(x = cbind(x.train,w.train), y = y, d = dtemp )
+        seleq <- paste0("d ~ " , paste(colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))],
+                                       collapse = " + "))
+        outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)],
+                                       collapse = " + "))
+        fit_ok <- FALSE
+        if (is.na(sigest) && ncol(x.train) < n1) {
+          heckit.ml <- tryCatch(
+            sampleSelection::heckit(
+              selection = as.formula(seleq),
+              outcome   = as.formula(outeq),
+              data = df,
+              method = "ml"
+            ),
+            error = function(e) NULL
+          )
+          if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+            rho_hat <- heckit.ml$estimate["rho"]
+            sigma_hat <- heckit.ml$estimate["sigma"]
+            if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+              zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+              if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                tempsd <- sigma_hat
+                fit_ok <- TRUE
+                y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                tempmean <- mean(y_initpreds)
+              }
+            }
+          }
+        }
+        if (!fit_ok) {
+          if(is.na(censored_value)){
+            dtemp <-  1*(!(is.na(y)))
+          }else{
+            dtemp <-  1*(y != censored_value)
+          }
+          df = data.frame(y = y, d = dtemp )
+          seleq <- "d ~ ."
+          outeq <- "y ~ ."
+          fit_ok2 <- FALSE
+          if (is.na(sigest) && ncol(x.train) < n1) {
+            heckit.ml <- tryCatch(
+              sampleSelection::heckit(
+                selection = as.formula(seleq),
+                outcome   = as.formula(outeq),
+                data = df,
+                method = "ml"
+              ),
+              error = function(e) NULL
+            )
+            if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+              rho_hat <- heckit.ml$estimate["rho"]
+              sigma_hat <- heckit.ml$estimate["sigma"]
+              if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+                zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+                if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                  tempsd <- sigma_hat
+                  fit_ok2 <- TRUE
+                  y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                  tempmean <- mean(y_initpreds)
+                }
+              }
+            }
+          }
+          if (!fit_ok2) {
+            tempsd <- sd(y[uncens_inds])
+            # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+            tempmean <- mean(y[uncens_inds])
+          }
+          # tempsd <- sd(y[uncens_inds])
+          # # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+          # tempmean <- mean(y[uncens_inds])
+        }
+      } else {
+        if(is.na(censored_value)){
+          dtemp <-  1*(!(is.na(y)))
+        }else{
+          dtemp <-  1*(y != censored_value)
+        }
+        df = data.frame(y = y, d = dtemp ,intercept_covariate = rep(0, length(y)))
+        seleq <- "d ~ 1"
+        outeq <- "y ~ 1"
+        fit_ok <- FALSE
+        if (is.na(sigest) && ncol(x.train) < n1) {
+          heckit.ml <- tryCatch(
+            sampleSelection::heckit(
+              selection = as.formula(seleq),
+              outcome   = as.formula(outeq),
+              data = df,
+              method = "ml"
+            ),
+            error = function(e) NULL
+          )
+          if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+            rho_hat <- heckit.ml$estimate["rho"]
+            sigma_hat <- heckit.ml$estimate["sigma"]
+            if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+              zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+              if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                tempsd <- sigma_hat
+                fit_ok <- TRUE
+                y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                tempmean <- mean(y_initpreds)
+              }
+            }
+          }
+        }
+        if (!fit_ok) {
+          tempsd <- sd(y[uncens_inds])
+          # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+          tempmean <- mean(y[uncens_inds])
+        }
+      }
+    }else{
+      tempmean <- mean(y[uncens_inds])
+      tempsd <- sigest
+    }
+  }
   originaly <- y
   y <- (y - tempmean)/tempsd
   if (!is.na(sigest)) { sigest <- sigest / tempsd}
@@ -377,15 +507,9 @@ tbart2np <- function(x.train,
   rm(ecdfs)
 
   xdf_y_all <- data.frame(x = x.train)
-  #create z vector
-
   #create ystar vector
   ystar <- rep(mean(y[uncens_inds]), length(y))
   ystar[uncens_inds] <- y[uncens_inds]
-  n <- length(y)
-  n0 <- length(cens_inds)
-  n1 <- length(uncens_inds)
-  ntest = nrow(x.test)
   p_y <- ncol(x.train)
   p_z <- ncol(w.train)
 
@@ -892,7 +1016,14 @@ tbart2np <- function(x.train,
     yinit_vec <- ystar[uncens_inds] - gamma0*(z[uncens_inds] - offsetz - zhat_heckman[uncens_inds])
     # node.prior_y = dbarts:::normal
   }
-  y_reference <- yinit_vec
+  ## Robust scale of the initial standardized outcome
+  y_reference_half_range <- 0.5 * diff(quantile(yinit_vec,probs = c(0.025, 0.975),na.rm = TRUE,names = FALSE))
+  if (is.finite(y_reference_half_range) ||y_reference_half_range <= 0) {
+    y_reference_half_range <- 2
+  }
+  y_reference <- c(-y_reference_half_range,y_reference_half_range,rep(0, n1 - 2L))
+
+  # y_reference <- yinit_vec
 
   Z_initial <-  z - offsetz
   reference_half_range <- 3.0
@@ -939,7 +1070,7 @@ tbart2np <- function(x.train,
                         weights = weightstemp_z,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-                        node.prior = node.prior,
+                        node.prior = normal(k_sig_mu),
                         resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1 #sigmadbarts
@@ -972,7 +1103,7 @@ tbart2np <- function(x.train,
                         # weights = weightstemp,
                         control = control_z,
                         tree.prior = dbarts:::cgm(power = tree_power_z, base = tree_base_z,  split.probs = rep(1 / p_z, p_z)),
-                        node.prior = node.prior,
+                        node.prior = normal(k_sig_mu),
                         resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1 # sigmadbarts
@@ -2405,15 +2536,18 @@ tbart2np <- function(x.train,
       # zytest[,1] <- zytest[,1] + offsetz + mutemp_test_z
       # zytest[,2] <- zytest[,2] + mutemp_test_y
 
-      for(i in 1:ntest){
-        # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
-        Sigma_mattemp <- cbind(c(1,varthetamat_test[i,4]),
-                               c(varthetamat_test[i,4],varthetamat_test[i,3]+varthetamat_test[i,4]^2))
-
-        zytest[i,] <- Rfast::rmvnorm(n = 1, mu = c(offsetz + mutemp_test_z[i] + varthetamat_test[i,1], mutemp_test_y[i]+ varthetamat_test[i,2]),
-                              sigma = Sigma_mattemp)
-      }
-
+      # for(i in 1:ntest){
+      #   # varthetamat_test[i,] <- cbind(mutilde, phitilde, gammatilde)
+      #   Sigma_mattemp <- cbind(c(1,varthetamat_test[i,4]),
+      #                          c(varthetamat_test[i,4],varthetamat_test[i,3]+varthetamat_test[i,4]^2))
+      #
+      #   zytest[i,] <- Rfast::rmvnorm(n = 1, mu = c(offsetz + mutemp_test_z[i] + varthetamat_test[i,1], mutemp_test_y[i]+ varthetamat_test[i,2]),
+      #                         sigma = Sigma_mattemp)
+      # }
+      e1 <- rnorm(ntest)
+      e2 <- rnorm(ntest)
+      zytest[,1] <- offsetz + mutemp_test_z + varthetamat_test[,1] + e1
+      zytest[,2] <- mutemp_test_y + varthetamat_test[,2] + varthetamat_test[,4] * e1 + sqrt(varthetamat_test[,3]) * e2
 
       # probcens_train <- pnorm(- mutemp_z[uncens_inds] - offsetz - varthetamat[uncens_inds,1] )
       probcens_train <- pnorm(- mutemp_z - offsetz - varthetamat[,1] )
@@ -2495,8 +2629,8 @@ tbart2np <- function(x.train,
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
       draw$muuncens_y_train[, iter_min_burnin] <- (mutemp_y + varthetamat[uncens_inds,2]) *tempsd+tempmean
 
-      draw$mu_z_train[, iter_min_burnin] <- mutemp_z + offsetz + varthetamat[,1]
-      draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z + offsetz + varthetamat_test[,1]
+      draw$mu_z_train[, iter_min_burnin] <- mutemp_z + offsetz + varthetamat[,1] + offsetz
+      draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z + offsetz + varthetamat_test[,1] + offsetz
 
       draw$train.probcens[, iter_min_burnin] <-  probcens_train
       draw$test.probcens[, iter_min_burnin] <-  probcens_test

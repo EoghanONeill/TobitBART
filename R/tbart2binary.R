@@ -894,14 +894,7 @@ tbart2binary <- function(x.train,
     Z_reference <- z - offsetz
   }
 
-
-
-
-
-
   if(nrow(x.test ) == 0){
-
-
     # xdf_y <- data.frame(y = yinit_vec, x = x.train[uncens_inds,])
     xdf_y <- data.frame(y = y_reference, x = x.train[uncens_inds,])
     sampler_y <- dbarts(y ~ .,
@@ -913,11 +906,7 @@ tbart2binary <- function(x.train,
                         resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1 # sigmadbarts
-    )
-
-    # print("line 697")
-
-    # print("Line 425")
+                        )
 
     xdf_z <- data.frame(y = Z_reference, x = w.train)
 
@@ -930,11 +919,8 @@ tbart2binary <- function(x.train,
                         node.prior = normal(k_sig_mu),
                         resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
-                        sigma = 1
-    )
-
+                        sigma = 1)
   }else{
-
     # xdf_y <- data.frame(y = yinit_vec, x = x.train[uncens_inds,])
     xdf_y <- data.frame(y = y_reference, x = x.train[uncens_inds,])
     xdf_y_test <- data.frame(x = x.test)
@@ -948,15 +934,11 @@ tbart2binary <- function(x.train,
                         resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1 # sigmadbarts
-    )
-
-    # print("Line 425")
-
+                        )
 
     # xdf_z <- data.frame(y = z - offsetz, x = w.train)
     xdf_z <- data.frame(y = Z_reference, x = w.train)
     xdf_z_test <- data.frame(x = w.test)
-
 
     sampler_z <- dbarts(y ~ .,
                         data = xdf_z,
@@ -968,17 +950,8 @@ tbart2binary <- function(x.train,
                         resid.prior = fixed(1),
                         proposal.probs = proposal.probs,
                         sigma = 1 # sigmadbarts
-    )
-
+                        )
   }
-
-
-
-
-  # print("Line 473")
-
-
-
 
 
   preds.train_ystar <- matrix(NA, n, 1)
@@ -986,8 +959,6 @@ tbart2binary <- function(x.train,
 
   preds.test_ystar <- matrix(NA, ntest, 1)
   preds.test_z <- matrix(NA, ntest, 1)
-
-
 
   #initialize sum-of-tree sampler
   z_resids <- z - offsetz #z_epsilon
@@ -1915,8 +1886,8 @@ tbart2binary <- function(x.train,
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
       draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y*tempsd+tempmean
 
-      draw$mu_z_train[, iter_min_burnin] <- mutemp_z
-      draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z
+      draw$mu_z_train[, iter_min_burnin] <- mutemp_z + offsetz
+      draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z + offsetz
 
       draw$train.probcens[, iter_min_burnin] <-  probcens_train
       draw$test.probcens[, iter_min_burnin] <-  probcens_test

@@ -52,7 +52,8 @@ softtbart2np(
   simultaneous_covmat = TRUE,
   mu1_tozero = TRUE,
   yinit_resid = FALSE,
-  draw_censored_predictions = TRUE
+  draw_censored_predictions = TRUE,
+  linHeck_centring = TRUE
 )
 }
 \arguments{

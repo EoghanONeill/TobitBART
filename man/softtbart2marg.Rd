@@ -62,7 +62,8 @@ softtbart2marg(
   jointbetagamma = FALSE,
   mh_tau_bandwidth = TRUE,
   tau_rate = 10,
-  draw_censored_predictions = TRUE
+  draw_censored_predictions = TRUE,
+  linHeck_centring = TRUE
 )
 }
 \arguments{

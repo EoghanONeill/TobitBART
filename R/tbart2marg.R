@@ -243,7 +243,8 @@ tbart2marg <- function(x.train,
                     one_chol = FALSE,
                     tau_hyperprior = FALSE, alpha_tau = 1, beta_tau = 10, jointgammanodes = TRUE, linearterms = FALSE, jointbetagamma = FALSE,
                     yinit_resid = FALSE,
-                    draw_censored_predictions = TRUE){
+                    draw_censored_predictions = TRUE,
+                    linHeck_centring = TRUE){
 
   if(one_chol){stop("one_chol currently not supported.")}
   if (nrow(x.test) == 0L) {stop("x.test with zero rows is currently not supported; pass training rows if no test set is needed.")}
@@ -315,10 +316,145 @@ tbart2marg <- function(x.train,
   # tree_fits_store = matrix(0, ncol = n.trees, nrow = length(y))
 
   if (sd(y[uncens_inds]) <= 0 || !is.finite(sd(y[uncens_inds]))) { stop("Uncensored outcomes must have positive finite standard deviation.")}
-
+  if ( anyNA(w.train)|| anyNA(w.test) ) { stop("Missing covariate values in w.train or w.test.") }
+  if(draw_censored_predictions){
+    if (anyNA(x.train)  || anyNA(x.test) ) { stop("There are missing covariate values in x.train or x.test. This is not allowed with draw_censored_predictions == TRUE. If draw_censored_predictions == FALSE, Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.") }
+  }else{
+    if (anyNA(x.train[uncens_inds,])  || anyNA(x.test) ) { stop("There are missing covariate values in uncensored x.train or any of x.test. Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.") }
+  }
+  n <- length(y)
+  n0 <- length(cens_inds)
+  n1 <- length(uncens_inds)
+  ntest = nrow(x.test)
   # normalize the outcome
   tempmean <- mean(y[uncens_inds])
   tempsd <- sd(y[uncens_inds])
+  if(linHeck_centring){
+    if(is.na(sigest)) {
+      if(ncol(x.train) < n1) {
+        if(is.na(censored_value)){
+          dtemp <-  1*(!(is.na(y)))
+        }else{
+          dtemp <-  1*(y != censored_value)
+        }
+        df = data.frame(x = cbind(x.train,w.train), y = y, d = dtemp )
+        seleq <- paste0("d ~ " , paste(colnames(df)[(ncol(x.train)+1):(ncol(x.train) + ncol(w.train))],
+                                       collapse = " + "))
+        outeq <- paste0("y ~ " , paste(colnames(df)[1:ncol(x.train)],
+                                       collapse = " + "))
+        fit_ok <- FALSE
+        if (is.na(sigest) && ncol(x.train) < n1) {
+          heckit.ml <- tryCatch(
+            sampleSelection::heckit(
+              selection = as.formula(seleq),
+              outcome   = as.formula(outeq),
+              data = df,
+              method = "ml"
+            ),
+            error = function(e) NULL
+          )
+          if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+            rho_hat <- heckit.ml$estimate["rho"]
+            sigma_hat <- heckit.ml$estimate["sigma"]
+            if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+              zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+              if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                tempsd <- sigma_hat
+                fit_ok <- TRUE
+                y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                tempmean <- mean(y_initpreds)
+              }
+            }
+          }
+        }
+        if (!fit_ok) {
+          if(is.na(censored_value)){
+            dtemp <-  1*(!(is.na(y)))
+          }else{
+            dtemp <-  1*(y != censored_value)
+          }
+          df = data.frame(y = y, d = dtemp ,intercept_covariate = rep(0, length(y)))
+          seleq <- "d ~ 1"
+          outeq <- "y ~ 1"
+          fit_ok2 <- FALSE
+          if (is.na(sigest) && ncol(x.train) < n1) {
+            heckit.ml <- tryCatch(
+              sampleSelection::heckit(
+                selection = as.formula(seleq),
+                outcome   = as.formula(outeq),
+                data = df,
+                method = "ml"
+              ),
+              error = function(e) NULL
+            )
+            if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+              rho_hat <- heckit.ml$estimate["rho"]
+              sigma_hat <- heckit.ml$estimate["sigma"]
+              if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+                zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+                if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                  tempsd <- sigma_hat
+                  fit_ok2 <- TRUE
+                  y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                  tempmean <- mean(y_initpreds)
+                }
+              }
+            }
+          }
+          if (!fit_ok2) {
+            tempsd <- sd(y[uncens_inds])
+            # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+            tempmean <- mean(y[uncens_inds])
+          }
+          # tempsd <- sd(y[uncens_inds])
+          # # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+          # tempmean <- mean(y[uncens_inds])
+        }
+      } else {
+        if(is.na(censored_value)){
+          dtemp <-  1*(!(is.na(y)))
+        }else{
+          dtemp <-  1*(y != censored_value)
+        }
+        df = data.frame(y = y, d = dtemp )
+        seleq <- "d ~ ."
+        outeq <- "y ~ ."
+        fit_ok <- FALSE
+        if (is.na(sigest) && ncol(x.train) < n1) {
+          heckit.ml <- tryCatch(
+            sampleSelection::heckit(
+              selection = as.formula(seleq),
+              outcome   = as.formula(outeq),
+              data = df,
+              method = "ml"
+            ),
+            error = function(e) NULL
+          )
+          if (!is.null(heckit.ml) && !is.null(heckit.ml$estimate) && all(c("rho", "sigma") %in% names(heckit.ml$estimate))) {
+            rho_hat <- heckit.ml$estimate["rho"]
+            sigma_hat <- heckit.ml$estimate["sigma"]
+            if (length(rho_hat) == 1L && length(sigma_hat) == 1L && is.finite(rho_hat) && is.finite(sigma_hat) && sigma_hat > 0) {
+              zhat_candidate <- tryCatch(as.numeric(predict(heckit.ml,newdata = df,part = "selection",type = "link")),error = function(e) NULL)
+              if (!is.null(zhat_candidate) && length(zhat_candidate) == nrow(df) && all(is.finite(zhat_candidate))) {
+                tempsd <- sigma_hat
+                fit_ok <- TRUE
+                y_initpreds <- predict(heckit.ml, newdata = df, part = "outcome", type = "unconditional")
+                tempmean <- mean(y_initpreds)
+              }
+            }
+          }
+        }
+        if (!fit_ok) {
+          tempsd <- sd(y[uncens_inds])
+          # y_initpreds <- rep(mean(y[uncens_inds]), nrow(df))
+          tempmean <- mean(y[uncens_inds])
+        }
+      }
+    }else{
+      tempmean <- mean(y[uncens_inds])
+      tempsd <- sigest
+    }
+  }
   originaly <- y
   y <- (y-tempmean)/tempsd
   if (!is.na(sigest)) { sigest <- sigest / tempsd}
@@ -332,12 +468,7 @@ tbart2marg <- function(x.train,
     censored_value <- (censored_value- tempmean)/tempsd
   }
 
-  if ( anyNA(w.train)|| anyNA(w.test) ) { stop("Missing covariate values in w.train or w.test.") }
-  if(draw_censored_predictions){
-    if (anyNA(x.train)  || anyNA(x.test) ) { stop("There are missing covariate values in x.train or x.test. This is not allowed with draw_censored_predictions == TRUE. If draw_censored_predictions == FALSE, Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.") }
-  }else{
-    if (anyNA(x.train[uncens_inds,])  || anyNA(x.test) ) { stop("There are missing covariate values in uncensored x.train or any of x.test. Censored/training observations with missing predictors are supported, but predictors are required for selected or test observations.") }
-  }
+
 
   ecdfsx   <- list()
   for(i in 1:ncol(x.train)) {
@@ -384,16 +515,9 @@ tbart2marg <- function(x.train,
   # sigma2_mu <- ((max(y_scale)-min(y_scale))/(2 * k* sqrt(m)))^2
   # sigma2_mu <- ((y_max - y_min) / (2 * k * sqrt(m)))^2
 
-  #create z vector
   #create ystar vector
   ystar <- rep(mean(y_scale[uncens_inds]), length(y_scale)) # this line is unimportant because only uncensored values are used
   ystar[uncens_inds] <- y_scale[uncens_inds]
-
-  n <- length(y)
-  n0 <- length(cens_inds)
-  n1 <- length(uncens_inds)
-  ntest = nrow(x.test)
-
   p_y <- ncol(x.train)
   p_z <- ncol(w.train)
   s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
@@ -3321,8 +3445,8 @@ tbart2marg <- function(x.train,
       # draw$mucens_y_train[, iter_min_burnin] <- mutemp_y[cens_inds]
       # draw$muuncens_y_train[, iter_min_burnin] <- mutemp_y[uncens_inds]
       draw$muuncens_y_train[, iter_min_burnin] <- (mutemp_y + y_center )*tempsd+tempmean
-      draw$mu_z_train[, iter_min_burnin] <- mutemp_z
-      draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z
+      draw$mu_z_train[, iter_min_burnin] <- mutemp_z + offsetz
+      draw$mu_z_test[, iter_min_burnin] <- mutemp_test_z + offsetz
       draw$train.probcens[, iter_min_burnin] <-  probcens_train
       draw$test.probcens[, iter_min_burnin] <-  probcens_test
       # draw$cond_exp_train[, iter_min_burnin] <- (condexptrain + y_center )*tempsd+tempmean
