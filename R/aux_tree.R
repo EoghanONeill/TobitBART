@@ -111,6 +111,43 @@ get_predictions = function(trees, X, single_tree = FALSE) {
   return(unname(as.numeric(predictions)))
 }
 
+get_predictions_soft_slow = function(trees, X, tau_vec) {
+  predictions <- rep(NA, nrow(X))
+  terminal_rows <- which(trees[[1]]$tree_matrix[, "terminal"] == 1)
+  if(nrow( trees[[1]]$tree_matrix)==1){
+    predictions <- rep(trees[[1]]$tree_matrix[1, 'mu'], nrow(X))
+  }else{
+    predictions <- phi_app(X,get_branch(trees[[1]]),tau_vec[1]) %*% trees[[1]]$tree_matrix[terminal_rows, 'mu']
+  }
+  # print("get_predictions_soft_slow line 117")
+  if(length(trees) > 1){
+    for(i in 2:length(trees)){
+      terminal_rows <- which(trees[[i]]$tree_matrix[, "terminal"] == 1)
+      if(nrow( trees[[i]]$tree_matrix)==1){
+        predictions <- predictions + rep(trees[[i]]$tree_matrix[1, 'mu'], nrow(X))
+      }else{
+        predictions <- predictions + phi_app(X,get_branch(trees[[i]]),tau_vec[i]) %*% trees[[i]]$tree_matrix[terminal_rows, 'mu']
+      }
+      # predictions <- predictions + phi_app(X,get_branch(trees[[i]]),tau_vec[i]) %*% trees[[i]]$tree_matrix[terminal_rows, 'mu']
+    }
+  }
+  # print("get_predictions_soft_slow line 124")
+  return(as.numeric(predictions))
+}
+
+get_predictions_soft_slow_onetree = function(tree, X, tau) {
+  terminal_rows <- which(tree$tree_matrix[, "terminal"] == 1)
+  # print("get_predictions_soft_slow_onetree line 130")
+  if(nrow( trees$tree_matrix)==1){
+    predictions <- rep(trees$tree_matrix[1, 'mu'], nrow(X))
+  }else{
+    predictions <- phi_app(X,get_branch(tree),tau) %*% tree$tree_matrix[terminal_rows, 'mu']
+  }
+  # print("get_predictions_soft_slow_onetree line 132")
+  return(as.numeric(predictions))
+}
+
+
 get_predictions_HBART = function(trees, X, single_tree = FALSE) {
 
   # product of terminal node parameters

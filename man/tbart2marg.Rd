@@ -36,7 +36,7 @@ tbart2marg(
   cov_prior = "VH",
   tau = 1/3,
   mixprob = 0.5,
-  simultaneous_covmat = TRUE,
+  simultaneous_covmat = FALSE,
   fast = TRUE,
   nu0 = 3,
   offsetz = FALSE,

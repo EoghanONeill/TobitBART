@@ -224,8 +224,8 @@ softtbart2marg <- function(x.train,
                        cov_prior = "VH",
                        tau = 1/3,
                        mixprob = 0.5,
-                       simultaneous_covmat = TRUE,
-                       fast = FALSE,
+                       simultaneous_covmat = FALSE,
+                       fast = TRUE,
                        nu0 = 3, offsetz = FALSE,
                        quantsig = 0.9,
                        sparse = FALSE,
@@ -817,20 +817,33 @@ softtbart2marg <- function(x.train,
   mutemp_test_z_trees <- rep(0, ntest)
 
   if(linearterms){
-    alpha_var <- solve(solve(Avar_p) +
-                         crossprod(wmat_train[cens_inds,, drop = FALSE]) +
-                         ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]))
+    # alpha_var <- solve(invAvar_p + # solve(Avar_p) +
+    #                      crossprod(wmat_train[cens_inds,, drop = FALSE]) +
+    #                      ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]))
+    #
+    # alpha0hat <- solve(crossprod(wmat_train[cens_inds,, drop = FALSE])) %*% crossprod(wmat_train[cens_inds,, drop = FALSE], z[cens_inds] - offsetz)
+    # # print("line 798 = ")
+    # alpha1hat <- solve(crossprod(wmat_train[uncens_inds,, drop = FALSE])) %*% crossprod(wmat_train[uncens_inds,, drop = FALSE],
+    #                                                                                     z[uncens_inds] - offsetz -
+    #                                                                                       (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2))
+    #
+    # alpha_mean <- alpha_var %*% (invAvar_p %*% Amean_p +
+    #                                crossprod(wmat_train[cens_inds,]) %*%  alpha0hat+
+    #                                ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]) %*% alpha1hat  )
+    # alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
 
-    alpha0hat <- solve(crossprod(wmat_train[cens_inds,, drop = FALSE])) %*% crossprod(wmat_train[cens_inds,, drop = FALSE], z[cens_inds] - offsetz)
-    # print("line 798 = ")
-    alpha1hat <- solve(crossprod(wmat_train[uncens_inds,, drop = FALSE])) %*% crossprod(wmat_train[uncens_inds,, drop = FALSE],
-                                                                                        z[uncens_inds] - offsetz -
-                                                                                          (ystar[uncens_inds]  - mutemp_y)*gamma1/(phi1 + gamma1^2))
+    Wc <- wmat_train[cens_inds,,drop=FALSE]
+    Wu <- wmat_train[uncens_inds,,drop=FALSE]
+    lambdatemp <- (gamma1^2 + phi1)/phi1
+    Q <- invAvar_p + crossprod(Wc) + lambdatemp*crossprod(Wu)
+    U <- chol(Q)
+    rc <- z[cens_inds] - offsetz #- mutemp_z_trees[cens_inds]
+    ru <- z[uncens_inds] - offsetz - (ystar[uncens_inds] - mutemp_y) * gamma1/(phi1 + gamma1^2)
+    b <- invAvar_p %*% Amean_p + crossprod(Wc, rc) + lambda*crossprod(Wu, ru)
+    alpha_mean <- backsolve( U, forwardsolve(t(U), b) )
+    alpha_vec <- drop( alpha_mean + backsolve(U, rnorm(length(alpha_mean)), transpose = TRUE) )
 
-    alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
-                                   crossprod(wmat_train[cens_inds,]) %*%  alpha0hat+
-                                   ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]) %*% alpha1hat  )
-    alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
+
 
     mutemp_z_lin <- wmat_train %*% alpha_vec
     mutemp_test_z_lin <- wmat_test %*% alpha_vec
@@ -845,11 +858,19 @@ softtbart2marg <- function(x.train,
       Xresmat <- cbind(xmat_train ,z[uncens_inds] - offsetz - mutemp_z_lin[uncens_inds] )
       gamma0res <- c(Bmean_p,gamma0)
       G0res <- rbind(cbind(Bvar_p, rep(0, nrow(Bvar_p))), t(c(rep(0,ncol(Bvar_p)),  tau*phi1)))
-      Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
-      ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds])
-      g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
-      # sample beta vector and gamma simulataneously
-      betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
+
+      # Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
+      # ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds])
+      # g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+      # betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
+      # # sample beta vector and gamma simulataneously
+
+      Q <- solve(G0res) + (1/phi1)*crossprod(Xresmat)
+      U <- chol(Q)
+      b <- solve(G0res, gamma0res) + (1/phi1)*crossprod(Xresmat, y_resids)
+      g_bar <- backsolve(U, forwardsolve(t(U), b))
+      betagamma_vec <- drop( g_bar + backsolve(U, rnorm(length(gamma0res)), transpose = TRUE) )
+
       gamma1 <- betagamma_vec[length(betagamma_vec)]
       beta_vec <- betagamma_vec[- length(betagamma_vec)]
       mutemp_y_lin <- xmat_train %*% beta_vec
@@ -859,16 +880,18 @@ softtbart2marg <- function(x.train,
       # D0_mat <- rbind(cbind(Avar_p, matrix(0,nrow = nrow(Avar_p), ncol = ncol(Bvar_p))),
       #                 cbind( matrix(0,nrow = nrow(Bvar_p), ncol = ncol(Avar_p)), Bvar_p))
       # instead sample alpha and beta separately
-
       y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z_lin[uncens_inds])
       Xuncensmat <- xmat_train
-
-      Bvar <- solve(solve(Bvar_p) + (1/phi1)*crossprod(Xuncensmat)  )
-      Bhat <- solve((1/phi1)*crossprod(Xuncensmat))%*% ((1/phi1)*crossprod(Xuncensmat,  y_resids) )
-      B_bar <- Bvar %*% (solve(Bvar_p)%*%Bmean_p + (1/phi1)*crossprod(Xuncensmat)%*% Bhat)
-      # sample beta vector and gamma simulataneously
-      beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
-
+      # Bvar <- solve(invBvar_p + (1/phi1)*crossprod(Xuncensmat)  )
+      # Bhat <- solve((1/phi1)*crossprod(Xuncensmat))%*% ((1/phi1)*crossprod(Xuncensmat,  y_resids) )
+      # B_bar <- Bvar %*% (invBvar_p%*%Bmean_p + (1/phi1)*crossprod(Xuncensmat)%*% Bhat)
+      # # sample beta vector and gamma simulataneously
+      # beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
+      Q <- invBvar_p + (1/phi1)*crossprod(Xuncensmat)
+      U <- chol(Q)
+      b <- invBvar_p %*% Bmean_p + (1/phi1)*crossprod(Xuncensmat, y_resids)
+      B_bar <- backsolve(U, forwardsolve(t(U), b))
+      beta_vec <- drop(B_bar + backsolve(U, rnorm(length(B_bar)),transpose = TRUE))
       mutemp_y_lin <- xmat_train %*% beta_vec
       mutemp_test_y_lin <- xmat_test %*% beta_vec
     }
@@ -899,7 +922,8 @@ softtbart2marg <- function(x.train,
   # Initialise the new trees as current one
   new_trees_z = curr_trees_z
   # Initialise the predicted values to zero
-  mutemp_z = get_predictions(curr_trees_z, w.train, single_tree = n.trees_censoring == 1)
+  # mutemp_z = get_predictions(curr_trees_z, w.train, single_tree = n.trees_censoring == 1)
+  mutemp_z <- get_predictions_soft_slow(curr_trees_z, w.train, tau_vec_censoring )
   # z_hat <- mutemp_z
   if(linearterms){
     mutemp_z <- mutemp_z + mutemp_z_lin
@@ -999,9 +1023,12 @@ softtbart2marg <- function(x.train,
                                                 weightz,
                                                 binmat_all_z, cens_inds, uncens_inds, BtB_z_u, BtB_z_c, firstcolindtrees_z)
     }
-    mutemp_test_z <- get_predictions(curr_trees_z,
-                                     w.test,
-                                     single_tree = length(curr_trees_z) == 1)
+    # mutemp_test_z <- get_predictions(curr_trees_z,
+    #                                  w.test,
+    #                                  single_tree = length(curr_trees_z) == 1)
+
+    mutemp_test_z <- get_predictions_soft_slow(curr_trees_z, w.test, tau_vec_censoring )
+
     if(linearterms){
       mutemp_z <- cbind(wmat_train, binmat_all_z) %*% mudrawlist_z[[5]]
     }else{
@@ -1043,7 +1070,9 @@ softtbart2marg <- function(x.train,
   new_trees_y = curr_trees_y
 
   # Initialise the predicted values to zero
-  mutemp_y = get_predictions(curr_trees_y, x.train[uncens_inds,], single_tree = n.trees_outcome == 1)
+  # mutemp_y = get_predictions(curr_trees_y, x.train[uncens_inds,], single_tree = n.trees_outcome == 1)
+  mutemp_y = get_predictions_soft_slow(curr_trees_y, x.train[uncens_inds,], tau_vec_outcome)
+
   # y_hat <- mutemp_y
   if(linearterms){
     mutemp_y <- mutemp_y + mutemp_y_lin
@@ -1338,17 +1367,29 @@ softtbart2marg <- function(x.train,
     ############ draw linear terms if not marginalizing #################
 
     if(linearterms & !marginalize){
-      alpha_var <- solve(solve(Avar_p) +
-                           crossprod(wmat_train[cens_inds, , drop = FALSE]) +
-                           ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]))
-      alpha0hat <- solve(crossprod(wmat_train[cens_inds,, drop = FALSE])) %*% crossprod(wmat_train[cens_inds,, drop = FALSE], z[cens_inds] - offsetz - mutemp_z_trees[cens_inds])
-      alpha1hat <- solve(crossprod(wmat_train[uncens_inds,, drop = FALSE])) %*% crossprod(wmat_train[uncens_inds,, drop = FALSE],
-                                                                                          z[uncens_inds] - offsetz - mutemp_z_trees[uncens_inds] -
-                                                                                            (ystar[uncens_inds]  - mutemp_y_lin - mutemp_y_trees)*gamma1/(phi1 + gamma1^2))
-      alpha_mean <- alpha_var %*% (solve(Avar_p) %*% Amean_p +
-                                     crossprod(wmat_train[cens_inds,, drop = FALSE]) %*%  alpha0hat+
-                                     ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,, drop = FALSE]) %*% alpha1hat  )
-      alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
+      # alpha_var <- solve(invAvar_p + # solve(Avar_p) +
+      #                      crossprod(wmat_train[cens_inds, , drop = FALSE]) +
+      #                      ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,]))
+      # alpha0hat <- solve(crossprod(wmat_train[cens_inds,, drop = FALSE])) %*% crossprod(wmat_train[cens_inds,, drop = FALSE], z[cens_inds] - offsetz - mutemp_z_trees[cens_inds])
+      # alpha1hat <- solve(crossprod(wmat_train[uncens_inds,, drop = FALSE])) %*% crossprod(wmat_train[uncens_inds,, drop = FALSE],
+      #                                                                                     z[uncens_inds] - offsetz - mutemp_z_trees[uncens_inds] -
+      #                                                                                       (ystar[uncens_inds]  - mutemp_y_lin - mutemp_y_trees)*gamma1/(phi1 + gamma1^2))
+      # alpha_mean <- alpha_var %*% (invAvar_p %*% Amean_p +
+      #                                crossprod(wmat_train[cens_inds,, drop = FALSE]) %*%  alpha0hat+
+      #                                ((gamma1^2 + phi1)/phi1)*crossprod(wmat_train[uncens_inds,, drop = FALSE]) %*% alpha1hat  )
+      # alpha_vec <- mvrnorm(1, mu = alpha_mean, Sigma = alpha_var)
+
+      Wc <- wmat_train[cens_inds,,drop=FALSE]
+      Wu <- wmat_train[uncens_inds,,drop=FALSE]
+      lambdatemp <- (gamma1^2 + phi1)/phi1
+      Q <- invAvar_p + crossprod(Wc) + lambdatemp*crossprod(Wu)
+      U <- chol(Q)
+      rc <- z[cens_inds] - offsetz - mutemp_z_trees[cens_inds]
+      ru <- z[uncens_inds] - offsetz - mutemp_z_trees[uncens_inds] - (ystar[uncens_inds] - mutemp_y_lin - mutemp_y_trees) * gamma1/(phi1 + gamma1^2)
+      b <- invAvar_p %*% Amean_p + crossprod(Wc, rc) + lambda*crossprod(Wu, ru)
+      alpha_mean <- backsolve( U, forwardsolve(t(U), b) )
+      alpha_vec <- drop( alpha_mean + backsolve(U, rnorm(length(alpha_mean)), transpose = TRUE) )
+
 
       mutemp_z_lin <- wmat_train %*% alpha_vec
       mutemp_test_z_lin <- wmat_test %*% alpha_vec
@@ -1359,17 +1400,21 @@ softtbart2marg <- function(x.train,
 
       if(jointbetagamma){
         Xresmat <- cbind(xmat_train ,z[uncens_inds] - mutemp_z_lin[uncens_inds] - mutemp_z_trees[uncens_inds] )
-
         gamma0res <- c(Bmean_p,gamma0)
         G0res <- rbind(cbind(Bvar_p, rep(0, nrow(Bvar_p))),
                        t(c(rep(0,ncol(Bvar_p)), tau*phi1)))
 
-        Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
-        ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds] - mutemp_y_trees)
-        g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+        # Gbar <- solve(solve(G0res) + (1/phi1)*crossprod(Xresmat)  )
+        # ghat <- solve(crossprod(Xresmat))%*% crossprod(Xresmat,  ystar[uncens_inds] - mutemp_y_trees)
+        # g_bar <- Gbar %*% (solve(G0res)%*%gamma0res + (1/phi1)*crossprod(Xresmat)%*% ghat)
+        # # sample beta vector and gamma simulataneously
+        # betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
 
-        # sample beta vector and gamma simulataneously
-        betagamma_vec <- mvrnorm(1, mu = g_bar, Sigma = Gbar)
+        Q <- solve(G0res) + (1/phi1)*crossprod(Xresmat)
+        U <- chol(Q)
+        b <- solve(G0res, gamma0res) + (1/phi1)*crossprod(Xresmat, ystar[uncens_inds] - mutemp_y_trees)
+        g_bar <- backsolve(U, forwardsolve(t(U), b))
+        betagamma_vec <- drop( g_bar + backsolve(U, rnorm(length(gamma0res)), transpose = TRUE) )
 
         gamma1 <- betagamma_vec[length(betagamma_vec)]
         beta_vec <- betagamma_vec[- length(betagamma_vec)]
@@ -1387,13 +1432,18 @@ softtbart2marg <- function(x.train,
         # instead sample alpha and beta separately
         y_resids <- ystar[uncens_inds] - mutemp_y_trees - gamma1*(z[uncens_inds] - offsetz - mutemp_z_lin[uncens_inds] - mutemp_z_trees[uncens_inds])
         Xuncensmat <- xmat_train
+        # Bvar <- solve(invBvar_p + (1/phi1)*crossprod(Xuncensmat)  )
+        # Bhat <- solve((1/phi1)*crossprod(Xuncensmat))%*% ((1/phi1)*crossprod(Xuncensmat,  y_resids) )
+        # B_bar <- Bvar %*% (invBvar_p%*%Bmean_p + (1/phi1)*crossprod(Xuncensmat)%*% Bhat)
+        # # sample beta vector and gamma simulataneously
+        # beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
 
-        Bvar <- solve(solve(Bvar_p) + (1/phi1)*crossprod(Xuncensmat)  )
-        Bhat <- solve((1/phi1)*crossprod(Xuncensmat))%*% ((1/phi1)*crossprod(Xuncensmat,  y_resids) )
-        B_bar <- Bvar %*% (solve(Bvar_p)%*%Bmean_p + (1/phi1)*crossprod(Xuncensmat)%*% Bhat)
+        Q <- invBvar_p + (1/phi1)*crossprod(Xuncensmat)
+        U <- chol(Q)
+        b <- invBvar_p %*% Bmean_p + (1/phi1)*crossprod(Xuncensmat, y_resids)
+        B_bar <- backsolve(U, forwardsolve(t(U), b))
+        beta_vec <- drop(B_bar + backsolve(U, rnorm(length(B_bar)),transpose = TRUE))
 
-        # sample beta vector and gamma simulataneously
-        beta_vec <- mvrnorm(1, mu = B_bar, Sigma = Bvar)
         mutemp_y_lin <- xmat_train %*% beta_vec
         mutemp_test_y_lin <- xmat_test %*% beta_vec
 
@@ -3042,7 +3092,9 @@ softtbart2marg <- function(x.train,
                                                  sigma2_mu_z,
                                                  weightstemp)
         # Updating BART predictions
-        current_fit = get_predictions(curr_trees_z[j], w.train, single_tree = TRUE)
+        # current_fit = get_predictions(curr_trees_z[j], w.train, single_tree = TRUE)
+        current_fit <- get_predictions_soft_slow_onetree(curr_trees_z[j], w.train, tau_vec_censoring[j] )
+
         mutemp_z = mutemp_z - tree_fits_store_z[,j] # subtract the old fit
         mutemp_z = mutemp_z + current_fit # add the new fit
         mutemp_z_trees = mutemp_z_trees - tree_fits_store_z[,j] # subtract the old fit
@@ -3418,26 +3470,10 @@ softtbart2marg <- function(x.train,
                 Btz_new <- c(Btz_new,NA)
                 Btz_new[c(ncol(BtB_y_new) )] <- crossprod((binmat_all_y_new[ ,c(ncol(BtB_y_new) ), drop = FALSE ]) , z_epsilon[uncens_inds])
 
-                # if(any((binmat_all_y_new) ==0 )){
-                #   print("which(binmat_all_y_new ==0, arr.ind = TRUE) = ")
-                #   print(which(binmat_all_y_new ==0, arr.ind = TRUE))
-                #   print("binmat_all_y_new = ")
-                #   print(binmat_all_y_new)
-                #   stop("Line 4324 any((binmat_all_y_new) ==0 )))")
-                # }
-                # if(any((BtB_y_new) ==0 )){
-                #   print("which(BtB_y_new ==0, arr.ind = TRUE) = ")
-                #   print(which(BtB_y_new ==0, arr.ind = TRUE))
-                #   print("BtB_y_new = ")
-                #   print(BtB_y_new)
-                #   stop("Line 4333 any((BtB_y_new) ==0 )))")
-                # }
-
                 if(any(is.na(binmat_all_y_new))){
                   print("addednode = ");print(addednode);print("which(is.na(binmat_all_y_new), arr.ind = TRUE) = ");print(which(is.na(binmat_all_y_new), arr.ind = TRUE))
                   stop("Line 4041 NA in binmat_all_y_new")
                 }
-
               }else{
                 binmat_all_y_new <- cbind(binmat_all_y_new[, 1:(firstcolindtrees_y[j]-1 + addednode-1 ), drop = FALSE ],
                                           newparentbin,
@@ -4096,22 +4132,6 @@ softtbart2marg <- function(x.train,
           BztBz_y_new <- cbind(BtB_y_new, Btz_new)
           BztBz_y_new <- rbind(BztBz_y_new, t(c(Btz_new, ztz)))
 
-          # if(any((binmat_all_y_new) ==0 )){
-          #   print("which(binmat_all_y_new ==0, arr.ind = TRUE) = ")
-          #   print(which(binmat_all_y_new ==0, arr.ind = TRUE))
-          #   print("binmat_all_y_new = ")
-          #   print(binmat_all_y_new)
-          #   stop("Line 5033 any((binmat_all_y_new) ==0 )))")
-          # }
-          #
-          # if(any((BtB_y_new) ==0 )){
-          #   print("which(BtB_y_new ==0, arr.ind = TRUE) = ")
-          #   print(which(BtB_y_new ==0, arr.ind = TRUE))
-          #   print("BtB_y_new = ")
-          #   print(BtB_y_new)
-          #   stop("Line 5042 any((BtB_y_new) ==0 )))")
-          # }
-
           y_resids <- ystar[uncens_inds] - gamma1*(z[uncens_inds] - offsetz - mutemp_z[uncens_inds])
 
           if(linearterms){
@@ -4390,7 +4410,8 @@ softtbart2marg <- function(x.train,
                                         phi1,
                                         sigma2_mu_y)
         # Updating BART predictions
-        current_fit = get_predictions(curr_trees_y[j], x.train[uncens_inds,], single_tree = TRUE)
+        # current_fit = get_predictions(curr_trees_y[j], x.train[uncens_inds,], single_tree = TRUE)
+        current_fit = get_predictions_soft_slow_onetree(curr_trees_y[j], x.train[uncens_inds,], tau_vec_outcome[j] )
         mutemp_y = mutemp_y - tree_fits_store_y[,j] # subtract the old fit
         mutemp_y = mutemp_y + current_fit # add the new fit
         mutemp_y_trees = mutemp_y_trees - tree_fits_store_y[,j] # subtract the old fit
@@ -4628,7 +4649,9 @@ softtbart2marg <- function(x.train,
       IMR_test <- exp( dnorm(temp_ztest,log=T) - pnorm(temp_ztest,log.p = T) )
       # }
       if(draw_censored_predictions){
-        mutemp_y_all <- get_predictions(curr_trees_y,x.train, single_tree =length(curr_trees_y) == 1L)
+        # mutemp_y_all <- get_predictions(curr_trees_y,x.train, single_tree =length(curr_trees_y) == 1L)
+        mutemp_y_all <- get_predictions_soft_slow(curr_trees_y, x.train, tau_vec_outcome )
+
         condexptrain_all <- mutemp_y_all + gamma1 * IMR_train
         draw$mu_y_train[, iter_min_burnin] <-(mutemp_y_all + y_center) * tempsd + tempmean
         draw$cond_exp_train[, iter_min_burnin] <-(condexptrain_all + y_center) * tempsd + tempmean

@@ -1350,7 +1350,7 @@ tbart2pluslinearnp <- function(x.train,
 
   ## Robust scale of the initial standardized outcome
   y_reference_half_range <- 0.5 * diff(quantile(yinit_vec,probs = c(0.025, 0.975),na.rm = TRUE,names = FALSE))
-  if (is.finite(y_reference_half_range) ||y_reference_half_range <= 0) {
+  if (!is.finite(y_reference_half_range) ||y_reference_half_range <= 0) {
     y_reference_half_range <- 2
   }
   y_reference <- c(-y_reference_half_range,y_reference_half_range,rep(0, n1 - 2L))
